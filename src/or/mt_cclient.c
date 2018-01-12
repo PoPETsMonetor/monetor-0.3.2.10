@@ -1,3 +1,19 @@
+/**
+ * \file mt_cclient.c
+ * Implement the controller logic for the MoneTor payment system when
+ * this Tor instance is used as a client. This module interact with
+ * mt_cpay.c module to produce and verify the crypto pieces.
+ *
+ * This module is responsible to select, build and maintan connection
+ * towards the ledger and the intermediaries. This module is also
+ * responsible to track the number of cell received and sent that have
+ * been relayed alongside a payment channel and to ensure payment have
+ * been made properly
+ *
+ * Finally, it acts as an interface to the network logic and the payment
+ * logic.
+ */
+
 
 #include "or.h"
 #include "config.h"

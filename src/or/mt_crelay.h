@@ -1,4 +1,5 @@
 #ifndef mt_crelay_h
+#define mt_crelay_h
 /**** INIT ****/
 void mt_crelay_init(void);
 
@@ -24,5 +25,4 @@ void mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
 
 ledger_t * mt_crelay_get_ledger(void);
 
-#define mt_crelay_h
 #endif

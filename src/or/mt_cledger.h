@@ -1,0 +1,33 @@
+/**
+ * \file mt_cledger.h
+ */
+
+#ifndef mt_cledger_h
+#define mt_cledger_h
+
+void mt_cledger_init(void);
+
+/**
+ * When we received a fist payment cell over a new unused
+ * or_circuit, then we create a new descriptor and add it
+ * within our structure
+ */
+void mt_cledger_init_desc_and_add(or_circuit_t *circ);
+
+/**
+ * When a CIRCUIT_PURPOSE_LEDGER closes, this function should
+ * be called
+ */
+void mt_cledger_orcirc_has_closed(or_circuit_t *circ);
+
+/******************* Payment related messages *******/
+
+
+int mt_cledger_send_message(mt_desc_t* desc, mt_ntype_t type,
+    byte *msg, int size);
+
+void mt_cledger_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
+    byte *msg, size_t msg_len);
+
+#endif
+
