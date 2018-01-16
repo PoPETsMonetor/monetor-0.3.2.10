@@ -130,25 +130,35 @@ void mt_cintermediary_ledger_circ_has_closed(circuit_t *circ) {
   byte id[DIGEST_LEN];
   mt_desc2digest(&TO_ORIGIN_CIRCUIT(circ)->desc, &id);
   digestmap_remove(desc2circ, (char*) id);
+  log_info(LD_MT, "MoneTor: ledger circ has closed. Removed %s from our internal structure",
+      mt_desc_describe(&TO_ORIGIN_CIRCUIT(circ)->desc));
 }
 
 void mt_cintermediary_orcirc_has_closed(or_circuit_t *circ) {
   buf_free(circ->buf);
-  // XXX TODO remove this circuit from our structures
-  /* XXX TODO alert payment module to cashout */
+  byte id[DIGEST_LEN];
+  mt_desc2digest(&circ->desc, &id);
+  digestmap_remove(desc2circ, (char*) id);
+  log_info(LD_MT, "MoneTor: orcirc circ has closed. Removed %s from our internal structure",
+      mt_desc_describe(&circ->desc));
+  /* XXX TODO alert payment module to cashout? */
+  /** This might happen because the circuit breaks
+   * between the client and the intermediary; or the relay
+   * and the intermediary. The relay (or client) should rebuild and
+   * pursue the protocol. Is it possible? */
   /*mt_desc_free(&circ->desc);*/
 }
 
 /** We've received the first payment cell over that circuit 
  * init structure as well as add this circ in our structures*/
 
-void mt_cintermediary_init_desc_and_add(or_circuit_t *circ) {
+void mt_cintermediary_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
   increment(count);
   circ->desc.id[0] = count[0]; 
   circ->desc.id[1] = count[1]; 
-  /*Cell received has been sent either by a relay or by a client
-   *Todo => check with Thien-Nam what desc.party we have to configure */
-  circ->desc.party = MT_PARTY_INT;
+  /*Cell received has been sent either by a relay or by a client */
+  // XXX must be REL or CLI but IDK :/
+  circ->desc.party = party; 
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
@@ -174,8 +184,11 @@ mt_cintermediary_send_message(mt_desc_t *desc, mt_ntype_t pcommand,
   // We can go a bit further and re-send the command for 
   // ledger circuits when it is up again.
   // XXX TODO
-  if (!circ || circ->marked_for_close || circ->state !=
+  tor_assert(circ);
+  if (circ->marked_for_close || circ->state !=
       CIRCUIT_STATE_OPEN) {
+    log_info(LD_MT, "MoneTor: the circuit has a problem."
+      " circ state: %s", circuit_state_to_string(circ->state));
     return -1;
   }
   if (circ->purpose == CIRCUIT_PURPOSE_I_LEDGER) {
@@ -203,12 +216,12 @@ mt_cintermediary_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
     desc = &orcirc->desc;
     if (mt_ipay_recv(desc, pcommand, msg, msg_len) < 0) {
       log_info(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %hhx", pcommand);
-      //decides what to do
+      // XXX decides what to do
     }
   }
   else {
-    log_info(LD_MT, "MoneTor: Processing circuit with unsupported purpose %hhx",
-        circ->purpose);
+    log_info(LD_MT, "MoneTor: Processing circuit with unsupported purpose %s",
+        circuit_purpose_to_string(circ->purpose));
   }
 }
 
@@ -216,10 +229,12 @@ mt_cintermediary_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
 /*************************** init and free functions *****************/
 
 void mt_cintermediary_init(void) {
+  log_info(LD_MT, "MoneTor: Initialization of the intermediary controller module");
   desc2circ = digestmap_new();
   ledgercircs = smartlist_new();
   count[0] = rand_uint64();
   count[1] = rand_uint64();
-
+  log_info(LD_MT, "MoneTor: Initialization of the intermediary payment module");
+  mt_ipay_init();
 }
 

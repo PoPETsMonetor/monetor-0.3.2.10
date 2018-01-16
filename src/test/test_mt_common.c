@@ -151,6 +151,7 @@ static void test_mt_process_msg(void *args) {
   circ->inter_ident = tor_malloc_zero(sizeof(intermediary_identity_t));
   memcpy(circ->inter_ident->identity, inter->identity->identity, DIGEST_LEN);
   TO_CIRCUIT(circ)->purpose = CIRCUIT_PURPOSE_C_INTERMEDIARY;
+  circ->buf = buf_new_with_capacity(RELAY_PPAYLOAD_SIZE);
   rph->length = RELAY_PPAYLOAD_SIZE;
   bytes_remains = msg_len1;
   i = 0;
@@ -162,9 +163,9 @@ static void test_mt_process_msg(void *args) {
       rph->length = bytes_remains;
     }
     i++;
-  } while (buf_datalen(inter->buf) != 0 && i < 10);
+  } while (buf_datalen(circ->buf) != 0 && i < 10);
   tt_int_op(i, OP_EQ, msg_len1/RELAY_PPAYLOAD_SIZE+1);
-  tt_int_op(buf_datalen(inter->buf), OP_EQ, 0);
+  tt_int_op(buf_datalen(circ->buf), OP_EQ, 0);
 
  done:
   UNMOCK(mt_cclient_process_received_msg);

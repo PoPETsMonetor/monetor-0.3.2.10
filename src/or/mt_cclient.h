@@ -40,6 +40,11 @@ smartlist_t* get_node_t_smartlist_intermerdiaries(void);
 
 smartlist_t* get_intermediaries(int for_circuit);
 
+
+/* Get the ledger */
+
+ledger_t* mt_cclient_get_ledger(void);
+
 /**
  * Get intermediary by identity
  */

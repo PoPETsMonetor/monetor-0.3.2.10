@@ -85,7 +85,6 @@ intermediary_new(const node_t *node, extend_info_t *ei, time_t now) {
   intermediary->desc.party = MT_PARTY_INT;
   intermediary->chosen_at = now;
   intermediary->ei = ei;
-  intermediary->buf = buf_new_with_capacity(RELAY_PPAYLOAD_SIZE);
   log_info(LD_MT, "Intermediary created at %lld", (long long) now);
   return intermediary;
 }
@@ -96,7 +95,6 @@ intermediary_free(intermediary_t *intermediary) {
     return;
   if (intermediary->ei)
     extend_info_free(intermediary->ei);
-  buf_free(intermediary->buf);
   tor_free(intermediary);
 }
 
@@ -156,6 +154,8 @@ mt_cclient_init(void) {
   ledgercircs = smartlist_new();
   count[0] = rand_uint64();
   count[1] = rand_uint64();
+  log_info(LD_MT, "MoneTor: initialization of payment client module");
+  mt_cpay_init();
 }
 
 /**
@@ -185,8 +185,8 @@ intermediary_need_cleanup(intermediary_t *intermediary, time_t now) {
         digestmap_remove(desc2circ, (char*) id);
         SMARTLIST_DEL_CURRENT(intermediaries, inter);
         intermediary_free(intermediary);
-        log_info(LD_MT, "MoneTor: Removing intermediary from list %ld",
-            (long) now);
+        log_info(LD_MT, "MoneTor: Removing intermediary from list %lld",
+            (long long) now);
       }
     } SMARTLIST_FOREACH_END(inter);
   }
@@ -466,6 +466,12 @@ run_cclient_build_circuit_event(time_t now) {
   extend_info_free(ei);
   ledger_free(&ledger);
   return;
+}
+
+
+ledger_t *
+mt_cclient_get_ledger(void) {
+  return ledger;
 }
 
 /** Get the intermediary connected at the other end of this origin_circuit_t
@@ -762,9 +768,8 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
   if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY) {
     intermediary_t *intermediary = mt_cclient_get_intermediary_from_ocirc(circ);
     desc = &intermediary->desc;
-    log_info(LD_MT, "Processed a cell sent by our intermediary %s - calling mt_ipay_recv",
+    log_info(LD_MT, "Processed a complete msg sent by our intermediary %s - calling mt_ipay_recv",
         extend_info_describe(intermediary->ei));
-    // XXX Buffering cells? - We should do this in mt_common
     if (mt_cpay_recv(desc, pcommand, msg, msg_len) < 0) {
       log_info(LD_MT, "Payment module returned -1 for mt_ntype_t %hhx", pcommand);
       // XXX Do we mark this circuit for close and complain about
@@ -794,7 +799,7 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
     if (mt_cpay_recv(desc, pcommand, msg, msg_len) < 0) {
       /* De we retry or close? Let's assume easiest things -> we close*/
       log_info(LD_MT, "Payment module returned -1 for mt_ntype_t %d", pcommand);
-      ppath->p_marked_for_close = 1;
+      ppath->p_marked_for_close = 1; //XXX probably need to do more than just marking this ppath
     }
     /*tor_free(msg);*/ // should be freed by mt_common
   }

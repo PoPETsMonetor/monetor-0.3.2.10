@@ -766,7 +766,18 @@ circuit_purpose_to_string(uint8_t purpose)
       return "Hidden service client: Active rendezvous point";
     case CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT:
       return "Measuring circuit timeout";
-
+    case CIRCUIT_PURPOSE_C_INTERMEDIARY:
+      return "Payment client controller: circuit toward the intermediary";
+    case CIRCUIT_PURPOSE_C_LEDGER:
+      return "Payment client controller: circuit toward the ledger";
+    case CIRCUIT_PURPOSE_R_INTERMEDIARY:
+      return "Payment relay controller: circuit toward the intermediary";
+    case CIRCUIT_PURPOSE_R_LEDGER:
+      return "Payment relay controller: circuit toward the ledger";
+    case CIRCUIT_PURPOSE_INTERMEDIARY:
+      return "Payment intermediary controller: payment circuit at the intermediary";
+    case CIRCUIT_PURPOSE_LEDGER:
+      return "Payment ledger controller: payment circuit at the ledger";
     case CIRCUIT_PURPOSE_S_ESTABLISH_INTRO:
       return "Hidden service: Establishing introduction point";
     case CIRCUIT_PURPOSE_S_INTRO:

@@ -71,6 +71,7 @@ LIBTOR_A_SOURCES = \
   src/or/mt_cintermediary.c        \
   src/or/mt_cpay.c        \
   src/or/mt_common.c        \
+  src/or/mt_cledger.c        \
   src/or/mt_crelay.c        \
   src/or/mt_crypto.c        \
   src/or/mt_ipay.c        \
@@ -221,6 +222,7 @@ ORHEADERS = \
   src/or/mt_cintermediary.h         \
   src/or/mt_cpay.h        \
   src/or/mt_common.h        \
+  src/or/mt_cledger.h        \
   src/or/mt_crelay.h        \
   src/or/mt_crypto.h        \
   src/or/mt_ipay.h        \

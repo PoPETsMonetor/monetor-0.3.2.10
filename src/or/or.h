@@ -826,6 +826,7 @@ typedef enum {
   MT_PARTY_INT,
   MT_PARTY_AUT,
   MT_PARTY_LED,
+  MT_PARTY_IDK,
 } mt_party_t;
 
 typedef struct {
@@ -3365,7 +3366,10 @@ typedef struct origin_circuit_t {
 
   /** Used for ledger circuits and intermediary circuit at the relay */
   mt_desc_t desc;
-
+  
+  /** buffer used for intermediary circuits and ledger circuits
+   * on client, intermediary and relay */
+  struct buf_t *buf;
 
   /** Holds the data that the entry guard system uses to track the
    * status of the guard this circuit is using, and thereby to determine

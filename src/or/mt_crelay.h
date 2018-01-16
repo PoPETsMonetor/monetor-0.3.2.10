@@ -15,7 +15,7 @@ void mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc);
 
 void mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc);
 
-void mt_crelay_init_desc_and_add(or_circuit_t *circ);
+void mt_crelay_init_desc_and_add(or_circuit_t *circ, mt_party_t party);
 
 int mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
     byte* msg, int size);

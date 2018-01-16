@@ -16,6 +16,7 @@
 #include "buffers.h"
 #include "config.h"
 #include "compat.h"
+#include "circuitlist.h"
 #include "circuituse.h"
 #include "circuitbuild.h"
 #include "mt_crypto.h" // only needed for the defined byte array sizes
@@ -23,6 +24,7 @@
 #include "mt_cclient.h"
 #include "mt_crelay.h"
 #include "mt_cintermediary.h"
+#include "mt_cledger.h"
 #include "mt_tokens.h"
 #include "router.h"
 
@@ -186,7 +188,6 @@ ledger_init(ledger_t **ledger, const node_t *node, extend_info_t *ei,
   (*ledger)->desc.id[1] = count[1];
   (*ledger)->desc.party = MT_PARTY_LED;
   (*ledger)->ei = ei;
-  (*ledger)->buf = buf_new_with_capacity(RELAY_PPAYLOAD_SIZE);
   log_info(LD_MT, "Ledger created at %lld", (long long) now);
 }
 
@@ -195,7 +196,6 @@ void ledger_free(ledger_t **ledger) {
     return;
   if ((*ledger)->ei)
     extend_info_free((*ledger)->ei);
-  buf_free((*ledger)->buf);
   tor_free(*ledger);
 }
 
@@ -215,13 +215,13 @@ void monetor_run_scheduled_events(time_t now) {
 
   /*XXX MoneTor - Todo: adding scheduled events for intermediaries, relays, etc */
   if (authdir_mode(get_options()) || authdir_mode_v3(get_options())) {
-    /*run_cauthdir_scheduled_events(now);*/
+    run_cledger_scheduled_events(now);
   }
   if (intermediary_mode(get_options())) {
     run_cintermediary_scheduled_events(now);
   }
   else if (server_mode(get_options())) {
-    /*run_crelay_scheduled_events(now);*/
+    run_crelay_scheduled_events(now);
   }
   else {
     /*2run scheduled cclient event - avoid to do this on authority*/
@@ -286,6 +286,68 @@ void unpack_int_id(byte *msg, int_id_t *int_id_out) {
   memcpy(int_id_out, msg, sizeof(int_id_t));
 }
 
+static mt_party_t
+mt_common_whose_other_edge(mt_ntype_t pcommand) {
+  switch (pcommand) {
+    case MT_NTYPE_NAN_CLI_DESTAB1:
+    case MT_NTYPE_NAN_CLI_DPAY1:
+    case MT_NTYPE_MIC_CLI_PAY1:
+    case MT_NTYPE_MIC_CLI_PAY3:
+    case MT_NTYPE_MIC_CLI_PAY5:
+    case MT_NTYPE_NAN_CLI_SETUP1:
+    case MT_NTYPE_NAN_CLI_SETUP3:
+    case MT_NTYPE_NAN_CLI_SETUP5:
+    case MT_NTYPE_NAN_CLI_ESTAB1:
+    case MT_NTYPE_NAN_CLI_PAY1:
+    case MT_NTYPE_NAN_CLI_REQCLOSE1:
+      return  MT_PARTY_CLI;
+    case MT_NTYPE_MIC_REL_PAY2:
+    case MT_NTYPE_MIC_REL_PAY6:
+    case MT_NTYPE_NAN_REL_ESTAB2:
+    case MT_NTYPE_NAN_REL_ESTAB4:
+    case MT_NTYPE_NAN_REL_ESTAB6:
+    case MT_NTYPE_NAN_REL_PAY2:
+    case MT_NTYPE_NAN_REL_REQCLOSE2:
+      return MT_PARTY_REL;
+    case MT_NTYPE_CHN_END_ESTAB1:
+    case MT_NTYPE_CHN_END_ESTAB3:
+    case MT_NTYPE_NAN_END_CLOSE1:
+    case MT_NTYPE_NAN_END_CLOSE3:
+    case MT_NTYPE_NAN_END_CLOSE5:
+    case MT_NTYPE_NAN_END_CLOSE7:
+    case MT_NTYPE_CHN_END_SETUP:
+    case MT_NTYPE_CHN_END_CLOSE:
+    case MT_NTYPE_CHN_END_CASHOUT:
+      return MT_PARTY_IDK; // XXX Change that
+    case MT_NTYPE_MAC_AUT_MINT:
+      return MT_PARTY_AUT;
+    case MT_NTYPE_CHN_INT_ESTAB2:
+    case MT_NTYPE_CHN_INT_ESTAB4:
+    case MT_NTYPE_MIC_INT_PAY4:
+    case MT_NTYPE_MIC_INT_PAY7:
+    case MT_NTYPE_MIC_INT_PAY8:
+    case MT_NTYPE_NAN_INT_SETUP2:
+    case MT_NTYPE_NAN_INT_SETUP4:
+    case MT_NTYPE_NAN_INT_SETUP6:
+    case MT_NTYPE_NAN_INT_DESTAB2:
+    case MT_NTYPE_NAN_INT_DPAY2:
+    case MT_NTYPE_NAN_INT_CLOSE2:
+    case MT_NTYPE_NAN_INT_CLOSE4:
+    case MT_NTYPE_NAN_INT_CLOSE6:
+    case MT_NTYPE_NAN_INT_CLOSE8:
+    case MT_NTYPE_NAN_INT_ESTAB3:
+    case MT_NTYPE_NAN_INT_ESTAB5:
+    case MT_NTYPE_CHN_INT_SETUP:
+    case MT_NTYPE_CHN_INT_CLOSE:
+    case MT_NTYPE_CHN_INT_REQCLOSE:
+    case MT_NTYPE_CHN_INT_CASHOUT:
+      return MT_PARTY_INT;
+    case MT_NTYPE_MAC_ANY_TRANS:
+      return MT_PARTY_IDK;
+    default:
+      return MT_PARTY_IDK;
+  }
+}
 /** Called when we get a MoneTor cell on circuit circ.
  *  gets the right mt_desc_t and dispatch to the right
  *  payment module
@@ -298,25 +360,34 @@ MOCK_IMPL(void,
     relay_pheader_t* rph, crypt_path_t *layer_hint, uint8_t* payload)) {
   (void) rh; //need to refactor
   size_t msg_len = mt_token_get_size_of(rph->pcommand);
-  if (authdir_mode(get_options())) {
-  }
-  else if (intermediary_mode(get_options()) || 
+  if(authdir_mode(get_options()) || intermediary_mode(get_options()) ||
       server_mode(get_options())) {
+    /**
+     * We basically have 2 situations - We receive a payment cell over
+     * a circuit that we created (an origin_circuit_t), or over
+     * a circuti that has been created by someone else */
     if (CIRCUIT_IS_ORCIRC(circ)) {
       // should be circuit built towards us by a client or
-      // a relay
+      // a relay or an intermediary
       or_circuit_t *orcirc = TO_OR_CIRCUIT(circ);
       /** It is a payment cell over a or-circuit - should be
        * sent a client or a relay - change purpose */
       if (!orcirc->circuit_received_first_payment_cell) {
         // Should be done at the first received payment cell
         // over this circuit
-        if (intermediary_mode(get_options())) {
+        /* Try to know if the cell comes from a client, a relay
+         * or a intermediary */
+        mt_party_t party = mt_common_whose_other_edge(rph->pcommand);
+        if (authdir_mode(get_options())) {
+          circuit_change_purpose(circ, CIRCUIT_PURPOSE_LEDGER);
+          mt_cledger_init_desc_and_add(orcirc, party);
+        }
+        else if (intermediary_mode(get_options())) {
           circuit_change_purpose(circ, CIRCUIT_PURPOSE_INTERMEDIARY);
-          mt_cintermediary_init_desc_and_add(orcirc);
+          mt_cintermediary_init_desc_and_add(orcirc, party);
         }
         else {
-          mt_crelay_init_desc_and_add(orcirc);
+          mt_crelay_init_desc_and_add(orcirc, party);
         }
         orcirc->buf = buf_new_with_capacity(RELAY_PPAYLOAD_SIZE);
         orcirc->circuit_received_first_payment_cell = 1;
@@ -329,7 +400,10 @@ MOCK_IMPL(void,
           byte *msg = tor_malloc(msg_len);
           buf_get_bytes(orcirc->buf, (char*) msg, msg_len);
           buf_clear(orcirc->buf);
-          if (intermediary_mode(get_options())) {
+          if (authdir_mode(get_options())) {
+            mt_cledger_process_received_msg(circ, rph->pcommand, msg, msg_len);
+          }
+          else if (intermediary_mode(get_options())) {
             mt_cintermediary_process_received_msg(circ, rph->pcommand, msg, msg_len);
           }
           else {
@@ -352,20 +426,13 @@ MOCK_IMPL(void,
     } 
     else if (CIRCUIT_IS_ORIGIN(circ)) {
       // should be a ledger circuit
+      origin_circuit_t *ocirc = TO_ORIGIN_CIRCUIT(circ);
       if (msg_len > RELAY_PPAYLOAD_SIZE) {
-        ledger_t *ledger;
-        if (intermediary_mode(get_options())) {
-          ledger = mt_cintermediary_get_ledger();
-        }
-        else {
-          ledger = mt_crelay_get_ledger();
-        }
-        tor_assert(ledger);
-        buf_add(ledger->buf, (char*) payload, rph->length);
-        if (buf_datalen(ledger->buf) == msg_len) {
+        buf_add(ocirc->buf, (char*) payload, rph->length);
+        if (buf_datalen(ocirc->buf) == msg_len) {
           byte *msg = tor_malloc(msg_len);
-          buf_get_bytes(ledger->buf, (char*) msg, msg_len);
-          buf_clear(ledger->buf);
+          buf_get_bytes(ocirc->buf, (char*) msg, msg_len);
+          buf_clear(ocirc->buf);
           if (intermediary_mode(get_options())) {
             mt_cintermediary_process_received_msg(circ, rph->pcommand, msg, msg_len);
           }
@@ -376,14 +443,18 @@ MOCK_IMPL(void,
         }
         else {
           log_info(LD_MT, "Buffering one received payment cell of type %hhx"
-              " current buf datlen %lu", rph->pcommand, buf_datalen(ledger->buf));
+              " current buf datlen %lu", rph->pcommand, buf_datalen(ocirc->buf));
           return;
         }
       }
       else {
         /** No need to buffer */
         tor_assert(rph->length == msg_len);
-        if (intermediary_mode(get_options())) {
+        if (authdir_mode(get_options())) {
+          mt_cledger_process_received_msg(circ, rph->pcommand, payload,
+              rph->length);
+        }
+        else if (intermediary_mode(get_options())) {
           mt_cintermediary_process_received_msg(circ, rph->pcommand, payload,
               rph->length);
         }
@@ -398,9 +469,9 @@ MOCK_IMPL(void,
     /* Client mode with one origin circuit */
     if (CIRCUIT_IS_ORIGIN(circ)) {
       if (msg_len > RELAY_PPAYLOAD_SIZE) {
+        origin_circuit_t *ocirc = TO_ORIGIN_CIRCUIT(circ);
         if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
           // get right ppath
-          origin_circuit_t *ocirc = TO_ORIGIN_CIRCUIT(circ);
           pay_path_t *ppath = ocirc->ppath;
           crypt_path_t *cpath = ocirc->cpath;
           do {
@@ -423,26 +494,26 @@ MOCK_IMPL(void,
             return;
           }
         }
-        else if (circ->purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY) {
-          origin_circuit_t *ocirc = TO_ORIGIN_CIRCUIT(circ);
-          intermediary_t *intermediary = mt_cclient_get_intermediary_from_ocirc(ocirc);
-          buf_add(intermediary->buf, (char*) payload, rph->length);
-          if (buf_datalen(intermediary->buf) == msg_len) {
+        else if (circ->purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY ||
+            circ->purpose == CIRCUIT_PURPOSE_C_LEDGER) {
+          buf_add(ocirc->buf, (char*) payload, rph->length);
+          if (buf_datalen(ocirc->buf) == msg_len) {
             byte *msg = tor_malloc(msg_len);
-            buf_get_bytes(intermediary->buf, (char*) msg, msg_len);
-            buf_clear(intermediary->buf);
+            buf_get_bytes(ocirc->buf, (char*) msg, msg_len);
+            buf_clear(ocirc->buf);
             mt_cclient_process_received_msg(ocirc, layer_hint, rph->pcommand, msg, msg_len);
             tor_free(msg);
           }
           else {
-            log_info(LD_MT, "Buffering one received payment cell of type %hhx"
+            log_info(LD_MT, "MoneTor: Buffering one received payment cell of type %hhx"
                 " current buf datalen on the intermediary: %lu",
-                rph->pcommand, buf_datalen(intermediary->buf));
+                rph->pcommand, buf_datalen(ocirc->buf));
             return;
           }
         }
         else {
-          // XXX ledger stuff
+          log_info(LD_MT, "MoneTor: unrecognized purpose %s", 
+              circuit_purpose_to_string(circ->purpose));
         }
       }
       else {
@@ -455,7 +526,6 @@ MOCK_IMPL(void,
     else {
       /* defensive prog */
       log_warn(LD_MT, "Receiving a client payment cell on a non-origin circuit. dafuk?");
-      return;
     }
   }
 }

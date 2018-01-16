@@ -28,20 +28,21 @@ mt_crelay_init(void) {
   desc2circ = digestmap_new();
   count[0] = rand_uint64();
   count[1] = rand_uint64();
+  log_info(LD_MT, "MoneTor: initialization of payment relay code");
+  mt_rpay_init();
 }
 
-void mt_crelay_init_desc_and_add(or_circuit_t *circ) {
+void mt_crelay_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
   increment(count);
   circ->desc.id[0] = count[0];
   circ->desc.id[1] = count[1];
-  circ->desc.party = MT_PARTY_CLI; // Which party shoud I put?
+  circ->desc.party = party; // Should always be CLI
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
   digestmap_set(desc2circ, (char*) id, circ);
 }
 
-ledger_t *
-mt_crelay_get_ledger(void) {
+ledger_t * mt_crelay_get_ledger(void) {
   return ledger;
 }
 
@@ -77,10 +78,11 @@ void mt_crelay_ledger_circ_has_closed(origin_circuit_t *circ) {
     ledger->circuit_retries++;
   }
   smartlist_remove(ledgercircs, circ);
-  /* XXX Todo should also remove from desc2circ */
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
   digestmap_remove(desc2circ, (char*) id);
+  log_info(LD_MT, "MoneTor: ledger circ has closed. Removed %s from our internal structure",
+      mt_desc_describe(&circ->desc));
 }
 
 void
@@ -262,8 +264,11 @@ mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   mt_desc2digest(desc, &id);
   circuit_t *circ = digestmap_get(desc2circ, (char*) id);
   crypt_path_t *layer_start = NULL;
-  if (!circ || circ->marked_for_close || circ->state !=
+  tor_assert(circ);
+  if (circ->marked_for_close || circ->state !=
       CIRCUIT_STATE_OPEN) {
+    log_info(LD_MT, "MoneTor: the circuit has a problem."
+      " circ state: %s", circuit_state_to_string(circ->state));
     //XXX Todo maybe do something smarter if the circ is still not
     //open
     return -1;
@@ -283,7 +288,18 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
   mt_desc_t *desc;
   or_circuit_t *orcirc;
   if (CIRCUIT_IS_ORIGIN(circ)) {
+  //XXX Todo
   // should be a ledger circuit or a circuit to an interemdiary
+    desc = &TO_ORIGIN_CIRCUIT(circ)->desc;
+    if (mt_rpay_recv(desc, pcommand, msg, msg_len) < 0) {
+      log_info(LD_MT, "MoneTor: Payment module returnerd -1");
+      // XXX What do we do? aboard every circuit linked to this
+      if (circ->purpose == CIRCUIT_PURPOSE_R_LEDGER) {
+      }
+      else if(circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY) {
+      }
+    }
+
   }
   else {
     //circ should a or_circuit_t of a normal circuit with

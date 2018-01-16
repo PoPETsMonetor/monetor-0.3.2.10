@@ -37,10 +37,6 @@ typedef struct intermediary_t {
    * with that intermediary */
   uint32_t circuit_retries;
 
-  /*buffer payment cells received by this intermediary
-   *if we get multiple cells for one mt_ntype_t */
-  buf_t *buf;
-
 } intermediary_t;
 
 /********************* Ledger struct *****************************/
@@ -65,8 +61,6 @@ typedef struct ledger_t {
   extend_info_t *ei;
 
   mt_desc_t desc;
-
-  struct buf_t *buf;
 
   uint32_t circuit_retries;
 } ledger_t;

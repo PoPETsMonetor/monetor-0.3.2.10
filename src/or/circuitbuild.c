@@ -486,6 +486,13 @@ origin_circuit_init(uint8_t purpose, int flags)
   circ->build_state->is_internal =
     ((flags & CIRCLAUNCH_IS_INTERNAL) ? 1 : 0);
   circ->base_.purpose = purpose;
+  if (purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY ||
+      purpose == CIRCUIT_PURPOSE_C_LEDGER ||
+      purpose == CIRCUIT_PURPOSE_I_LEDGER ||
+      purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY ||
+      purpose == CIRCUIT_PURPOSE_R_LEDGER) {
+    circ->buf = buf_new_with_capacity(RELAY_PPAYLOAD_SIZE);
+  }
   return circ;
 }
 
