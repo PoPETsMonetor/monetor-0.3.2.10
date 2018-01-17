@@ -826,7 +826,8 @@ typedef enum {
   MT_PARTY_INT,
   MT_PARTY_AUT,
   MT_PARTY_LED,
-  MT_PARTY_IDK,
+  MT_PARTY_IDK, /** Style used for _ANY_ messages */
+  MT_PARTY_END,
 } mt_party_t;
 
 typedef struct {

@@ -318,7 +318,7 @@ mt_common_whose_other_edge(mt_ntype_t pcommand) {
     case MT_NTYPE_CHN_END_SETUP:
     case MT_NTYPE_CHN_END_CLOSE:
     case MT_NTYPE_CHN_END_CASHOUT:
-      return MT_PARTY_IDK; // XXX Change that
+      return MT_PARTY_END;
     case MT_NTYPE_MAC_AUT_MINT:
       return MT_PARTY_AUT;
     case MT_NTYPE_CHN_INT_ESTAB2:
