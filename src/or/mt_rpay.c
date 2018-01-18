@@ -668,7 +668,8 @@ static int handle_nan_cli_pay1(mt_desc_t* desc, nan_cli_pay1_t* token, byte (*pi
   chn->data.balance += chn->data.nan_public.val_to;
   chn->data.nan_state.num_payments ++;
 
-  mt_alert_payment(desc);
+  //mt_alert_payment(desc);
+  mt_paymod_signal(MT_SIGNAL_PAYMENT_RECEIVED, desc);
 
   byte* msg;
   int msg_size = pack_nan_rel_pay2(&reply, pid, &msg);

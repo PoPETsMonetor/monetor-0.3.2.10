@@ -10,6 +10,8 @@
  * performing a "context switch" into them whenever necessary.
  */
 
+#pragma GCC diagnostic ignored "-Wswitch-enum"
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -84,6 +86,7 @@ static digestmap_t* rel_ctx;           // digest(rel_desc) -> context_t*
 static digestmap_t* int_ctx;           // digest(int_desc) -> context_t*
 
 static smartlist_t* event_queue;
+static digestmap_t* connections;        // digest(cli_desc) -> (digest(rel_desc) -> digest(int_desc))
 static digestmap_t* exp_balance;
 
 static int mock_send_message(mt_desc_t *desc, mt_ntype_t type, byte* msg, int size){
@@ -147,11 +150,6 @@ static int mock_send_message_multidesc(mt_desc_t *desc1, mt_desc_t* desc2,  mt_n
   return MT_SUCCESS;
 }
 
-static int mock_alert_payment(mt_desc_t* desc){
-  (void)desc;
-  return 0;
-}
-
 static workqueue_entry_t* mock_cpuworker_queue_work(workqueue_priority_t priority,
 						    workqueue_reply_t (*fn)(void*, void*),
 						    int (*reply_fn)(void*), void* arg){
@@ -170,37 +168,45 @@ static workqueue_entry_t* mock_cpuworker_queue_work(workqueue_priority_t priorit
   return (void*)NON_NULL;
 }
 
-static int mock_pay_success(mt_desc_t* rdesc, mt_desc_t* idesc, int success){
-  (void)success;
+static int mock_paymod_signal(mt_signal_t signal, mt_desc_t* desc){
 
-  // as long as there is still time keep making payments, otherwise close
-  if(sim_time < max_time){
+  // need to get idesc somehow;
 
-    event_t* event = tor_malloc(sizeof(event_t));
-    event->type = CALL_PAY;
-    event->src = cur_desc;
-    event->desc1 = *rdesc;
-    event->desc2 = *idesc;
+  switch(signal){
+    case MT_SIGNAL_PAYMENT_SUCCESS:;
 
-    smartlist_add(event_queue, event);
+      byte cdigest[DIGEST_LEN];
+      byte rdigest[DIGEST_LEN];
+      mt_desc2digest(&cur_desc, &cdigest);
+      mt_desc2digest(desc, &rdigest);
+
+      digestmap_t* rel2int = digestmap_get(connections, (char*)cdigest);
+      mt_desc_t* idesc = digestmap_get(rel2int, (char*)rdigest);
+
+      // as long as there is still time keep making payments, otherwise close
+      if(sim_time < max_time){
+
+	event_t* event = tor_malloc(sizeof(event_t));
+	event->type = CALL_PAY;
+	event->src = cur_desc;
+	event->desc1 = *desc;
+	event->desc2 = *idesc;
+
+	smartlist_add(event_queue, event);
+      }
+      else {
+	event_t* event = tor_malloc(sizeof(event_t));
+	event->type = CALL_CLOSE;
+	event->src = cur_desc;
+	event->desc1 = *desc;
+	event->desc2 = *idesc;
+
+	smartlist_add(event_queue, event);
+      }
+
+    default:;
   }
-  else {
-    event_t* event = tor_malloc(sizeof(event_t));
-    event->type = CALL_CLOSE;
-    event->src = cur_desc;
-    event->desc1 = *rdesc;
-    event->desc2 = *idesc;
 
-    smartlist_add(event_queue, event);
-  }
-
-  return MT_SUCCESS;
-}
-
-static int mock_close_success(mt_desc_t* rdesc, mt_desc_t* idesc, int success){
-  (void)rdesc;
-  (void)idesc;
-  (void)success;
   return MT_SUCCESS;
 }
 
@@ -239,6 +245,9 @@ static char* party_string(mt_desc_t* desc){
       break;
     case MT_PARTY_INT:
       party_str = "int";
+      break;
+    case MT_PARTY_IDK:
+      party_str = "idk";
       break;
   }
 
@@ -444,9 +453,12 @@ static int compare_random(const void **a, const void **b){
 }
 
 static void set_up_main_loop(void){
-    MAP_FOREACH(digestmap_, cli_ctx, const char*, digest, context_t*, ctx){
+  MAP_FOREACH(digestmap_, cli_ctx, const char*, digest, context_t*, ctx){
     mt_cpay_import(ctx->state);
     tor_free(ctx->state);
+
+    digestmap_t* rel2int = digestmap_new();
+    digestmap_add(digest, rel2int);
 
     // populate random subset of relays
     mt_desc_t unique_rel_descs[REL_CONNS];
@@ -472,16 +484,28 @@ static void set_up_main_loop(void){
       event->desc1 = unique_rel_descs[i];
       event->desc2 = ((context_t*)digestmap_rand(int_ctx))->desc;
       smartlist_add(event_queue, event);
+
+      // record the relay -> intermediary pairing
+      byte rdigest[DIGEST_LEN];
+      mt_desc_t* idesc = tor_malloc(sizeof(mt_desc_t));
+      mt_desc2digest(&event->desc1, &rdigest);
+      memcpy(idesc, &event->desc2, sizeof(mt_desc_t));
+      digestmap_add(rel2int, rdigest, idesc);
     }
 
     // make direct payments
-
     event_t* event = tor_malloc(sizeof(event_t));
     event->type = CALL_PAY;
     event->src = ctx->desc;
     event->desc1 = ((context_t*)digestmap_rand(int_ctx))->desc;
     event->desc2 = event->desc1;
     smartlist_add(event_queue, event);
+
+    byte idigest[DIGEST_LEN];
+    mt_desc_t* idesc = tor_malloc(sizeof(mt_desc_t));
+    mt_desc2digest(&event->desc1, idigest);
+    memcpy(idesc, &event->desc2, sizeof(mt_desc_t));
+    digestmap_add(rel2int, idigest, idesc);
 
     mt_cpay_export(&ctx->state);
   } MAP_FOREACH_END;
@@ -638,9 +662,7 @@ static void test_mt_paymulti(void *arg){
 
   MOCK(mt_send_message, mock_send_message);
   MOCK(mt_send_message_multidesc, mock_send_message_multidesc);
-  MOCK(mt_alert_payment, mock_alert_payment);
-  MOCK(mt_pay_success, mock_pay_success);
-  MOCK(mt_close_success, mock_close_success);
+  MOCK(mt_paymod_signal, mock_paymod_signal);
   MOCK(cpuworker_queue_work, (cpuworker_fn)mock_cpuworker_queue_work);
 
   cli_ctx = digestmap_new();
@@ -649,6 +671,7 @@ static void test_mt_paymulti(void *arg){
 
   event_queue = smartlist_new();
   exp_balance = digestmap_new();
+  connections = digestmap_new();
 
   // seed random number so we get repeatable results
   srand(42);
@@ -919,10 +942,10 @@ static void test_mt_paymulti(void *arg){
 
   UNMOCK(mt_send_message);
   UNMOCK(mt_send_message_multidesc);
-  UNMOCK(mt_alert_payment);
-  UNMOCK(mt_pay_success);
-  UNMOCK(mt_close_success);
+  UNMOCK(mt_paymod_signal);
   UNMOCK(cpuworker_queue_work);
+
+  // free maps
 }
 
 struct testcase_t mt_paymulti_tests[] = {
