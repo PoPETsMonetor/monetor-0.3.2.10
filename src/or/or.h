@@ -3366,7 +3366,7 @@ typedef struct origin_circuit_t {
 
   /** Used for ledger circuits and intermediary circuit at the relay */
   mt_desc_t desc;
-  
+
   /** buffer used for intermediary circuits and ledger circuits
    * on client, intermediary and relay */
   struct buf_t *buf;
@@ -3630,7 +3630,7 @@ typedef struct or_circuit_t {
    * Set to 1 when we receive the first payment cell */
 
   unsigned int circuit_received_first_payment_cell : 1;
-  
+
   /**
    * Set to 1 when we prioritize this circuit
    */
@@ -4276,7 +4276,7 @@ typedef struct {
   int DirCache; /**< Cache all directory documents and accept requests via
                  * tunnelled dir conns from clients. If 1, enabled (default);
                  * If 0, disabled. */
-  
+
   int Ledger; /** Used to tell if this dirauth is going to be the ledger */
 
   char *VirtualAddrNetworkIPv4; /**< Address and mask to hand out for virtual
@@ -5643,6 +5643,56 @@ typedef struct tor_version_t {
 
 /***************************** MoneTor **********************************/
 
+typedef enum {
+
+  /**
+   * Signal that the last mt_cpay_pay to the given relay desc was successful. Do
+   * not call mt_cpay_pay again until either this signal (or
+   * MT_SIGNAL_PAY_FAILURE) is broadcasted
+   */
+  MT_SIGNAL_PAYMENT_SUCCESS,
+
+  /**
+   * Signal that the last mt_cpay_pay to the given relay desc failed
+   */
+  MT_SIGNAL_PAYMENT_FAILURE,
+
+  /**
+   * Signal that the last mt_cpay_close to the given relay desc was
+   * successful. Do not call mt_cpay_close again until either this signal (or
+   * MT_SIGNAL_PAY_FAILURE) is broadcasted
+   */
+  MT_SIGNAL_CLOSE_SUCCESS,
+
+  /**
+   * Signal that the last mt_cpay_close to the given relay desc failed
+   */
+  MT_SIGNAL_CLOSE_FAILURE,
+
+  /**
+   * Signal to a relay controller that a client has initiated a payment
+   * protocol. The controller pre-emptively begin prioritizing traffic at this
+   * point as an act of trust even though an irrevocable payment has not yet
+   * been received.
+   */
+  MT_SIGNAL_PAYMENT_INITIALIZED,
+
+  /**
+   * Signal to a relay controller that a real, irrevocabl payment has been
+   * received by a client. The relay should continue prioritizing traffic from
+   * this client with confidence.
+   */
+  MT_SIGNAL_PAYMENT_RECEIVED,
+
+  /**
+   * Signal to an end user that there are no active nanopayment channels left
+   * with the intermediary in case the end user is inclined to close the
+   * circuit.
+   */
+  MT_SIGNAL_INTERMEDIARY_IDLE,
+
+} mt_signal_t;
+
 //XXX MoneTor merging moneTor enum & co here
 
 typedef unsigned char byte;
@@ -5849,7 +5899,7 @@ typedef enum {
   MT_NTYPE_CHN_LED_DATA,        // channel ledger data mapped to an address
   MT_NTYPE_MAC_LED_QUERY,       // request to query macropayment data
   MT_NTYPE_CHN_LED_QUERY,       // request to query channel data
-  
+
 } mt_ntype_t;
 
 //----------------------------- Local Tokens --------------------------------//

@@ -1224,15 +1224,17 @@ static workqueue_reply_t wcom_task(void* thread, void* args){
 }
 
 static int pay_finish(mt_desc_t* rdesc, mt_desc_t* idesc){
-  return mt_pay_success(rdesc, idesc, MT_SUCCESS);
+  //return mt_pay_success(rdesc, idesc, MT_SUCCESS);
+  (void)idesc;
+  return mt_paymod_signal(MT_SIGNAL_PAYMENT_SUCCESS, rdesc);
 }
 
 static int close_finish(mt_desc_t* rdesc, mt_desc_t* idesc){
-  (void)rdesc;
   (void)idesc;
 
   smartlist_sort(client.nans_setup, compare_chn_end_data);
-  return mt_close_success(rdesc, idesc, MT_SUCCESS);
+  //return mt_close_success(rdesc, idesc, MT_SUCCESS);
+  return mt_paymod_signal(MT_SIGNAL_CLOSE_SUCCESS, rdesc);
 }
 
 static mt_channel_t* smartlist_idesc_remove(smartlist_t* list, mt_desc_t* desc){

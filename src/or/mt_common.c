@@ -49,7 +49,7 @@ int mt_pk2addr(byte (*pk)[MT_SZ_PK], byte (*addr_out)[MT_SZ_ADDR]){
 void mt_desc2digest(mt_desc_t* desc, byte (*digest_out)[DIGEST_LEN]){
   byte hash[MT_SZ_HASH];
   byte input[sizeof(uint32_t) + sizeof(desc->party)];
-  memcpy(input, &desc->id, sizeof(uint32_t));
+  memcpy(input, &desc->id, sizeof(desc->id));
   memcpy(input + sizeof(uint32_t), &desc->party, sizeof(desc->party));
   mt_crypt_hash(input, sizeof(uint32_t) + sizeof(desc->party), &hash);
   memcpy(*digest_out, hash, DIGEST_LEN);
@@ -423,7 +423,7 @@ MOCK_IMPL(void,
         mt_cintermediary_process_received_msg(circ, rph->pcommand, payload,
             rph->length);
       }
-    } 
+    }
     else if (CIRCUIT_IS_ORIGIN(circ)) {
       // should be a ledger circuit
       origin_circuit_t *ocirc = TO_ORIGIN_CIRCUIT(circ);
@@ -512,7 +512,7 @@ MOCK_IMPL(void,
           }
         }
         else {
-          log_info(LD_MT, "MoneTor: unrecognized purpose %s", 
+          log_info(LD_MT, "MoneTor: unrecognized purpose %s",
               circuit_purpose_to_string(circ->purpose));
         }
       }
@@ -678,7 +678,7 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
 }
 
 /**
- * Called to send a intermediary descriptor to a relay. This is sent by 
+ * Called to send a intermediary descriptor to a relay. This is sent by
  * a client.
  */
 MOCK_IMPL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2,
@@ -692,21 +692,8 @@ MOCK_IMPL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2,
   return mt_cclient_send_message_multidesc(desc1, desc2, type, msg, size);
 }
 
-MOCK_IMPL(int, mt_alert_payment, (mt_desc_t *desc)) {
-  (void) desc;
-  return 0;
-}
-
-MOCK_IMPL(int, mt_pay_success, (mt_desc_t *rdesc, mt_desc_t* idesc, int success)){
-  (void)rdesc;
-  (void)idesc;
-  (void)success;
-  return 0;
-}
-
-MOCK_IMPL(int, mt_close_success, (mt_desc_t *rdesc, mt_desc_t* idesc, int success)){
-  (void)rdesc;
-  (void)idesc;
-  (void)success;
+MOCK_IMPL(int, mt_paymod_signal, (mt_signal_t signal, mt_desc_t *desc)){
+  (void)signal;
+  (void)desc;
   return 0;
 }

@@ -226,29 +226,10 @@ MOCK_DECL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type, byte* msg, in
 MOCK_DECL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2, mt_ntype_t type, byte* msg, int size));
 
 /**
- * Inform the controller of the success of an mt_cpay_pay() protocol
- *
- * When the controller calls mt_cpay_pay to invoke a relay payment, the payment
- * module will initiate whatever protocols necessary to make that happen (making
- * some number of <b>mt_send_message</b> calls in the process). When everything
- * is completed, it invokes <b>mt_pay_success</b> to notify the controller that
- * the payment has gone through. The <b>rdesc</b> and <b>idesc</b> parameters
- * are the same values that were provided in the <b>mt_cpay_pay</b> call and the
- * <b>success</b> indicates whether the payment was completed.
- *
- * Note that the controller should NOT attempt to call <b>mt_cpay_pay</b> on the
- * same <b>rdesc</b> before it has received confirmation of success.
+ * Inform the controller of events that happen within the payment module. See
+ * the definitions of <b>mt_signal_t</b> in <b>or.h</b> for details of possible
+ * signals.
  */
-MOCK_DECL(int, mt_pay_success, (mt_desc_t *rdesc, mt_desc_t* idesc, int success));
-
-/**
- * Inform the controller of the success of an mt_cpay_close() protocol
- *
- * Similar to <b>mt_pay_success</b> except to inform the controller that the
- * <b>mt_cpay_close</b> command has completed. Once a channel has been closed,
- * the payment module will NOT send any more message to <b>rdesc</b> again
- * unless it is reopened.
- */
-MOCK_DECL(int, mt_close_success, (mt_desc_t *rdesc, mt_desc_t* idesc, int success));
+MOCK_DECL(int, mt_paymod_signal, (mt_signal_t signal, mt_desc_t *desc));
 
 #endif

@@ -602,7 +602,8 @@ static int handle_nan_cli_dpay1(mt_desc_t* desc, nan_cli_dpay1_t* token, byte (*
 
   // fill out token
 
-  mt_alert_payment(desc);
+  //mt_alert_payment(desc);
+  mt_paymod_signal(MT_SIGNAL_PAYMENT_RECEIVED, desc);
 
   byte* msg;
   int msg_size = pack_nan_int_dpay2(&reply, pid, &msg);
