@@ -693,8 +693,7 @@ MOCK_IMPL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2,
 }
 
 MOCK_IMPL(int, mt_alert_payment, (mt_desc_t *desc)) {
-  (void) desc;
-  return 0;
+  return mt_crelay_alert_payement(desc);
 }
 
 MOCK_IMPL(int, mt_pay_success, (mt_desc_t *rdesc, mt_desc_t* idesc, int success)){

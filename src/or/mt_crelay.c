@@ -382,3 +382,22 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
     }
   }
 }
+
+/*
+ * This function is invoked by the relay payment module every time that a
+ * successful payment has been made. The <b>desc</b> parameter contains the
+ * identity of the paying client. This client should be familiar to the
+ * controller through previous protocol executions.
+ */
+
+int mt_crelay_alert_payement(mt_desc_t* desc) {
+
+  byte id[DIGEST_LEN];
+  mt_desc2digest(desc, &id);
+  circuit_t *circ = digestmap_get(desc2circ, (char*) id);
+  if (!circ) {
+    log_info(LD_MT, "MoneTor: Looks like we don't have any circuit relate"
+        " to this descriptor %s within our map", mt_desc_describe(desc));
+    return -1;
+  }
+}
