@@ -4789,7 +4789,6 @@ typedef struct {
   smartlist_t *SchedulerTypes_;
 
   /* moneTor configurations for the payment module */
-  char* moneTorLedgerDesc;
   char* moneTorAuthorityPK;
   int moneTorFee;
   int moneTorTax;

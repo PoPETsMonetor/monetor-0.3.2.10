@@ -416,7 +416,6 @@ static config_var_t option_vars_[] = {
   V(moneTorAuthorityPK,          STRING,   NULL),
   V(moneTorBalance,              INT,      "0"),
   V(moneTorFee,                  INT,      "0"),
-  V(moneTorLedgerDesc,           UINT,     "0"),
   V(moneTorPK,                   STRING,   NULL),
   V(moneTorPP,                   STRING,   NULL),
   V(moneTorSK,                   STRING,   NULL),

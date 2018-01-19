@@ -130,6 +130,7 @@ static int mock_send_message(mt_desc_t *desc, mt_ntype_t type, byte* msg, int si
 
 static int mock_send_message_multidesc(mt_desc_t *desc1, mt_desc_t* desc2,  mt_ntype_t type, byte* msg, int size){
 
+  printf("party %d rel %d\n", desc1->party, MT_PARTY_REL);
   if(desc1->party != MT_PARTY_REL)
     return MT_ERROR;
 
@@ -437,7 +438,7 @@ static void print_sent_message(mt_desc_t* src, mt_desc_t* dst, mt_ntype_t type){
   char* dst_party = party_string(dst);
   char* type_str = type_string(type);
 
-  printf("%s (%02d) -> %s (%02d) : %s\n", src_party, (int)src->id, dst_party, (int)dst->id, type_str);
+  printf("%s (%02d) -> %s (%02d) : %s\n", src_party, (int)src->id[0], dst_party, (int)dst->id[0], type_str);
 
   tor_free(src_party);
   tor_free(dst_party);
@@ -550,6 +551,7 @@ static int do_main_loop_once(void){
   }
 
   switch(event->type){
+
     case CALL_PAY:
       ctx = digestmap_get(cli_ctx, (char*)src_digest);
       mt_cpay_import(ctx->state);
@@ -689,28 +691,29 @@ static void test_mt_paymulti(void *arg){
   int int_trans_val = (MT_INT_CHN_VAL + MT_FEE) * 100;
 
   // setup all of the parties and add to _ctx maps
+  uint32_t ids = 1;
 
   byte pp[MT_SZ_PP];
-
-  byte aut_pk[MT_SZ_PK];
-  byte aut_sk[MT_SZ_SK];
-  aut_desc.party = MT_PARTY_AUT;
 
   byte led_pk[MT_SZ_PK];
   byte led_sk[MT_SZ_SK];
   led_desc.party = MT_PARTY_LED;
+  led_desc.id[0] = 0;
+  led_desc.id[1] = 0;
+
+  byte aut_pk[MT_SZ_PK];
+  byte aut_sk[MT_SZ_SK];
+  aut_desc.party = MT_PARTY_AUT;
+  aut_desc.id[0] = ids++;
+  aut_desc.id[1] = 0;
 
   mt_crypt_setup(&pp);
   mt_crypt_keygen(&pp, &aut_pk, &aut_sk);
   mt_crypt_keygen(&pp, &led_pk, &led_sk);
 
-  uint32_t ids = 0;
-  aut_desc.id[0] = ids++;
-  led_desc.id[0] = ids++;
 
   or_options_t* options = (or_options_t*)get_options();
 
-  mt_bytes2hex((byte*)&led_desc.id[0], sizeof(led_desc.id[0]), &options->moneTorLedgerDesc);
   mt_bytes2hex(aut_pk, MT_SZ_PK, &options->moneTorAuthorityPK);
 
   mt_bytes2hex(pp, MT_SZ_PP, &options->moneTorPP);
@@ -739,26 +742,24 @@ static void test_mt_paymulti(void *arg){
   int packed_mint_size = pack_mac_aut_mint(&mint, &mint_id, &packed_mint);
   int signed_mint_size = mt_create_signed_msg(packed_mint, packed_mint_size,
 					      &aut_pk, &aut_sk, &signed_mint);
-
   result = mt_lpay_recv(&aut_desc, MT_NTYPE_MAC_AUT_MINT, signed_mint, signed_mint_size);
   tt_assert(result == MT_SUCCESS);
 
   // initialize clients
 
   for(int i = 0; i < CLI_NUM; i++){
-
     mt_desc_t cli_desc;
     byte cli_pk[MT_SZ_PK];
     byte cli_sk[MT_SZ_SK];
     cli_desc.party = MT_PARTY_CLI;
     mt_crypt_keygen(&pp, &cli_pk, &cli_sk);
     cli_desc.id[0] = ids++;
+    cli_desc.id[1] = 0;
 
     mt_bytes2hex(cli_pk, MT_SZ_PK, &options->moneTorPK);
     mt_bytes2hex(cli_sk, MT_SZ_SK, &options->moneTorSK);
     options->moneTorBalance = cli_trans_val;
     tt_assert(mt_cpay_init() == MT_SUCCESS);
-
     byte digest[DIGEST_LEN];
     mt_desc2digest(&cli_desc, &digest);
 
@@ -803,6 +804,7 @@ static void test_mt_paymulti(void *arg){
     rel_desc.party = MT_PARTY_REL;
     mt_crypt_keygen(&pp, &rel_pk, &rel_sk);
     rel_desc.id[0] = ids++;
+    rel_desc.id[1] = 0;
 
     mt_bytes2hex(rel_pk, MT_SZ_PK, &options->moneTorPK);
     mt_bytes2hex(rel_sk, MT_SZ_SK, &options->moneTorSK);
@@ -853,6 +855,7 @@ static void test_mt_paymulti(void *arg){
     int_desc.party = MT_PARTY_INT;
     mt_crypt_keygen(&pp, &int_pk, &int_sk);
     int_desc.id[0] = ids++;
+    int_desc.id[1] = ids++;
 
     mt_bytes2hex(int_pk, MT_SZ_PK, &options->moneTorPK);
     mt_bytes2hex(int_sk, MT_SZ_SK, &options->moneTorSK);

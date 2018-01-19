@@ -48,10 +48,10 @@ int mt_pk2addr(byte (*pk)[MT_SZ_PK], byte (*addr_out)[MT_SZ_ADDR]){
  */
 void mt_desc2digest(mt_desc_t* desc, byte (*digest_out)[DIGEST_LEN]){
   byte hash[MT_SZ_HASH];
-  byte input[sizeof(uint32_t) + sizeof(desc->party)];
-  memcpy(input, &desc->id, sizeof(desc->id));
-  memcpy(input + sizeof(uint32_t), &desc->party, sizeof(desc->party));
-  mt_crypt_hash(input, sizeof(uint32_t) + sizeof(desc->party), &hash);
+  byte input[sizeof(uint64_t) * 2 + sizeof(desc->party)];
+  memcpy(input, &desc->id, sizeof(uint64_t) * 2);
+  memcpy(input + sizeof(uint64_t) * 2, &desc->party, sizeof(desc->party));
+  mt_crypt_hash(input, sizeof(uint64_t) * 2 + sizeof(desc->party), &hash);
   memcpy(*digest_out, hash, DIGEST_LEN);
 }
 
@@ -141,6 +141,16 @@ int mt_hc_verify(byte (*tail)[MT_SZ_HASH], byte (*preimage)[MT_SZ_HASH], int k){
     return MT_ERROR;
 
   return MT_SUCCESS;
+}
+
+int mt_desc_comp(mt_desc_t* desc1, mt_desc_t* desc2){
+  if(desc1->party != desc2->party)
+    return (desc1->party > desc2->party) ? 1 : -1;
+  if(desc1->id[0] != desc2->id[0])
+    return (desc1->id[0] > desc2->id[0]) ? 1 : -1;
+  if(desc1->id[1] != desc2->id[1])
+    return (desc1->id[1] > desc2->id[1]) ? 1 : -1;
+  return 0;
 }
 
 void increment(long unsigned *id) {

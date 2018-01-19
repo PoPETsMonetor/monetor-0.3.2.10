@@ -192,14 +192,11 @@ int mt_cpay_init(void){
   byte* temp_pp;
   byte* temp_pk;
   byte* temp_sk;
-  byte* temp_led;
 
   fee = options->moneTorFee;
   tax = options->moneTorTax;
   cli_bal = options->moneTorBalance;
-  ledger.party = MT_PARTY_LED;
 
-  tor_assert(mt_hex2bytes(options->moneTorLedgerDesc, &temp_led) == sizeof(ledger.id));
   tor_assert(mt_hex2bytes(options->moneTorPP, &temp_pp) == MT_SZ_PP);
   tor_assert(mt_hex2bytes(options->moneTorPK, &temp_pk) == MT_SZ_PK);
   tor_assert(mt_hex2bytes(options->moneTorSK, &temp_sk) == MT_SZ_SK);
@@ -207,14 +204,17 @@ int mt_cpay_init(void){
   memcpy(pp, temp_pp, MT_SZ_PP);
   memcpy(pk, temp_pk, MT_SZ_PK);
   memcpy(sk, temp_sk, MT_SZ_SK);
-  memcpy(&ledger.id, temp_led, sizeof(ledger.id));
 
   free(temp_pp);
   free(temp_pk);
   free(temp_sk);
-  free(temp_led);
 
   /********************************************************************/
+
+  // set ledger
+  ledger.id[0] = 0;
+  ledger.id[1] = 0;
+  ledger.party = MT_PARTY_LED;
 
   // copy in values crypto fields
   memcpy(client.pp, pp, MT_SZ_PP);
@@ -251,10 +251,10 @@ int mt_cpay_init(void){
  * error.
  */
 int mt_cpay_pay(mt_desc_t* rdesc, mt_desc_t* idesc){
-
   // determine whether this is a standard or direct payment
-  if(rdesc->id != idesc->id)
+  if(mt_desc_comp(rdesc, idesc) != 0){
     return pay_helper(rdesc, idesc);
+  }
   else
     return dpay_helper(rdesc, idesc);
 }
@@ -645,8 +645,7 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
     log_debug(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
-
-  if(desc->id != client.ledger.id || desc->party != MT_PARTY_LED)
+  if(mt_desc_comp(desc, &client.ledger) != 0)
     return MT_ERROR;
 
   if(token->success != MT_CODE_SUCCESS)
@@ -849,8 +848,9 @@ static int handle_nan_int_setup6(mt_desc_t* desc, nan_int_setup6_t* token, byte 
   // sort nans_setup here?
 
   // check validity incoming message
-  if(chn->callback.fn)
+  if(chn->callback.fn){
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
+  }
   return MT_SUCCESS;
 }
 
@@ -1240,7 +1240,7 @@ static int close_finish(mt_desc_t* rdesc, mt_desc_t* idesc){
 static mt_channel_t* smartlist_idesc_remove(smartlist_t* list, mt_desc_t* desc){
 
   SMARTLIST_FOREACH_BEGIN(list, mt_channel_t*, elm){
-    if(elm->idesc.id == desc->id && elm->idesc.party == desc->party){
+    if(mt_desc_comp(&elm->idesc, desc) == 0){
       smartlist_remove(list, elm);
       return elm;
     }

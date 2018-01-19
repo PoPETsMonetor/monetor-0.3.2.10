@@ -164,13 +164,10 @@ int mt_rpay_init(void){
   byte* temp_pp;
   byte* temp_pk;
   byte* temp_sk;
-  byte* temp_led;
 
   fee = options->moneTorFee;
   rel_bal = options->moneTorBalance;
-  ledger.party = MT_PARTY_LED;
 
-  tor_assert(mt_hex2bytes(options->moneTorLedgerDesc, &temp_led) == sizeof(ledger.id));
   tor_assert(mt_hex2bytes(options->moneTorPP, &temp_pp) == MT_SZ_PP);
   tor_assert(mt_hex2bytes(options->moneTorPK, &temp_pk) == MT_SZ_PK);
   tor_assert(mt_hex2bytes(options->moneTorSK, &temp_sk) == MT_SZ_SK);
@@ -178,14 +175,17 @@ int mt_rpay_init(void){
   memcpy(pp, temp_pp, MT_SZ_PP);
   memcpy(pk, temp_pk, MT_SZ_PK);
   memcpy(sk, temp_sk, MT_SZ_SK);
-  memcpy(&ledger.id, temp_led, sizeof(ledger.id));
 
   free(temp_pp);
   free(temp_pk);
   free(temp_sk);
-  free(temp_led);
 
   /********************************************************************/
+
+  // set ledger
+  ledger.id[0] = 0;
+  ledger.id[1] = 0;
+  ledger.party = MT_PARTY_LED;
 
   // copy macro-level crypto fields
   memcpy(relay.pp, pp, MT_SZ_PP);
@@ -413,7 +413,7 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
     return MT_ERROR;
   }
 
-  if(desc->id != relay.ledger.id || desc->party != MT_PARTY_LED)
+  if(mt_desc_comp(desc, &relay.ledger) != 0)
     return MT_ERROR;
 
   if(token->success != MT_CODE_SUCCESS)

@@ -239,31 +239,31 @@ static int mock_send_message(mt_desc_t *desc, mt_ntype_t type, byte* msg, int si
   }
 
   // invoke the corresponding recv call and log
-  if(dst_desc.id[0] == aut_desc.id[0] && dst_desc.party == MT_PARTY_AUT){
+  if(mt_desc_comp(&dst_desc, &aut_desc) == 0){
     printf("%s -> aut : %s\n", party_str, type_str);
     return MT_SUCCESS;
   }
 
-  if(dst_desc.id[0] == led_desc.id[0] && dst_desc.party == MT_PARTY_LED){
+  if(mt_desc_comp(&dst_desc, &led_desc) == 0){
     printf("%s -> led : %s\n", party_str, type_str);
     return mt_lpay_recv(&src_desc, type, msg, size);
   }
 
-  if(dst_desc.id[0] == cli_desc.id[0] && dst_desc.party == MT_PARTY_CLI){
+  if(mt_desc_comp(&dst_desc, &cli_desc) == 0){
     printf("%s -> cli : %s\n", party_str, type_str);
     return mt_cpay_recv(&src_desc, type, msg, size);
   }
 
-  if(dst_desc.id[0] == rel_desc.id[0] && dst_desc.party == MT_PARTY_REL){
+  if(mt_desc_comp(&dst_desc, &rel_desc) == 0){
     printf("%s -> rel : %s\n", party_str, type_str);
     return mt_rpay_recv(&src_desc, type, msg, size);
   }
 
-  if(dst_desc.id[0] == int_desc.id[0] && dst_desc.party == MT_PARTY_INT){
+  if(mt_desc_comp(&dst_desc, &int_desc) == 0){
     printf("%s -> int : %s\n", party_str, type_str);
     return mt_ipay_recv(&src_desc, type, msg, size);
   }
-
+  printf("dst_desc %d\n", dst_desc.id[0]);
   printf("ERROR: descriptor not recognized\n");
   return MT_ERROR;
 }
@@ -277,9 +277,7 @@ static int mock_send_message_multidesc(mt_desc_t *desc1, mt_desc_t* desc2, mt_nt
   memcpy(&src_desc, &dst_desc, sizeof(mt_desc_t));
   memcpy(&dst_desc, &temp_desc, sizeof(mt_desc_t));
 
-  if(dst_desc.id[0] == rel_desc.id[0]
-     && dst_desc.party == MT_PARTY_REL
-     && type == MT_NTYPE_NAN_CLI_ESTAB1){
+  if(mt_desc_comp(&dst_desc, &rel_desc) == 0 && type == MT_NTYPE_NAN_CLI_ESTAB1){
     printf("cli - >rel : nan_cli_estab1\n");
     return mt_rpay_recv_multidesc(&src_desc, desc2, type, msg, size);
   }
@@ -381,19 +379,25 @@ static void test_mt_paysimple(void *arg){
   mt_crypt_keygen(&pp, &rel_pk, &rel_sk);
   mt_crypt_keygen(&pp, &int_pk, &int_sk);
 
-  uint32_t ids = 0;
+  led_desc.id[0] = 0;
+  led_desc.id[1] = 0;
+
+  uint32_t ids = 1;
   aut_desc.id[0] = ids++;
-  led_desc.id[0] = ids++;
   cli_desc.id[0] = ids++;
   rel_desc.id[0] = ids++;
   int_desc.id[0] = ids++;
+
+  aut_desc.id[1] = 0;
+  cli_desc.id[1] = 0;
+  rel_desc.id[1] = 0;
+  int_desc.id[1] = 0;
 
   // write values to disk as separate files in the tor/ directory
   // TODO: this should go through torcc instead
 
   or_options_t* options = (or_options_t*)get_options();
 
-  mt_bytes2hex((byte*)&led_desc.id[0], sizeof(led_desc.id[0]), &options->moneTorLedgerDesc);
   mt_bytes2hex(aut_pk, MT_SZ_PK, &options->moneTorAuthorityPK);
   mt_bytes2hex(pp, MT_SZ_PP, &options->moneTorPP);
   options->moneTorFee = MT_FEE;

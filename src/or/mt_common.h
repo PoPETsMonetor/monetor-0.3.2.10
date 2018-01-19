@@ -105,6 +105,12 @@ int mt_hc_verify(byte (*tail)[MT_SZ_HASH], byte (*preimage)[MT_SZ_HASH], int k);
 
 int mt_commit_wallet(byte (*pp)[MT_SZ_PP], byte (*pk)[MT_SZ_PK], chn_end_secret_t* chn, int epislon);
 
+/**
+ * Compare two descriptors and return 0 if they are equal or some other number
+ * (canonically sortable) if they are not
+ */
+int mt_desc_comp(mt_desc_t* desc1, mt_desc_t* desc2);
+
 /** Canibalize a general circuit => extends it to
  *  the intermediary point described by ei
  *
