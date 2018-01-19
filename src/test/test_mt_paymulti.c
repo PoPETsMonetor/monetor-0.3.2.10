@@ -458,7 +458,7 @@ static void set_up_main_loop(void){
     tor_free(ctx->state);
 
     digestmap_t* rel2int = digestmap_new();
-    digestmap_add(digest, rel2int);
+    digestmap_set(connections, digest, rel2int);
 
     // populate random subset of relays
     mt_desc_t unique_rel_descs[REL_CONNS];
@@ -490,7 +490,7 @@ static void set_up_main_loop(void){
       mt_desc_t* idesc = tor_malloc(sizeof(mt_desc_t));
       mt_desc2digest(&event->desc1, &rdigest);
       memcpy(idesc, &event->desc2, sizeof(mt_desc_t));
-      digestmap_add(rel2int, rdigest, idesc);
+      digestmap_set(rel2int, rdigest, idesc);
     }
 
     // make direct payments
@@ -505,7 +505,7 @@ static void set_up_main_loop(void){
     mt_desc_t* idesc = tor_malloc(sizeof(mt_desc_t));
     mt_desc2digest(&event->desc1, idigest);
     memcpy(idesc, &event->desc2, sizeof(mt_desc_t));
-    digestmap_add(rel2int, idigest, idesc);
+    digestmap_set(rel2int, idigest, idesc);
 
     mt_cpay_export(&ctx->state);
   } MAP_FOREACH_END;

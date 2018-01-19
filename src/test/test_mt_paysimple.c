@@ -288,16 +288,18 @@ static int mock_send_message_multidesc(mt_desc_t *desc1, mt_desc_t* desc2, mt_nt
 }
 
 /**
- * Mock the alert_payment function
+ * Mock the mt_paymod_signal function
  */
-static int mock_alert_payment(mt_desc_t* desc){
+static int mock_paymod_signal(mt_signal_t signal, mt_desc_t* desc){
   (void)desc;
 
-  int cli_bal = mt_cpay_mac_balance() + mt_cpay_chn_balance();
-  int rel_bal = mt_rpay_mac_balance() + mt_rpay_chn_balance();
-  int int_bal = mt_ipay_mac_balance() + mt_ipay_chn_balance();
+  if(signal == MT_SIGNAL_PAYMENT_RECEIVED){
+    int cli_bal = mt_cpay_mac_balance() + mt_cpay_chn_balance();
+    int rel_bal = mt_rpay_mac_balance() + mt_rpay_chn_balance();
+    int int_bal = mt_ipay_mac_balance() + mt_ipay_chn_balance();
 
-  printf("Balances : cli %d; rel %d; int %d\n", cli_bal, rel_bal, int_bal);
+    printf("Balances : cli %d; rel %d; int %d\n", cli_bal, rel_bal, int_bal);
+  }
   return MT_SUCCESS;
 }
 
@@ -334,7 +336,7 @@ static void test_mt_paysimple(void *arg){
 					     void (*)(void*), void*);
   MOCK(mt_send_message, mock_send_message);
   MOCK(mt_send_message_multidesc, mock_send_message_multidesc);
-  MOCK(mt_alert_payment, mock_alert_payment);
+  MOCK(mt_paymod_signal, mock_paymod_signal);
   MOCK(cpuworker_queue_work, (cpuworker_fn)mock_cpuworker_queue_work);
 
   /****************************** Setup **********************************/
@@ -563,7 +565,7 @@ static void test_mt_paysimple(void *arg){
 
   UNMOCK(mt_send_message);
   UNMOCK(mt_send_message_multidesc);
-  UNMOCK(mt_alert_payment);
+  UNMOCK(mt_paymod_signal);
   UNMOCK(cpuworker_queue_work);
 
   tor_free(signed_mint);
