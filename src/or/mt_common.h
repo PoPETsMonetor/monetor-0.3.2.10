@@ -13,6 +13,9 @@
 #include "mt_tokens.h"
 #include "buffers.h"
 
+
+#define LIMIT_PAYMENT_WINDOW 1000
+
 #define INTERMEDIARY_REACHABLE_NO 0
 #define INTERMEDIARY_REACHABLE_YES 1
 #define INTERMEDIARY_REACHABLE_MAYBE 2
@@ -191,6 +194,9 @@ MOCK_DECL(void, mt_process_received_relaycell, (circuit_t *circ, relay_header_t*
  */
 
 int mt_process_received_directpaymentcell(circuit_t *circ, cell_t *cell);
+
+
+void mt_update_payment_window(circuit_t *circ);
 
 /************ Tor - Payment event interface *********************/
 

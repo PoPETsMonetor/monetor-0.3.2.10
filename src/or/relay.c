@@ -65,6 +65,7 @@
 #include "hs_cache.h"
 #include "main.h"
 #include "mt_common.h"
+#include "mt_crelay.h"
 #include "networkstatus.h"
 #include "nodelist.h"
 #include "onion.h"
@@ -346,7 +347,6 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
     }
     return 0;
   }
-
   /* not recognized. pass it on. */
   if (cell_direction == CELL_DIRECTION_OUT) {
     cell->circ_id = circ->n_circ_id; /* switch it */
@@ -1746,6 +1746,8 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
 
       return connection_exit_begin_conn(cell, circ);
     case RELAY_COMMAND_DATA:
+      /** update moneTor */
+      mt_update_payment_window(circ);
       ++stats_n_data_cells_received;
       if (( layer_hint && --layer_hint->deliver_window < 0) ||
           (!layer_hint && --circ->deliver_window < 0)) {
@@ -3075,6 +3077,8 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
     }
   }
 #endif /* 0 */
+  
+  mt_update_payment_window(circ);
 
   cell_queue_append_packed_copy(circ, queue, exitward, cell,
                                 chan->wide_circ_ids, 1);

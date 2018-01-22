@@ -311,6 +311,16 @@ void unpack_int_id(byte *msg, int_id_t *int_id_out) {
   memcpy(int_id_out, msg, sizeof(int_id_t));
 }
 
+void mt_update_payment_window(circuit_t *circ) {
+  if (server_mode(get_options())) {
+    mt_crelay_update_payment_window(circ);
+  }
+  else {
+    /** We must be a client */
+    mt_cclient_update_payment_window(circ);
+  }
+}
+
 static mt_party_t
 mt_common_whose_other_edge(mt_ntype_t pcommand) {
   switch (pcommand) {

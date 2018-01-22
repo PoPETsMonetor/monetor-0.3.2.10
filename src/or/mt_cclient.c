@@ -367,6 +367,27 @@ run_cclient_housekeeping_event(time_t now) {
       intermediary_need_cleanup(intermediary, now);
     }
   } SMARTLIST_FOREACH_END(intermediary);
+   
+  DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
+    if (!circ->mt_priority && !CIRCUIT_IS_ORIGIN(circ)) {
+      continue;
+    }
+    /** Verify if we have enough remaining window */
+    pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
+    while (ppath_tmp != NULL) {
+      if (ppath_tmp->window < LIMIT_PAYMENT_WINDOW &&
+          ppath_tmp->last_mt_cpay_succeeded) {
+        /** pay :-) */
+        intermediary_t* intermediary = get_intermediary_by_role(ppath_tmp->position);
+        if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
+          log_info(LD_MT, "MoneTor: mt_cpay_pay failed");
+          ppath_tmp->p_marked_for_close = 1;
+          ppath_tmp->last_mt_cpay_succeeded = 0;
+        }
+      }
+      ppath_tmp = ppath_tmp->next;
+    }
+  } DIGESTMAP_FOREACH_END;
 }
 
 /*
@@ -507,12 +528,42 @@ run_cclient_scheduled_events(time_t now) {
 }
 
 
-/**
- * XXX TODO
- */
 void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
-  (void) circ;
+  
+  time_t now;
+  /* If the circuit is closed before we successfully extend
+   * a general circuit towards the ledger, then we may have
+   * a reachability problem.. */
+  if (TO_CIRCUIT(circ)->state != CIRCUIT_STATE_OPEN) {
+    now = time(NULL);
+    log_info(LD_MT, "MoneTor: Looks like we did not extend a circuit successfully"
+        " towards the ledger %lld", (long long) now);
+    ledger->circuit_retries++;
+  }
+  smartlist_remove(ledgercircs, circ);
+  byte id[DIGEST_LEN];
+  mt_desc2digest(&circ->desc, &id);
+  digestmap_remove(desc2circ, (char*) id);
+  log_info(LD_MT, "MoneTor: ledger circ has closed. Removed %s from our internal structure",
+      mt_desc_describe(&circ->desc));
 }
+
+
+
+void mt_cclient_update_payment_window(circuit_t *circ) {
+
+  if (get_options()->EnablePayment && circ->mt_priority &&
+      CIRCUIT_IS_ORIGIN(circ)) {
+    pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
+    while(ppath_tmp != NULL) {
+      if(--ppath_tmp->window  < 10) {
+        log_info(LD_MT, "MoneTor: payment window critically low");
+      }
+      ppath_tmp = ppath_tmp->next;
+    }
+  }
+}
+
 
 /**
  * Called by the payment module to signal an event

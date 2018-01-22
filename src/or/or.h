@@ -2948,6 +2948,8 @@ typedef struct pay_path_t {
    * */
   unsigned int p_marked_for_close : 1;
 
+  unsigned int last_mt_cpay_succeeded : 1;
+
   /* Position type of the current hop */
   position_t position;
   /* Used to keep track of number of cells we can send/receive
@@ -3176,6 +3178,10 @@ typedef struct circuit_t {
   /** Used on relay side to keep track of
    *  payment */
   int payment_window;
+  /**
+   * Set to 1 when we prioritize this circuit
+   */
+  unsigned int mt_priority : 1;
 
   /** Temporary field used during circuits_handle_oom. */
   uint32_t age_tmp;
@@ -3635,10 +3641,6 @@ typedef struct or_circuit_t {
 
   unsigned int circuit_received_first_payment_cell : 1;
 
-  /**
-   * Set to 1 when we prioritize this circuit
-   */
-  unsigned int mt_priority : 1;
   /*
    * Contains buffering that received on that circuit
    * if this is a CIRCUIT_PURPOSE_INTERMEDIARY */

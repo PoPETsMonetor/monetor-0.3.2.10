@@ -39,7 +39,6 @@ void mt_crelay_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
   circ->desc.party = party; // Should always be CLI
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
-  TO_CIRCUIT(circ)->payment_window = 3000; 
   /* when it reaches 1000, it should receive
    * a payment from the client */
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
@@ -381,10 +380,22 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
     if (mt_rpay_recv(desc, pcommand, msg, msg_len) < 0) {
       log_info(LD_MT, "MoneTor: Payment module returnerd -1"
           " we should stop prioritizing this circuit");
-      orcirc->mt_priority = 0;
+      circ->mt_priority = 0;
     }
   }
 }
+
+
+void mt_crelay_update_payment_window(circuit_t *circ) {
+  if (get_options()->EnablePayment &&
+      circ->mt_priority) {
+    if (--circ->payment_window < 10) {
+       log_info(LD_MT, "Payment window critically low: remains"
+          " %d cells", circ->payment_window);
+    }
+  }
+}
+
 
 /**
  * Called by the payment module to signal an event
@@ -397,8 +408,47 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
  */
 
 int mt_crelay_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
-  (void) signal;
-  (void) desc;
+  byte id[DIGEST_LEN];
+  mt_desc2digest(desc, &id);
+  circuit_t *circ = digestmap_get(desc2circ, (char*) id);
+  if (!circ) {
+    log_info(LD_MT, "MoneTor: looks like desc %s is not within our map", mt_desc_describe(desc));
+    return -1;
+  }
+  if (signal == MT_SIGNAL_PAYMENT_INITIALIZED) {
+    /** Set this circuit with priority */
+    if (!circ->marked_for_close) {
+      circ->mt_priority = 1;
+      circ->payment_window = 3000;
+    } 
+    else {
+      log_info(LD_MT, "MoneTor: Seems that the circuit has been closed");
+      digestmap_remove(desc2circ, (char*) id);
+      return -1;
+    }
+  }
+  else if (signal == MT_SIGNAL_PAYMENT_RECEIVED) {
+    if (!circ->marked_for_close) {
+      circ->payment_window += 2000;
+    }
+    else {
+      log_info(LD_MT, "MoneTor: Seems that the circuit has been closed");
+      digestmap_remove(desc2circ, (char*) id);
+      return -1;
+    }
+  }
+  else if (signal == MT_SIGNAL_INTERMEDIARY_IDLE) {
+    /** Marking this circuit for close */
+    if (!circ->marked_for_close) {
+      circuit_mark_for_close(circ, END_CIRC_REASON_NONE);
+    }
+    /** XXX Todo: check if this is the only thing to do.*/
+    digestmap_remove(desc2circ, (char*) id);
+  }
+  else {
+    log_info(LD_MT, "Received a signal we can't handle on mt_crelay");
+    return -1;
+  }
   return 0;
 }
 
