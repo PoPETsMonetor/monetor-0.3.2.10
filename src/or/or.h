@@ -3173,6 +3173,9 @@ typedef struct circuit_t {
    * circuit-level sendme cells to indicate that we're willing to accept
    * more. */
   int deliver_window;
+  /** Used on relay side to keep track of
+   *  payment */
+  int payment_window;
 
   /** Temporary field used during circuits_handle_oom. */
   uint32_t age_tmp;
@@ -5661,6 +5664,8 @@ typedef enum {
    * Signal that the last mt_cpay_close to the given relay desc was
    * successful. Do not call mt_cpay_close again until either this signal (or
    * MT_SIGNAL_PAY_FAILURE) is broadcasted
+   *
+   * XXX Thien-Nan: I cannot call mt_cpay_close on desc1 and on desc2 at the same time?
    */
   MT_SIGNAL_CLOSE_SUCCESS,
 

@@ -507,10 +507,28 @@ run_cclient_scheduled_events(time_t now) {
 }
 
 
+/**
+ * XXX TODO
+ */
 void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
   (void) circ;
 }
 
+/**
+ * Called by the payment module to signal an event
+ * 
+ * Can be either:
+ *   MT_SIGNAL_PAYMENT_SUCCESS
+ *   MT_SIGNAL_PAYMENT_FAILURE
+ *   MT_SIGNAL_CLOSE_SUCCESS
+ *   MT_SIGNAL_CLOSE_FAILURE
+ */
+
+int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
+  (void) signal;
+  (void) desc;
+  return 0;
+}
 /**
  * XXX MoneTor -- TODO here: general_circuit_has_closed()
  */

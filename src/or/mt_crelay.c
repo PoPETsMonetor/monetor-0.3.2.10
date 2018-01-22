@@ -39,7 +39,10 @@ void mt_crelay_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
   circ->desc.party = party; // Should always be CLI
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
-  digestmap_set(desc2circ, (char*) id, circ);
+  TO_CIRCUIT(circ)->payment_window = 3000; 
+  /* when it reaches 1000, it should receive
+   * a payment from the client */
+  digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
 }
 
 ledger_t * mt_crelay_get_ledger(void) {
@@ -383,6 +386,22 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
   }
 }
 
+/**
+ * Called by the payment module to signal an event
+ * 
+ * Can be either :
+ *   MT_SIGNAL_PAYMENT_INITIALIZED
+ *   MT_SIGNAL_PAYMENT_RECEIVED
+ *   MT_SIGNaL_INTERMEDIARY_IDLE
+ *
+ */
+
+int mt_crelay_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
+  (void) signal;
+  (void) desc;
+  return 0;
+}
+
 /*
  * This function is invoked by the relay payment module every time that a
  * successful payment has been made. The <b>desc</b> parameter contains the
@@ -390,7 +409,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
  * controller through previous protocol executions.
  */
 
-int mt_crelay_alert_payement(mt_desc_t* desc) {
+int mt_crelay_alert_payment(mt_desc_t* desc) {
 
   byte id[DIGEST_LEN];
   mt_desc2digest(desc, &id);
@@ -400,4 +419,5 @@ int mt_crelay_alert_payement(mt_desc_t* desc) {
         " to this descriptor %s within our map", mt_desc_describe(desc));
     return -1;
   }
+  return 0;
 }

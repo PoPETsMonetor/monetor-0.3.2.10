@@ -251,6 +251,21 @@ const char* mt_desc_describe(mt_desc_t* desc) {
   return "";
 }
 
+const char* mt_signal_describe(mt_signal_t signal) {
+  switch (signal) {
+    case MT_SIGNAL_PAYMENT_SUCCESS: return "Last mt_cpay_pay call is successful";
+    case MT_SIGNAL_PAYMENT_FAILURE: return "Last mt_cpay_pay call has failed";
+    case MT_SIGNAL_CLOSE_SUCCESS: return "Last mt_cpay_close is successfull";
+    case MT_SIGNAL_CLOSE_FAILURE: return "Last mt_cpay_close has failed";
+    case MT_SIGNAL_PAYMENT_INITIALIZED: return "A client initialized a payment";
+    case MT_SIGNAL_PAYMENT_RECEIVED: return "A payement has been received";
+    case MT_SIGNAL_INTERMEDIARY_IDLE: return "No active nanopayment channel left with an interemediary";
+    default:
+      log_info(LD_MT, "Signal event description unsupported: %d", (int) signal);
+      return "Event unsupported";
+  }
+}
+
 /** Free mt_desc */
 void mt_desc_free(mt_desc_t *desc) {
   if (!desc)
@@ -703,7 +718,19 @@ MOCK_IMPL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2,
 }
 
 MOCK_IMPL(int, mt_paymod_signal, (mt_signal_t signal, mt_desc_t *desc)){
-  (void)signal;
-  (void)desc;
-  return 0;
+  
+  log_info(LD_MT, "MoneTor: received signal %s for desc %s", 
+      mt_signal_describe(signal), mt_desc_describe(desc));
+  if (authdir_mode(get_options())) {
+    return mt_cledger_paymod_signal(signal, desc);
+  }
+  else if (intermediary_mode(get_options())) {
+    return mt_cintermediary_paymod_signal(signal, desc);
+  }
+  else if (server_mode(get_options())) {
+    return mt_crelay_paymod_signal(signal, desc);
+  }
+  else {
+    return mt_cclient_paymod_signal(signal, desc);
+  }
 }

@@ -26,6 +26,8 @@ void mt_cledger_init_desc_and_add(or_circuit_t *circ, mt_party_t party);
  */
 void mt_cledger_orcirc_has_closed(or_circuit_t *circ);
 
+int mt_cledger_paymod_signal(mt_signal_t signal, mt_desc_t *desc);
+
 /******************* Payment related messages *******/
 
 

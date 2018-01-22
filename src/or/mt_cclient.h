@@ -31,6 +31,7 @@ STATIC intermediary_t* intermediary_new(const node_t *node, extend_info_t *ei, t
  */
 void run_cclient_scheduled_events(time_t now);
 
+int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc);
 
 //handle intermediaries
 //XXX MoneTor maybe all of intermediary-handling

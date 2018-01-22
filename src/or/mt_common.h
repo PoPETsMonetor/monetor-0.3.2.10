@@ -168,6 +168,11 @@ void unpack_int_id(byte *str, int_id_t* ind_id_out);
 const char* mt_desc_describe(mt_desc_t *desc);
 
 /**
+ * Gives a string description of mt_signal_t
+ */
+const char* mt_signal_describe(mt_signal_t signal);
+
+/**
  * Increment the counter described by 2 long unsigned
  */
 void increment(long unsigned *id);

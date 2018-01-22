@@ -65,6 +65,13 @@ mt_cledger_orcirc_has_closed(or_circuit_t *circ) {
    * the function in circuit_about_to_free*/
 }
 
+int
+mt_cledger_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
+  (void) signal;
+  (void) desc;
+  return 0;
+}
+
 /**********************Payment messages***************/
 
 int

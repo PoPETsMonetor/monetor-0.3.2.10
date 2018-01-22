@@ -165,6 +165,19 @@ void mt_cintermediary_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
 }
 
 
+/**
+ * Used by the payment module to notify a signal
+ *
+ * Can be:
+ *  ... (no ones currently)
+ */
+
+int mt_cintermediary_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
+  (void) signal;
+  (void) desc;
+  return 0;
+}
+
 /********************** Utility stuff ********************************/
 
 ledger_t *mt_cintermediary_get_ledger(void) {

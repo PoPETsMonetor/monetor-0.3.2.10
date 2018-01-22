@@ -27,4 +27,6 @@ int mt_crelay_alert_payment(mt_desc_t *desc);
 
 ledger_t * mt_crelay_get_ledger(void);
 
+int mt_crelay_paymod_signal(mt_signal_t signal, mt_desc_t *desc);
+
 #endif
