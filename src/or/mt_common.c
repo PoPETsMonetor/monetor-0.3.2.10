@@ -571,20 +571,74 @@ MOCK_IMPL(void,
  * had to be performed.  cell must contain the plaintext
  */
 
-//XXX Todo buffer received cells if msg_len too large
 int mt_process_received_directpaymentcell(circuit_t *circ, cell_t *cell) {
 
   relay_pheader_t rph;
   relay_pheader_unpack(&rph, cell->payload);
+  or_circuit_t *orcirc = NULL;
+  origin_circuit_t *oricirc = NULL;
+  size_t msg_len = mt_token_get_size_of(rph.pcommand);
 
   if (server_mode(get_options())) {
+    orcirc = TO_OR_CIRCUIT(circ);
+    if (!orcirc->circuit_received_first_payment_cell) {
+        mt_party_t party = mt_common_whose_other_edge(rph.pcommand);
+        mt_crelay_init_desc_and_add(orcirc, party);
+        orcirc->buf = buf_new_with_capacity(CELL_PPAYLOAD_SIZE);
+        orcirc->circuit_received_first_payment_cell = 1;
+    }
+    if (msg_len > CELL_PPAYLOAD_SIZE) {
+      buf_add(orcirc->buf,
+          (char*)cell->payload+RELAY_PHEADER_SIZE, rph.length);
+      if (buf_datalen(orcirc->buf) == msg_len) {
+        /** We now have the full message */
+        byte *msg = tor_malloc_zero(msg_len);
+        buf_get_bytes(orcirc->buf, (char*) msg, msg_len);
+        buf_clear(orcirc->buf);
+        mt_crelay_process_received_msg(circ, rph.pcommand, msg, msg_len);
+        tor_free(msg);
+      }
+      else {
+        log_info(LD_MT, "Buffering one received payment cell of type %hhx"
+            " current buf datlen %lu", rph.pcommand, buf_datalen(orcirc->buf));
+        return 0;
+      }
+    }
+    else {
+      /** No need to buffer */
+      tor_assert(rph.length == msg_len);
+      mt_crelay_process_received_msg(circ, rph.pcommand,
+          cell->payload+RELAY_PHEADER_SIZE, rph.length);
+    }
   }
   else {
     /* Should in client mode with an origin circuit */
     if (CIRCUIT_IS_ORIGIN(circ)) {
       /* everything's ok, let's proceed */
-
-      mt_cclient_process_received_directpaymentcell(TO_ORIGIN_CIRCUIT(circ), cell, &rph);
+      oricirc = TO_ORIGIN_CIRCUIT(circ);
+      if (msg_len > CELL_PPAYLOAD_SIZE){
+        buf_add(oricirc->ppath->buf,
+            (char*)cell->payload+RELAY_PHEADER_SIZE, rph.length);
+        if (buf_datalen(oricirc->buf) == msg_len) {
+          byte *msg = tor_malloc_zero(msg_len);
+          buf_get_bytes(oricirc->ppath->buf, (char*) msg, msg_len);
+          buf_clear(orcirc->buf);
+          mt_cclient_process_received_msg(oricirc, oricirc->cpath, rph.pcommand,
+              msg, msg_len);
+          tor_free(msg);
+        }
+        else {
+          log_info(LD_MT, "Buffering one received payment cell of type %hhx"
+              " current buf datlen %lu", rph.pcommand, buf_datalen(oricirc->buf));
+          return 0;
+        }
+      }
+      else {
+        /** No need to buffer */
+        tor_assert(rph.length == msg_len);
+        mt_cclient_process_received_msg(oricirc, oricirc->cpath, rph.pcommand,
+            cell->payload+RELAY_PHEADER_SIZE, rph.length);
+      }
     }
     else {
       return -1;

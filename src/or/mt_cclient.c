@@ -741,12 +741,6 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
 int
 mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2, 
     mt_ntype_t type, byte* msg, int size) {
-  (void) desc1;
-  (void) desc2;
-  (void) type;
-  (void) msg;
-  (void) size;
-  
   byte id[DIGEST_LEN];
   mt_desc2digest(desc1, &id);
   crypt_path_t *layer_start;
@@ -827,11 +821,10 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
     tor_assert(cpath);
 
     /* find the right ppath */
-    do {
+    while (cpath != layer_hint && ppath) {
       cpath = cpath->next;
       ppath = ppath->next;
-    } while (cpath != layer_hint && !ppath);
-
+    }
     tor_assert(ppath);
     /* get the right desc */
     desc = &ppath->desc;
@@ -847,19 +840,6 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
   }
   else {
     log_warn(LD_MT, "intermediary circuit not implemented yet");
-  }
-}
-
-/** Process a direct payment cell sent by our guard
- */
-void
-mt_cclient_process_received_directpaymentcell(origin_circuit_t *circ, cell_t *cell, 
-    relay_pheader_t *rph) {
-  tor_assert(circ->ppath);
-  mt_desc_t *desc = &circ->ppath->desc;
-  if (mt_cpay_recv(desc, rph->pcommand, cell->payload+RELAY_PHEADER_SIZE,
-        rph->length) < 0) {
-    // XXX MoneTor what to do if we fail here?
   }
 }
 
