@@ -33,7 +33,6 @@
 #include "circuituse.h"
 #include "relay.h"
 #include "router.h"
-#include "scheduler.h"
 #include "torlog.h"
 #include "main.h"
 
@@ -368,6 +367,7 @@ run_cclient_housekeeping_event(time_t now) {
     }
   } SMARTLIST_FOREACH_END(intermediary);
    
+  log_info(LD_MT, "MoneTor: relay digestmap length: %d", digestmap_size(desc2circ));
   DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
     if (!circ->mt_priority && !CIRCUIT_IS_ORIGIN(circ)) {
       continue;
@@ -384,6 +384,9 @@ run_cclient_housekeeping_event(time_t now) {
           ppath_tmp->p_marked_for_close = 1;
           ppath_tmp->last_mt_cpay_succeeded = 0;
         }
+      }
+      else if (!ppath_tmp->last_mt_cpay_succeeded) {
+        log_info(LD_MT, "MoneTor: Last payment did not succeeded yet.");
       }
       ppath_tmp = ppath_tmp->next;
     }
@@ -724,44 +727,12 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
         layer_start, (const char*) msg, size);
   }
   else if (command == CELL_PAYMENT) {
-    //XXX fix following code. msg can be >
-    /*tor_assert(size <= CELL_PAYLOAD_SIZE-RELAY_PHEADER_SIZE);*/
-    cell_t cell;
-    relay_pheader_t rph;
-    memset(&cell, 0, sizeof(cell_t));
-    memset(&rph, 0, sizeof(relay_pheader_t));
-    cell.circ_id = circ->n_circ_id;
-    cell.command = command;
-    rph.pcommand = type;
-    int nbr_cells;
-    if (size % CELL_PPAYLOAD_SIZE == 0)
-      nbr_cells = size/CELL_PPAYLOAD_SIZE;
-    else
-      nbr_cells = size/CELL_PPAYLOAD_SIZE + 1;
-    int remaining_payload = size;
-    for (int i = 0; i < nbr_cells; i++) {
-      if (remaining_payload <= CELL_PPAYLOAD_SIZE) {
-        rph.length = remaining_payload;
-      }
-      else {
-        rph.length = CELL_PPAYLOAD_SIZE;
-      }
-      direct_pheader_pack(cell.payload, &rph);
-      memcpy(cell.payload+RELAY_PHEADER_SIZE, msg+i*CELL_PPAYLOAD_SIZE, rph.length);
-      remaining_payload -= rph.length;
-      log_info(LD_MT, "Adding cell payment %hhx to queue", rph.pcommand);
-      cell_queue_append_packed_copy(NULL, &circ->n_chan_cells, 0, &cell,
-          circ->n_chan->wide_circ_ids, 0);
-    }
-    tor_assert(remaining_payload == 0);
-    update_circuit_on_cmux(circ, CELL_DIRECTION_OUT);
-    scheduler_channel_has_waiting_cells(circ->n_chan);
-    return 0;
+    return mt_common_send_direct_cell_payment(circ, type, msg, size, CELL_DIRECTION_OUT) ;
   }
   else {
     log_warn(LD_MT, "Unrecognized command %d", command);
+    return -1;
   }
-  return -1;
 }
 
 /**
@@ -859,7 +830,9 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
     do {
       cpath = cpath->next;
       ppath = ppath->next;
-    } while (cpath != layer_hint);
+    } while (cpath != layer_hint && !ppath);
+
+    tor_assert(ppath);
     /* get the right desc */
     desc = &ppath->desc;
     //XXX todo Buffering cells

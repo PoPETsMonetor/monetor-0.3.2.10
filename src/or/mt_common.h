@@ -196,6 +196,10 @@ MOCK_DECL(void, mt_process_received_relaycell, (circuit_t *circ, relay_header_t*
 int mt_process_received_directpaymentcell(circuit_t *circ, cell_t *cell);
 
 
+int mt_common_send_direct_cell_payment(circuit_t *circ, mt_ntype_t type,
+    byte *msg, int size, cell_direction_t direction);
+
+
 void mt_update_payment_window(circuit_t *circ);
 
 /************ Tor - Payment event interface *********************/

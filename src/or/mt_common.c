@@ -27,7 +27,8 @@
 #include "mt_cledger.h"
 #include "mt_tokens.h"
 #include "router.h"
-
+#include "relay.h"
+#include "scheduler.h"
 
 static uint64_t count[2] = {0, 0};
 
@@ -173,14 +174,16 @@ uint64_t rand_uint64(void) {
  * Should be called by the tor_init() function - initialize all environment
  * for the payment system
  *
- * XXX MoneTor to do regardless of the role played.
  */
 void mt_init(void){
   log_info(LD_MT, "MoneTor: Initializing the payment system");
   count[0] = rand_uint64();
   count[1] = rand_uint64();
+  /** Only one should properly complete */
   mt_cclient_init();
-  /* Todo call intermediary, relay and ledger init? */
+  mt_crelay_init();
+  mt_cledger_init();
+  mt_cintermediary_init();
 }
 /**
  * Initialize ledger info
@@ -219,11 +222,9 @@ int mt_check_enough_fund(void) {
 /**
  * Run scheduled events of the payment systems. Get called every second and
  * verifies that everything holds.
- * TODO : - check healthiness of intermediary circuit, consider cacshout?, etc?
  */
 void monetor_run_scheduled_events(time_t now) {
 
-  /*XXX MoneTor - Todo: adding scheduled events for intermediaries, relays, etc */
   if (authdir_mode(get_options()) || authdir_mode_v3(get_options())) {
     run_cledger_scheduled_events(now);
   }
@@ -649,8 +650,10 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
     /* Sending from authority */
     case MT_NTYPE_MAC_AUT_MINT:
       if (authdir_mode(get_options())) {
-        // XXX Todo new file related to authdir
-        return 0;
+        return mt_cledger_send_message(desc, type, msg, size);
+      }
+      else {
+        log_warn(LD_MT, "MoneTor: Cannot handle type %hhx from a ledger", (uint8_t)type);
       }
       break;
     /* Sending from intermediary */
@@ -662,8 +665,6 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
     case MT_NTYPE_NAN_INT_SETUP2:
     case MT_NTYPE_NAN_INT_SETUP4:
     case MT_NTYPE_NAN_INT_SETUP6:
-    case MT_NTYPE_NAN_INT_DESTAB2:
-    case MT_NTYPE_NAN_INT_DPAY2:
     case MT_NTYPE_NAN_INT_CLOSE2:
     case MT_NTYPE_NAN_INT_CLOSE4:
     case MT_NTYPE_NAN_INT_CLOSE6:
@@ -675,31 +676,33 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
     case MT_NTYPE_CHN_INT_REQCLOSE:
     case MT_NTYPE_CHN_INT_CASHOUT:
       if (intermediary_mode(get_options())) {
-        command = RELAY_COMMAND_MT;
-        //todo
-        return 0;
-      }
-      else if (server_mode(get_options())) {
-        /* Should match Direct payments */
-        command = CELL_PAYMENT;
-        // todo
-        return 0;
+        return mt_cintermediary_send_message(desc, type, msg, size);
       }
       else {
-        log_warn(LD_MT, "Cannot handle type %d", (uint8_t)type);
+        log_warn(LD_MT, "MoneTor: Cannot handle type %hhx from an intermediary", (uint8_t)type);
       }
       break;
       /* Sending from any of them */
+    case MT_NTYPE_NAN_INT_DESTAB2:
+    case MT_NTYPE_NAN_INT_DPAY2:
+        if (server_mode(get_options())) {
+          command = CELL_PAYMENT;
+          return mt_crelay_send_message(desc, command, type, msg, size);
+        }
+        else {
+          log_warn(LD_MT, "MoneTor: Cannot handle type %hhx from an intermediary", (uint8_t)type);
+        }
+        break;
     case MT_NTYPE_MAC_ANY_TRANS:
       command = RELAY_COMMAND_MT;
       if (intermediary_mode(get_options())) {
-        return 0;
+        return mt_cintermediary_send_message(desc, type, msg, size);
       }
       else if (server_mode(get_options())) {
         return mt_crelay_send_message(desc, command, type, msg, size);
       }
       else if (authdir_mode(get_options())) {
-        return 0;
+        return mt_cledger_send_message(desc, type, msg, size);
       }
       else {
         return mt_cclient_send_message(desc, command, type, msg, size);
@@ -709,7 +712,69 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
       log_warn(LD_MT, "MoneTor - Unrecognized type");
       return -1;
   }
+  log_info(LD_MT, "MoneTor: We should not reach this.. we return -1");
   return -1;
+}
+
+/**
+ * Direct Payment cells sent from Client or from a guard
+ * relay. Wrote here to avoid code duplication within
+ * mt_cclient and mt_crelay. They both should call this function
+ * when sending a direct payment cell.
+ */
+
+int mt_common_send_direct_cell_payment(circuit_t *circ, mt_ntype_t type,
+    byte *msg, int size, cell_direction_t direction) {
+  
+  or_circuit_t *orcirc = NULL;
+  cell_t cell;
+  relay_pheader_t rph;
+  memset(&cell, 0, sizeof(cell_t));
+  memset(&rph, 0, sizeof(relay_pheader_t));
+  if (direction == CELL_DIRECTION_OUT) {
+    cell.circ_id = circ->n_circ_id;
+  }
+  else {
+    orcirc = TO_OR_CIRCUIT(circ);
+    cell.circ_id = orcirc->p_circ_id;
+  }
+  cell.command = CELL_PAYMENT;
+  rph.pcommand = type;
+  int nbr_cells;
+  if (size % CELL_PPAYLOAD_SIZE == 0)
+    nbr_cells = size/CELL_PPAYLOAD_SIZE;
+  else
+    nbr_cells = size/CELL_PPAYLOAD_SIZE + 1;
+  int remaining_payload = size;
+  for (int i = 0; i < nbr_cells; i++) {
+    if (remaining_payload <= CELL_PPAYLOAD_SIZE) {
+      rph.length = remaining_payload;
+    }
+    else {
+      rph.length = CELL_PPAYLOAD_SIZE;
+    }
+    direct_pheader_pack(cell.payload, &rph);
+    memcpy(cell.payload+RELAY_PHEADER_SIZE, msg+i*CELL_PPAYLOAD_SIZE, rph.length);
+    remaining_payload -= rph.length;
+    log_info(LD_MT, "Adding cell payment %hhx to queue", rph.pcommand);
+    if (direction == CELL_DIRECTION_OUT) {
+      cell_queue_append_packed_copy(NULL, &circ->n_chan_cells, 0, &cell,
+          circ->n_chan->wide_circ_ids, 0);
+    }
+    else {
+      cell_queue_append_packed_copy(NULL, &orcirc->p_chan_cells, 0, &cell,
+          orcirc->p_chan->wide_circ_ids, 0);
+    }
+  }
+  tor_assert(remaining_payload == 0);
+  update_circuit_on_cmux(circ, direction);
+  if (direction == CELL_DIRECTION_OUT) {
+    scheduler_channel_has_waiting_cells(circ->n_chan);
+  }
+  else {
+    scheduler_channel_has_waiting_cells(orcirc->p_chan);
+  }
+  return 0;
 }
 
 /**

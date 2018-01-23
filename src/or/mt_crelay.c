@@ -177,7 +177,15 @@ run_crelay_housekeeping_event(time_t now) {
    * Logic: Every second, we check if every payment windows
    * are in a correct state => Do we received our payment, etc?
    */
-  (void) now;
+  log_info(LD_MT, "MoneTor: relay digestmap length: %d at time %lld", 
+      digestmap_size(desc2circ), (long long) now);
+  DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
+    if (CIRCUIT_IS_ORCIRC(circ) && circ->mt_priority && circ->payment_window < 0) {
+      tor_assert_nonfatal(circ->payment_window > 0);
+      log_info(LD_MT, "MoneTor: this circuit has negative window, this should not happen!");
+
+    }
+  } DIGESTMAP_FOREACH_END;
 }
 
 /**
@@ -275,13 +283,23 @@ mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
     //open
     return -1;
   }
-  if (circ->purpose == CIRCUIT_PURPOSE_R_LEDGER || 
-      circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY) {
-    /** Message for the ledger an intermediary */
-    layer_start = TO_ORIGIN_CIRCUIT(circ)->cpath->prev;
+  if (command == RELAY_COMMAND_MT) {
+    if (circ->purpose == CIRCUIT_PURPOSE_R_LEDGER || 
+        circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY) {
+      /** Message for the ledger an intermediary */
+      layer_start = TO_ORIGIN_CIRCUIT(circ)->cpath->prev;
+    }
+    return relay_send_pcommand_from_edge(circ, command,
+        type, layer_start, (const char*) msg, size);
   }
-  return relay_send_pcommand_from_edge(circ, command,
-      type, layer_start, (const char*) msg, size);
+  else if (command == CELL_PAYMENT){ /** CELL_PAYMENT */
+    return mt_common_send_direct_cell_payment(circ, type, msg, size,
+        CELL_DIRECTION_IN);
+  }
+  else {
+    log_warn(LD_MT, "Unrecognized command %d", command);
+    return -1;
+  }
 }
 
 void
