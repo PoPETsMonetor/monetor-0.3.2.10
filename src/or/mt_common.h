@@ -25,7 +25,6 @@
 
 typedef struct intermediary_t {
   intermediary_identity_t* identity;
-  char nickname[MAX_HEX_NICKNAME_LEN+1];
   unsigned int is_reachable : 2;
   time_t chosen_at;
   extend_info_t *ei;

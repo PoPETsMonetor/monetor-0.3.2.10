@@ -74,10 +74,7 @@ intermediary_new(const node_t *node, extend_info_t *ei, time_t now) {
   intermediary_t *intermediary = tor_malloc_zero(sizeof(intermediary_t));
   intermediary->identity = tor_malloc_zero(sizeof(intermediary_t));
   memcpy(intermediary->identity->identity, node->identity, DIGEST_LEN);
-  //XXX MoneTor change nickname to something else, or remove nickname
-  //intermediary->nickname = tor_strdup(node->ri->nickname);
   intermediary->is_reachable = INTERMEDIARY_REACHABLE_MAYBE;
-  /** XXX change this counter to a 128-bit digest */
   increment(count);
   intermediary->desc.id[0] = count[0]; 
   intermediary->desc.id[1] = count[1]; 
@@ -247,7 +244,6 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
       mt_desc_describe(&exit->desc));
   mt_desc2digest(&exit->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
-  // XXX MoneTor - what to do with retVal
   /*Now, notify payment module that we have to start a payment*/
   int retVal;
   log_info(LD_MT, "MoneTor - Calling payment module for direct payment"
@@ -442,8 +438,6 @@ run_cclient_build_circuit_event(time_t now) {
       memcpy(circ->inter_ident->identity,
           intermediary->identity->identity, DIGEST_LEN);
     }
-    //XXX MoneTor - Check circuit healthiness? - check that it is already
-    // done by an other Tor intern function
   } SMARTLIST_FOREACH_END(intermediary);
   
   /* Ledger stuff now  - We initiate ou ledger if not already done and we 
@@ -569,6 +563,7 @@ void mt_cclient_update_payment_window(circuit_t *circ) {
 
 
 /**
+ * XXX MoneTor: Todo
  * Called by the payment module to signal an event
  * 
  * Can be either:
@@ -587,10 +582,22 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
  * XXX MoneTor -- TODO here: general_circuit_has_closed()
  */
 
-void mt_cclient_general_circ_has_closed(origin_circuit_t *circ) {
-  if (circ->ppath) {
+void mt_cclient_general_circ_has_closed(origin_circuit_t *oricirc) {
+  if (oricirc->ppath) {
     log_info(LD_MT, "a general circuit has closed");
-    // verify what to do.. ? notify payment module?
+    byte id[DIGEST_LEN];
+    crypt_path_t *cpath_tmp = oricirc->cpath;
+    pay_path_t *ppath_tmp = oricirc->ppath;
+    // XXX rethink the tear-down system to close nanopayment
+    // then tear down
+    while (cpath_tmp->next != oricirc->cpath && ppath_tmp) {
+      mt_desc2digest(&ppath_tmp->desc, &id);
+      if (digestmap_get(desc2circ, (char*) id)) {
+        digestmap_remove(desc2circ, (char*) id);
+      }
+      /*intermediary_t *intermediary = get_intermediary_by_identity(ppath_tmp->inter_ident);*/
+      /*mt_cpay_close(&ppath_tmp->desc, &intermediary->desc);*/
+    }
   }
 }
 
