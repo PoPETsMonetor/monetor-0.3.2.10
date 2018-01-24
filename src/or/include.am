@@ -76,6 +76,7 @@ LIBTOR_A_SOURCES = \
   src/or/mt_crypto.c        \
   src/or/mt_ipay.c        \
   src/or/mt_lpay.c        \
+  src/or/mt_messagebuffer.c   \
   src/or/mt_microalgs.c         \
   src/or/mt_nanoalgs.c        \
   src/or/mt_rpay.c        \

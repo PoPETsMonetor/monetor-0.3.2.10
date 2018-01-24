@@ -35,6 +35,7 @@
 #include "mt_crypto.h"
 #include "mt_tokens.h"
 #include "mt_common.h"
+#include "mt_messagebuffer.h"
 #include "mt_lpay.h"
 
 //TODO move resolve to separate algs file
@@ -254,7 +255,7 @@ int mt_lpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
   byte* response_msg;
   int response_size = pack_any_led_confirm(&response, &pid, &response_msg);
 
-  if(mt_send_message(desc, MT_NTYPE_ANY_LED_CONFIRM, response_msg, response_size) != MT_SUCCESS){
+  if(mt_buffer_message(desc, MT_NTYPE_ANY_LED_CONFIRM, response_msg, response_size) != MT_SUCCESS){
     tor_free(raw_msg);
     tor_free(response_msg);
     return MT_ERROR;
