@@ -67,6 +67,7 @@
 #include "circuitlist.h"
 #include "config.h"
 #include "cpuworker.h"
+#include "mt_common.h"
 #include "networkstatus.h"
 #include "onion.h"
 #include "onion_fast.h"
@@ -239,7 +240,12 @@ onion_pending_add(or_circuit_t *circ, create_cell_t *onionskin)
     log_info(LD_CIRC,
              "Circuit create request is too old; canceling due to overload.");
     if (! TO_CIRCUIT(circ)->marked_for_close) {
-      circuit_mark_for_close(TO_CIRCUIT(circ), END_CIRC_REASON_RESOURCELIMIT);
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(TO_CIRCUIT(circ), 1, END_CIRC_REASON_RESOURCELIMIT);
+      }
+      else {
+        circuit_mark_for_close(TO_CIRCUIT(circ), END_CIRC_REASON_RESOURCELIMIT);
+      }
     }
   }
   return 0;

@@ -3236,6 +3236,12 @@ typedef struct circuit_t {
    * closing this circuit.
    */
   int marked_for_close_orig_reason;
+  
+  /** Means that the circuit must complete a closing nanopayment
+   *  channel before sending a destroy cell and removing the circuit */
+  unsigned int payment_channel_has_closed : 1;
+
+
 
   /** Unique ID for measuring tunneled network status requests. */
   uint64_t dirreq_id;

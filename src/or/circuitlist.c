@@ -539,7 +539,8 @@ circuit_remove_from_origin_circuit_list(origin_circuit_t *origin_circ)
 }
 
 /** Add <b>origin_circ</b> to the global list of origin circuits. Called
- * when creating the circuit. */
+ * when creating the circuit. 
+ * */
 static void
 circuit_add_to_origin_circuit_list(origin_circuit_t *origin_circ)
 {
@@ -551,6 +552,14 @@ circuit_add_to_origin_circuit_list(origin_circuit_t *origin_circ)
 
 /** Detach from the global circuit list, and deallocate, all
  * circuits that have been marked for close.
+ *
+ * MoneTor: hack this function with following logic: When a circuit is marked
+ * for close but the payment channel did not closed yet, then ensure that we
+ * close properly the payment channel and wait for a close_success or a 
+ * close_failure before calling about_to_free and free.µ
+ *
+ * If we're here because we received a destroy cell, close the circuit 
+ * anyway
  */
 void
 circuit_close_all_marked(void)
@@ -579,8 +588,6 @@ circuit_close_all_marked(void)
     circuit_about_to_free(circ);
     circuit_free(circ);
   } SMARTLIST_FOREACH_END(circ);
-
-  smartlist_clear(circuits_pending_close);
 }
 
 /** Return a pointer to the global list of circuits. */
@@ -1497,8 +1504,14 @@ circuit_unlink_all_from_channel(channel_t *chan, int reason)
           "to mark");
       continue;
     }
-    if (!circ->marked_for_close)
-      circuit_mark_for_close(circ, reason);
+    if (!circ->marked_for_close) {
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(circ, 1, reason);
+      }
+      else {
+        circuit_mark_for_close(circ, reason);
+      }
+    }
   } SMARTLIST_FOREACH_END(circ);
 
   smartlist_free(detached);
@@ -2473,7 +2486,12 @@ circuits_handle_oom(size_t current_allocation)
     /* Now, kill the circuit. */
     n = n_cells_in_circ_queues(circ);
     if (! circ->marked_for_close) {
-      circuit_mark_for_close(circ, END_CIRC_REASON_RESOURCELIMIT);
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(circ, 1, END_CIRC_REASON_RESOURCELIMIT);
+      }
+      else {
+        circuit_mark_for_close(circ, END_CIRC_REASON_RESOURCELIMIT);
+      }
     }
     marked_circuit_free_cells(circ);
     freed = marked_circuit_free_stream_bytes(circ);

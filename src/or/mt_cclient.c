@@ -579,7 +579,9 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
   return 0;
 }
 /**
- * XXX MoneTor -- TODO here: general_circuit_has_closed()
+ *
+ * Note: when this method is called, the payement channel must already
+ * be closed or we just abort
  */
 
 void mt_cclient_general_circ_has_closed(origin_circuit_t *oricirc) {
@@ -595,8 +597,21 @@ void mt_cclient_general_circ_has_closed(origin_circuit_t *oricirc) {
       if (digestmap_get(desc2circ, (char*) id)) {
         digestmap_remove(desc2circ, (char*) id);
       }
-      /*intermediary_t *intermediary = get_intermediary_by_identity(ppath_tmp->inter_ident);*/
-      /*mt_cpay_close(&ppath_tmp->desc, &intermediary->desc);*/
+      if (!TO_CIRCUIT(oricirc)->payment_channel_has_closed) {
+        /** Ugh. We abort */
+        if (TO_CIRCUIT(oricirc)->received_destroy) {
+          log_info(LD_MT, "MoneTor: We abort our payment channel because we received"
+              " a destroy cell");
+        }
+        else {
+          log_info(LD_MT, "MoneTor: circ has closed without reason? Need debug");
+        }
+        intermediary_t *intermediary = get_intermediary_by_identity(ppath_tmp->inter_ident);
+        if (mt_cpay_close(&ppath_tmp->desc, &intermediary->desc) < 0) {
+          log_info(LD_MT, "MoneTor: We call mt_cpay_close while our general circuit was already"
+              " closed. Is this the best choice?");
+        }
+      }
     }
   }
 }
@@ -691,8 +706,16 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   byte id[DIGEST_LEN];
   mt_desc2digest(desc, &id);
   circuit_t *circ = digestmap_get(desc2circ, (char*) id);
-  if (!circ || circ->marked_for_close || 
-      circ->state != CIRCUIT_STATE_OPEN) {
+  if (!circ) {
+    log_info(LD_MT, "MoneTor: digestmap_get failed to return a circ for descriptor"
+        " %s", mt_desc_describe(desc));
+    return -2;
+  } 
+  if(circ->marked_for_close && circ->payment_channel_has_closed) {
+    log_info(LD_MT, "MoneTor: This is circuit is about to be freed");
+    return -2;
+  }
+  if (circ->state != CIRCUIT_STATE_OPEN) {
     /*If send_message is called by an event added by a worker
       thread, it is possible that our circuit has just been
       marked for close for whatever reason - It is unlikely, though
@@ -701,8 +724,7 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
      * the message once a new circ is up (in the case of a ledger
      * circuit or an intermediary circuit)*/
     /** If this is a general circuit, we should just cashout */
-    log_info(LD_MT, "MoneTor: digestmap_get failed to return a circ for descriptor"
-        " %s", mt_desc_describe(desc));
+    log_info(LD_MT, "MoneTor: Circ is not open: state: %s", circuit_state_to_string(circ->state));
     return -1;
   }
   if (command == RELAY_COMMAND_MT) {

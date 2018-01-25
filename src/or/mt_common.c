@@ -863,3 +863,13 @@ MOCK_IMPL(int, mt_paymod_signal, (mt_signal_t signal, mt_desc_t *desc)){
     return mt_cclient_paymod_signal(signal, desc);
   }
 }
+
+/**
+ * Mark the payment channel for close and try to accomplish
+ * a nanopayment close. If abort is true, then we just
+ * abort the protocol 
+ */
+
+void circuit_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason) {
+}
+
