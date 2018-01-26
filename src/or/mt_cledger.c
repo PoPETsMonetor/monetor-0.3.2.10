@@ -58,18 +58,43 @@ void run_cledger_scheduled_events(time_t now) {
   run_cledger_housekeeping_event(now);
 }
 
+/* XXX Todo  complete this function and add the call
+ * the function in circuit_about_to_free*/
 void
 mt_cledger_orcirc_has_closed(or_circuit_t *circ) {
   buf_free(circ->buf);
-  /* XXX Todo  complete this function and add the call
-   * the function in circuit_about_to_free*/
+  byte id[DIGEST_LEN];
+  mt_desc2digest(&circ->desc, &id);
+  if (digestmap_get(desc2circ, (char*) id)) {
+    digestmap_remove(desc2circ, (char*) id);
+  }
+  else {
+    log_info(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
+  }
 }
+
+/**
+ * Used by the payment module to notify a signal
+ *
+ * Can be:
+ *  ... (no ones currently)
+ *
+ *  XXX
+ */
 
 int
 mt_cledger_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
   (void) signal;
   (void) desc;
   return 0;
+}
+
+void mt_cledger_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason) {
+  /** XXX Do we have to notify the payment module
+   * for any specific circuit? Maybe that would be nice
+   * for memory management */
+  (void) abort;
+  circuit_mark_for_close(circ, reason);
 }
 
 /**********************Payment messages***************/
@@ -79,9 +104,15 @@ mt_cledger_send_message(mt_desc_t* desc, mt_ntype_t type, byte *msg, int msg_len
   byte id[DIGEST_LEN];
   mt_desc2digest(desc, &id);
   circuit_t *circ = digestmap_get(desc2circ, (char*) id);
-  tor_assert(circ);
-  if (circ->marked_for_close || circ->state != 
-      CIRCUIT_STATE_OPEN) {
+  if (!circ) {
+    log_info(LD_MT, "MoneTor: Looks like %s is not in our map", mt_desc_describe(desc));
+    return -2;
+  }
+  if (circ->marked_for_close) {
+    log_info(LD_MT, "MoneTor: Circuit associated with desc %s marked for close", mt_desc_describe(desc));
+    return -2;
+  }
+  if (circ->state != CIRCUIT_STATE_OPEN) {
     log_info(LD_MT, "MoneTor: Error in mt_cledger_send_message; the circuit has a problem."
       " circ state: %s", circuit_state_to_string(circ->state));
     return -1;
@@ -105,7 +136,7 @@ void mt_cledger_process_received_msg(circuit_t *circ, mt_ntype_t type,
     }
   }
   else {
-    log_info(LD_MT, "MoneTor: Processing circuit with unsupported purpose %hhx",
-        circ->purpose);
+    log_info(LD_MT, "MoneTor: Processing circuit with unsupported purpose %s",
+        circuit_purpose_to_string(circ->purpose));
   }
 }

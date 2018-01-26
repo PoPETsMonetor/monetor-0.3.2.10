@@ -17,6 +17,8 @@ void mt_cclient_ledger_circ_has_opened(origin_circuit_t *circ);
 
 void mt_cclient_intermediary_circ_has_opened(origin_circuit_t *circ);
 
+void mt_cclient_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason);
+
 #define MAX_INTERMEDIARY_LINKED_TO_MIDDLE 1
 #define MAX_INTERMEDIARY_LINKED_TO_EXIT 1
 //XXX MoneTor - define following as the sum of the two above

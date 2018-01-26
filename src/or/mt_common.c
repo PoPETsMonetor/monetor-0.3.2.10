@@ -868,8 +868,26 @@ MOCK_IMPL(int, mt_paymod_signal, (mt_signal_t signal, mt_desc_t *desc)){
  * Mark the payment channel for close and try to accomplish
  * a nanopayment close. If abort is true, then we just
  * abort the protocol 
+ *
+ * This function should call circuit_mark_for_close() if
+ * no control cell to close the circuit has to be sent
+ *
  */
 
 void circuit_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason) {
+  log_info(LD_MT, "MoneTor: Trying to close a circuit that might have a payment channel"
+      " associated.");
+  if (authdir_mode(get_options())) {
+    mt_cledger_mark_payment_channel_for_close(circ, abort, reason);
+  }
+  else if (intermediary_mode(get_options())) {
+    mt_cintermediary_mark_payment_channel_for_close(circ, abort, reason);
+  }
+  else if (server_mode(get_options())) {
+    mt_crelay_mark_payment_channel_for_close(circ, abort, reason);
+  }
+  else {
+    mt_cclient_mark_payment_channel_for_close(circ, abort, reason);
+  }
 }
 

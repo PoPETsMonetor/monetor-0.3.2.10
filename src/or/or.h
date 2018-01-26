@@ -2947,6 +2947,8 @@ typedef struct pay_path_t {
    *    anymore
    * */
   unsigned int p_marked_for_close : 1;
+  
+  unsigned int p_has_closed : 1;
 
   unsigned int last_mt_cpay_succeeded : 1;
 
@@ -3237,12 +3239,6 @@ typedef struct circuit_t {
    */
   int marked_for_close_orig_reason;
   
-  /** Means that the circuit must complete a closing nanopayment
-   *  channel before sending a destroy cell and removing the circuit */
-  unsigned int payment_channel_has_closed : 1;
-
-
-
   /** Unique ID for measuring tunneled network status requests. */
   uint64_t dirreq_id;
 
@@ -3380,8 +3376,11 @@ typedef struct origin_circuit_t {
    */
   pay_path_t *ppath;
 
-  /** Used for ledger circuits and intermediary circuit at the relay */
+  /** Used for ledger circuits at the relay
+   * As well as for ledger circs at the client and the intermediary */
   mt_desc_t desc;
+
+  mt_desc_t *desci;
 
   /** buffer used for intermediary circuits and ledger circuits
    * on client, intermediary and relay */
@@ -3641,6 +3640,11 @@ typedef struct or_circuit_t {
    * This cell is has been sent by a Tor client
    */
   mt_desc_t desc;
+  
+  /**
+   * Contains a pointer to an existing intermediary descriptor
+   */
+  mt_desc_t *desci;
 
   /**
    * Set to 1 when we receive the first payment cell */

@@ -759,7 +759,7 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
             layer_start, cpath_layer, 0, filename, lineno) < 0) {
         log_info(LD_MT, "We are packaging several cells at once"
             " and one packaging failed ...");
-        return -1;
+        return -2;
       }
       payload_remains -= rph.length;
     }
