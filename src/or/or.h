@@ -2951,7 +2951,9 @@ typedef struct pay_path_t {
   unsigned int p_has_closed : 1;
 
   unsigned int last_mt_cpay_succeeded : 1;
-
+  
+  /** Tell whether we already called a mt_cpay_pay */
+  unsigned int payment_is_processing : 1;
   /* Position type of the current hop */
   position_t position;
   /* Used to keep track of number of cells we can send/receive

@@ -365,14 +365,15 @@ run_cclient_housekeeping_event(time_t now) {
    
   log_info(LD_MT, "MoneTor: relay digestmap length: %d", digestmap_size(desc2circ));
   DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
-    if (!circ->mt_priority && !CIRCUIT_IS_ORIGIN(circ)) {
+    if (!CIRCUIT_IS_ORIGIN(circ) && !TO_ORIGIN_CIRCUIT(circ)->ppath) {
       continue;
     }
     /** Verify if we have enough remaining window */
     pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
     while (ppath_tmp != NULL) {
       if (ppath_tmp->window < LIMIT_PAYMENT_WINDOW &&
-          ppath_tmp->last_mt_cpay_succeeded) {
+          !ppath_tmp->payment_is_processing &&
+          !ppath_tmp->p_marked_for_close) {
         /** pay :-) */
         intermediary_t* intermediary = get_intermediary_by_role(ppath_tmp->position);
         if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
@@ -584,14 +585,36 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
         " which is not in our map anymore?");
     return -1;
   }
-
+  oricirc = TO_ORIGIN_CIRCUIT(circ);
   if (signal == MT_SIGNAL_PAYMENT_SUCCESS) {
+    /** Which one? */
+    pay_path_t *ppath_tmp = oricirc->ppath;
+    while (ppath_tmp) {
+      if (&ppath_tmp->desc == desc) {
+        ppath_tmp->window += 2000;
+        ppath_tmp->last_mt_cpay_succeeded = 1;
+        ppath_tmp->payment_is_processing = 0;
+        log_info(LD_MT, "MoneTor: payement succeeded :)");
+        break;
+      }
+      ppath_tmp = ppath_tmp->next;
+    }
   }
   else if (signal == MT_SIGNAL_PAYMENT_FAILURE) {
+    pay_path_t *ppath_tmp = oricirc->ppath;
+    while (ppath_tmp) {
+      if (&ppath_tmp->desc == desc) {
+        /** XXX see what to do if such error */
+        ppath_tmp->last_mt_cpay_succeeded = 0;
+        ppath_tmp->payment_is_processing = 0;
+        log_warn(LD_MT, "MoneTor: We got a payment failure!");
+        break;
+      }
+      ppath_tmp = ppath_tmp->next;
+    }
   }
   else if (signal == MT_SIGNAL_CLOSE_SUCCESS ||
            signal == MT_SIGNAL_CLOSE_FAILURE) {
-    oricirc = TO_ORIGIN_CIRCUIT(circ);
     tor_assert(oricirc->ppath);
     pay_path_t *ppath_tmp = oricirc->ppath;
     int has_closed = 0;
