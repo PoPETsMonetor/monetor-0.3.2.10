@@ -73,6 +73,7 @@
 #include "mt_cclient.h"
 #include "mt_cintermediary.h"
 #include "mt_crelay.h"
+#include "mt_cledger.h"
 #include "networkstatus.h"
 #include "nodelist.h"
 #include "onion.h"
@@ -2065,24 +2066,37 @@ circuit_about_to_free(circuit_t *circ)
      orig_reason);
   }
   
-  /* Notify the payment controller for any intermediary circuit closing*/
+  /* Notify the payment controller */
 
   if (circ->purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY) {
     mt_cclient_intermediary_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
   }
-  if (circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY) {
+  else if (circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY) {
     mt_crelay_intermediary_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
   }
-  if (circ->purpose == CIRCUIT_PURPOSE_I_LEDGER) {
+  else if (circ->purpose == CIRCUIT_PURPOSE_I_LEDGER) {
     mt_cintermediary_ledger_circ_has_closed(circ);
   }
   /* Notify payment controller when a general circuit has closed */
-  if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
+  else if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
     mt_cclient_general_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
   }
-  if (circ->purpose == CIRCUIT_PURPOSE_C_LEDGER) {
+  else if (circ->purpose == CIRCUIT_PURPOSE_C_LEDGER) {
     mt_cclient_ledger_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
   }
+  else if (circ->purpose == CIRCUIT_PURPOSE_INTERMEDIARY) {
+    mt_cintermediary_orcirc_has_closed(TO_OR_CIRCUIT(circ));
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_LEDGER) {
+    mt_cledger_orcirc_has_closed(TO_OR_CIRCUIT(circ));
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_OR && 
+      TO_OR_CIRCUIT(circ)->circuit_received_first_payment_cell) {
+    mt_crelay_orcirc_has_closed(TO_OR_CIRCUIT(circ));
+  }
+ 
+
+  
 
   /* Notify the HS subsystem for any intro point circuit closing so it can be
    * dealt with cleanly. */

@@ -1,10 +1,10 @@
 /**
  * \file mt_cclient.c
  * Implement the controller logic for the MoneTor payment system when
- * this Tor instance is used as a client. This module interact with
+ * this Tor instance is used as a client. This module interacts with
  * mt_cpay.c module to produce and verify the crypto pieces.
  *
- * This module is responsible to select, build and maintan connection
+ * This module is responsible to select, build and maintain the connections
  * towards the ledger and the intermediaries. This module is also
  * responsible to track the number of cell received and sent that have
  * been relayed alongside a payment channel and to ensure payment have
@@ -166,7 +166,8 @@ static void
 intermediary_need_cleanup(intermediary_t *intermediary, time_t now) {
   if (intermediary->circuit_retries > INTERMEDIARY_MAX_RETRIES ||
       intermediary->is_reachable == INTERMEDIARY_REACHABLE_NO) {
-
+    
+    log_info(LD_MT, "MoneTor: Looks like we have to cleanup intermediary :/");
     /* Get all general circuit linked to this intermediary and
      * mark the payment as closed */
     // XXX MoneTor todo
@@ -564,7 +565,6 @@ void mt_cclient_update_payment_window(circuit_t *circ) {
 
 
 /**
- * XXX MoneTor: Todo
  * Called by the payment module to signal an event
  * 
  * Can be either:
@@ -608,6 +608,7 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
         ppath_tmp->last_mt_cpay_succeeded = 0;
         ppath_tmp->payment_is_processing = 0;
         log_warn(LD_MT, "MoneTor: We got a payment failure!");
+        // XXX Do we try to close? .
         break;
       }
       ppath_tmp = ppath_tmp->next;
@@ -689,7 +690,6 @@ void mt_cclient_intermediary_circ_has_closed(origin_circuit_t *circ) {
       goto cleanup;
     }
 
-    /* maybe because extrainfo is not fresh anymore?  XXX change that :s*/
     node_t* node = node_get_mutable_by_id(intermediary->identity->identity);
     extend_info_t *ei = extend_info_from_node(node, 0);
     if (!ei) {
@@ -865,9 +865,9 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
         " %s", mt_desc_describe(desc1));
     return -2;
   }
-  /* Get the appropriate ppath+layer_start and identify related intermediary */
   layer_start = TO_ORIGIN_CIRCUIT(circ)->cpath;
   ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
+  /* Get the appropriate ppath+layer_start and identify related intermediary */
   int found = 0;
   do {
     if (desc1 == &ppath_tmp->desc) {
@@ -877,6 +877,7 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
     layer_start = layer_start->next;
     ppath_tmp = ppath_tmp->next;
   } while(layer_start != TO_ORIGIN_CIRCUIT(circ)->cpath && ppath_tmp);
+
   if (!found) {
     log_info(LD_MT, "MoneTor: didn't find right ppath");
     return -2;
@@ -927,6 +928,13 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
     }
     /*tor_free(msg);*/ //should be freed by mt_common
   }
+  else if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_LEDGER) {
+    desc = &ledger->desc;
+    log_info(LD_MT, "Processed a msg send by the ledger ");
+    if (mt_cpay_recv(desc, pcommand, msg, msg_len) < 0) {
+      log_info(LD_MT, "Payment module returned -1 for mt_ntype_t %hhx", pcommand);
+    }
+  }
   else if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
 
     pay_path_t *ppath = circ->ppath;
@@ -942,8 +950,7 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
     tor_assert(ppath);
     /* get the right desc */
     desc = &ppath->desc;
-    //XXX todo Buffering cells
-    log_info(LD_MT, "Processed a cell sent by relay linked to desc %s - calling mt_cpay_recv",
+    log_info(LD_MT, "Processed a msg sent by relay linked to desc %s - calling mt_cpay_recv",
         mt_desc_describe(desc));
     if (mt_cpay_recv(desc, pcommand, msg, msg_len) < 0) {
       /* De we retry or close? Let's assume easiest things -> we close*/
