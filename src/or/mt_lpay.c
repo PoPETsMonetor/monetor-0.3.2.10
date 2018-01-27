@@ -61,6 +61,9 @@ typedef struct {
   byte pk[MT_SZ_PK];
   byte sk[MT_SZ_SK];
   byte led_addr[MT_SZ_ADDR];
+
+  // structure to run message buffering functionality
+  mt_msgbuf_t* msgbuf;
 } mt_lpay_t;
 
 static mt_lpay_t ledger;
@@ -90,6 +93,8 @@ void resolve(byte (*pp)[MT_SZ_PP], chn_end_public_t T_E, chn_int_public_t T_I,
  */
 int mt_lpay_init(void){
 
+  ledger.msgbuf = mt_messagebuffer_init();
+
   // initialize state
   ledger.mac_accounts = digestmap_new();
   ledger.chn_accounts = digestmap_new();
@@ -112,7 +117,7 @@ int mt_lpay_init(void){
   /********************************************************************/
   // load values from torrc
 
-  or_options_t* options = get_options();
+  const or_options_t* options = get_options();
 
   byte* temp_pp;
   byte* temp_pk;
@@ -255,7 +260,8 @@ int mt_lpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
   byte* response_msg;
   int response_size = pack_any_led_confirm(&response, &pid, &response_msg);
 
-  if(mt_buffer_message(desc, MT_NTYPE_ANY_LED_CONFIRM, response_msg, response_size) != MT_SUCCESS){
+  if(mt_buffer_message(ledger.msgbuf, desc, MT_NTYPE_ANY_LED_CONFIRM, response_msg, response_size)
+     != MT_SUCCESS){
     tor_free(raw_msg);
     tor_free(response_msg);
     return MT_ERROR;
@@ -264,6 +270,13 @@ int mt_lpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
   tor_free(raw_msg);
   tor_free(response_msg);
   return result;
+}
+
+/**
+ * Update the status of a descriptor (available/unavailable)
+ */
+int mt_lpay_set_status(mt_desc_t* desc, int status){
+  return mt_set_desc_status(ledger.msgbuf, desc, status);
 }
 
 //---------------------------- Transaction Handler Functions ----------------------------//

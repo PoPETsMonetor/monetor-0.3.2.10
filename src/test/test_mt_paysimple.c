@@ -236,6 +236,12 @@ static int mock_send_message(mt_desc_t *desc, mt_ntype_t type, byte* msg, int si
     case MT_PARTY_INT:
       party_str = "int";
       break;
+    case MT_PARTY_END:
+      party_str = "end";
+      break;
+    case MT_PARTY_IDK:
+      party_str = "idk";
+      break;
   }
 
   // invoke the corresponding recv call and log
@@ -263,7 +269,7 @@ static int mock_send_message(mt_desc_t *desc, mt_ntype_t type, byte* msg, int si
     printf("%s -> int : %s\n", party_str, type_str);
     return mt_ipay_recv(&src_desc, type, msg, size);
   }
-  printf("dst_desc %d\n", dst_desc.id[0]);
+  printf("dst_desc %d\n", (int)dst_desc.id[0]);
   printf("ERROR: descriptor not recognized\n");
   return MT_ERROR;
 }

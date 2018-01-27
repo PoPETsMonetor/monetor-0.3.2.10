@@ -45,6 +45,12 @@ int mt_lpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size);
  */
 mt_payment_public_t mt_lpay_get_payment_public(void);
 
+/**
+ * Update the status of a descriptor (available/unavailable)
+ */
+int mt_lpay_set_status(mt_desc_t* desc, int status);
+
+
 /********************** Instance Management ***********************/
 
 /**

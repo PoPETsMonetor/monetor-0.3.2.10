@@ -5723,7 +5723,7 @@ typedef enum {
 //-------------------------- Public Payment Parameters ----------------------//
 
 #define MT_NAN_VAL 100
-#define MT_NAN_LEN 50
+#define MT_NAN_LEN 1000
 #define MT_CLI_CHN_VAL 105 * 1000
 #define MT_REL_CHN_VAL 0
 #define MT_INT_CHN_VAL 200 * 1000

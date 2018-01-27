@@ -43,6 +43,11 @@ int mt_rpay_chn_balance(void);
  */
 int mt_rpay_chn_number(void);
 
+/**
+ * Update the status of a descriptor (available/unavailable)
+ */
+int mt_rpay_set_status(mt_desc_t* desc, int status);
+
 /********************** Instance Management ***********************/
 
 /**

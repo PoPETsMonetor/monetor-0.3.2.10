@@ -111,7 +111,7 @@ static void test_mt_lpay(void *arg)
   aut_0_desc.id[0] = 1;
   aut_0_desc.party = MT_PARTY_AUT;
 
-  or_options_t* options = get_options();
+  or_options_t* options = (or_options_t*)get_options();
 
   mt_bytes2hex(pp, MT_SZ_PP, &options->moneTorPP);
   mt_bytes2hex(led_0_pk, MT_SZ_PK, &options->moneTorPK);

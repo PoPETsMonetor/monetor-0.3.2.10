@@ -51,6 +51,11 @@ int mt_cpay_chn_balance(void);
  */
 int mt_cpay_chn_number(void);
 
+/**
+ * Update the status of a descriptor (available/unavailable)
+ */
+int mt_cpay_set_status(mt_desc_t* desc, int status);
+
 /********************** Instance Management ***********************/
 
 /**

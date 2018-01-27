@@ -91,6 +91,8 @@ typedef struct {
 
   digestmap_t* chns_transition;  // proto_id -> chn
 
+  // structure to run message buffering functionality
+  mt_msgbuf_t* msgbuf;
 } mt_ipay_t;
 
 
@@ -123,6 +125,10 @@ static mt_ipay_t intermediary;
  * will be loaded from the torrc configuration file.
  */
 int mt_ipay_init(void){
+
+  // TODO: get this to work
+  // cpu_init();
+  intermediary.msgbuf = mt_messagebuffer_init();
 
   byte pp[MT_SZ_PP];
   byte pk[MT_SZ_PK];
@@ -319,11 +325,18 @@ int mt_ipay_chn_number(void){
 }
 
 /**
+ * Update the status of a descriptor (available/unavailable)
+ */
+int mt_ipay_set_status(mt_desc_t* desc, int status){
+  return mt_set_desc_status(intermediary.msgbuf, desc, status);
+}
+
+
+/**
  * Delete the state of the payment module
  */
 int mt_ipay_clear(void){
   // Need to implement
-  tor_assert(0);
   return MT_ERROR;
 }
 
@@ -376,7 +389,8 @@ static int init_chn_int_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   int msg_size = pack_chn_int_setup(&token, pid, &msg);
   int signed_msg_size = mt_create_signed_msg(msg, msg_size,
 					     &intermediary.pk, &intermediary.sk, &signed_msg);
-  int result = mt_buffer_message(&intermediary.ledger, MT_NTYPE_CHN_INT_SETUP, signed_msg, signed_msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, &intermediary.ledger, MT_NTYPE_CHN_INT_SETUP,
+				 signed_msg, signed_msg_size);
   tor_free(msg);
   tor_free(signed_msg);
   return result;
@@ -437,7 +451,7 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
 
     byte* msg;
     int msg_size = pack_chn_int_estab2(&reply, pid, &msg);
-    int result = mt_buffer_message(desc, MT_NTYPE_CHN_INT_ESTAB2, msg, msg_size);
+    int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_CHN_INT_ESTAB2, msg, msg_size);
     tor_free(msg);
     return result;
   }
@@ -471,7 +485,7 @@ static int handle_chn_end_estab3(mt_desc_t* desc, chn_end_estab3_t* token, byte 
 
   byte* msg;
   int msg_size = pack_chn_int_estab4(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_CHN_INT_ESTAB4, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_CHN_INT_ESTAB4, msg, msg_size);
   tor_free(msg);
   return result;
 }
@@ -492,7 +506,7 @@ static int handle_nan_cli_setup1(mt_desc_t* desc, nan_cli_setup1_t* token, byte 
 
   byte* msg;
   int msg_size = pack_nan_int_setup2(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_NAN_INT_SETUP2, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_SETUP2, msg, msg_size);
   tor_free(msg);
   return result;
 }
@@ -508,7 +522,7 @@ static int handle_nan_cli_setup3(mt_desc_t* desc, nan_cli_setup3_t* token, byte 
 
   byte* msg;
   int msg_size = pack_nan_int_setup4(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_NAN_INT_SETUP4, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_SETUP4, msg, msg_size);
   tor_free(msg);
   return result;
 }
@@ -524,7 +538,7 @@ static int handle_nan_cli_setup5(mt_desc_t* desc, nan_cli_setup5_t* token, byte 
 
   byte* msg;
   int msg_size = pack_nan_int_setup6(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_NAN_INT_SETUP6, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_SETUP6, msg, msg_size);
   tor_free(msg);
   return result;
 }
@@ -542,7 +556,7 @@ static int handle_nan_rel_estab2(mt_desc_t* desc, nan_rel_estab2_t* token, byte 
 
   byte* msg;
   int msg_size = pack_nan_int_estab3(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_NAN_INT_ESTAB3, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_ESTAB3, msg, msg_size);
   tor_free(msg);
   return result;
 }
@@ -557,7 +571,7 @@ static int handle_nan_rel_estab4(mt_desc_t* desc, nan_rel_estab4_t* token, byte 
 
   byte* msg;
   int msg_size = pack_nan_int_estab5(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_NAN_INT_ESTAB5, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_ESTAB5, msg, msg_size);
   tor_free(msg);
   return result;
 }
@@ -575,7 +589,7 @@ static int handle_nan_cli_destab1(mt_desc_t* desc, nan_cli_destab1_t* token, byt
 
   byte* msg;
   int msg_size = pack_nan_int_destab2(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_NAN_INT_DESTAB2, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_DESTAB2, msg, msg_size);
   tor_free(msg);
   return result;
 }
@@ -608,7 +622,7 @@ static int handle_nan_cli_dpay1(mt_desc_t* desc, nan_cli_dpay1_t* token, byte (*
 
   byte* msg;
   int msg_size = pack_nan_int_dpay2(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_NAN_INT_DPAY2, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_DPAY2, msg, msg_size);
   tor_free(msg);
   return result;
 }
@@ -638,7 +652,7 @@ static int handle_nan_end_close1(mt_desc_t* desc, nan_end_close1_t* token, byte 
 
   byte* msg;
   int msg_size = pack_nan_int_close2(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_NAN_INT_CLOSE2, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_CLOSE2, msg, msg_size);
   tor_free(msg);
   return result;
 }
@@ -653,7 +667,7 @@ static int handle_nan_end_close3(mt_desc_t* desc, nan_end_close3_t* token, byte 
 
   byte* msg;
   int msg_size = pack_nan_int_close4(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_NAN_INT_CLOSE4, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_CLOSE4, msg, msg_size);
   tor_free(msg);
   return result;
 }
@@ -668,7 +682,7 @@ static int handle_nan_end_close5(mt_desc_t* desc, nan_end_close5_t* token, byte 
 
   byte* msg;
   int msg_size = pack_nan_int_close6(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_NAN_INT_CLOSE6, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_CLOSE6, msg, msg_size);
   tor_free(msg);
   return result;
 }
@@ -683,7 +697,7 @@ static int handle_nan_end_close7(mt_desc_t* desc, nan_end_close7_t* token, byte 
 
   byte* msg;
   int msg_size = pack_nan_int_close8(&reply, pid, &msg);
-  int result = mt_buffer_message(desc, MT_NTYPE_NAN_INT_CLOSE8, msg, msg_size);
+  int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_CLOSE8, msg, msg_size);
   tor_free(msg);
   return result;
 }
