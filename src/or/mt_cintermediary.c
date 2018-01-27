@@ -129,18 +129,29 @@ void mt_cintermediary_ledger_circ_has_closed(circuit_t *circ) {
   /* XXX Todo should also remove from desc2circ */
   byte id[DIGEST_LEN];
   mt_desc2digest(&TO_ORIGIN_CIRCUIT(circ)->desc, &id);
-  digestmap_remove(desc2circ, (char*) id);
-  log_info(LD_MT, "MoneTor: ledger circ has closed. Removed %s from our internal structure",
-      mt_desc_describe(&TO_ORIGIN_CIRCUIT(circ)->desc));
+  if (digestmap_get(desc2circ, (char*) id)) {
+    digestmap_remove(desc2circ, (char*) id);
+    log_info(LD_MT, "MoneTor: ledger circ has closed. Removed %s from our internal structure",
+        mt_desc_describe(&TO_ORIGIN_CIRCUIT(circ)->desc));
+  }
+  else{
+    log_info(LD_MT,
+        "MoneTor: desc %s not found in our map", mt_desc_describe(&TO_ORIGIN_CIRCUIT(circ)->desc));
+  }
 }
 
 void mt_cintermediary_orcirc_has_closed(or_circuit_t *circ) {
   buf_free(circ->buf);
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
-  digestmap_remove(desc2circ, (char*) id);
-  log_info(LD_MT, "MoneTor: orcirc circ has closed. Removed %s from our internal structure",
-      mt_desc_describe(&circ->desc));
+  if (digestmap_get(desc2circ, (char*) id)) {
+    digestmap_remove(desc2circ, (char*) id);
+    log_info(LD_MT, "MoneTor: orcirc circ has closed. Removed %s from our internal structure",
+        mt_desc_describe(&circ->desc));
+  }
+  else {
+    log_info(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
+  }
   /* XXX TODO alert payment module to cashout? */
   /** This might happen because the circuit breaks
    * between the client and the intermediary; or the relay
@@ -162,6 +173,8 @@ void mt_cintermediary_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
+  log_info(LD_MT, "New circuit connected to us received a payment cell."
+      " Adding it to the map: %s", mt_desc_describe(&circ->desc));
 }
 
 
@@ -170,12 +183,31 @@ void mt_cintermediary_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
  *
  * Can be:
  *  ... (no ones currently)
+ *
+ *  XXX
  */
 
 int mt_cintermediary_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
   (void) signal;
   (void) desc;
   return 0;
+}
+
+void mt_cintermediary_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason) {
+  if (CIRCUIT_IS_ORIGIN(circ)) {
+    /** That might be a ledger circ, just mark it as closed */
+    circuit_mark_for_close(circ, reason);
+  }
+  else {
+    or_circuit_t *orcirc = TO_OR_CIRCUIT(circ);
+    if (orcirc->circuit_received_first_payment_cell && !abort) {
+      /** XXX We want a proper close?*/
+    }
+    else {
+      // XXX What if we have received cell but abort was 1? 
+      circuit_mark_for_close(circ, reason);
+    }
+  }
 }
 
 /********************** Utility stuff ********************************/

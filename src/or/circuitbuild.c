@@ -49,6 +49,7 @@
 #include "hs_ntor.h"
 #include "main.h"
 #include "microdesc.h"
+#include "mt_common.h"
 #include "networkstatus.h"
 #include "nodelist.h"
 #include "onion.h"
@@ -515,6 +516,8 @@ circuit_establish_circuit(uint8_t purpose, extend_info_t *exit_ei, int flags)
   }
 
   circ = origin_circuit_init(purpose, flags);
+  
+  /** Again, no need to close the payment channel, we shouldn't have any */
 
   if (onion_pick_cpath_exit(circ, exit_ei, is_hs_v3_rp_circuit) < 0 ||
       onion_populate_cpath(circ) < 0) {
@@ -1562,8 +1565,15 @@ circuit_truncated(origin_circuit_t *circ, crypt_path_t *layer, int reason)
    *     means that a connection broke or an extend failed. For now,
    *     just give up.
    */
-  circuit_mark_for_close(TO_CIRCUIT(circ),
-          END_CIRC_REASON_FLAG_REMOTE|reason);
+  /** XXX MoneTor: abort the payment channel if this is a general circuit */
+  if (get_options()->EnablePayment) {
+    circuit_mark_payment_channel_for_close(TO_CIRCUIT(circ), 1,
+        END_CIRC_REASON_FLAG_REMOTE|reason);
+  }
+  else {
+    circuit_mark_for_close(TO_CIRCUIT(circ),
+            END_CIRC_REASON_FLAG_REMOTE|reason);
+  }
   return 0;
 
 #if 0
@@ -2382,6 +2392,7 @@ circuit_extend_to_new_exit(origin_circuit_t *circ, extend_info_t *exit_ei)
   if ((err_reason = circuit_send_next_onion_skin(circ))<0) {
     log_warn(LD_CIRC, "Couldn't extend circuit to new point %s.",
              extend_info_describe(exit_ei));
+    /** MoneTor: if we're here, the mt_cpay_pay() should not have been called*/
     circuit_mark_for_close(TO_CIRCUIT(circ), -err_reason);
     return -1;
   }

@@ -99,8 +99,9 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
    * log the attempt
    *
    * If circ closed but payment channel still open (the circ is still in 
-   * the digestmap ~ or whatever logic which makes us certain that the channel
+   * the digestmap ~ or whatever logic which makes us certain that the channe
    * is open; launch again one circuit toward the intermediary */
+  log_info(LD_MT, "MoneTor: Intermediary circ has closed");
   byte id[DIGEST_LEN];
   mt_desc2digest(&ocirc->desc, &id);
   if (TO_CIRCUIT(ocirc)->state != CIRCUIT_STATE_OPEN) {
@@ -108,9 +109,13 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
     tor_assert(ocirc->cpath);
     tor_assert(ocirc->cpath->prev);
     tor_assert(ocirc->cpath->prev->extend_info);
-    digestmap_remove(desc2circ, (char*) id);
+    if (digestmap_get(desc2circ, (char*) id)) {
+      digestmap_remove(desc2circ, (char*) id);
+    }
+    else {
+      log_info(LD_MT, "MoneTor: tried to remove the desc but it seems that this desc was not in our map anymore ~ bug?");
+    }
     if (ocirc->cpath->prev->extend_info->retries < INTERMEDIARY_MAX_RETRIES) {
-      
       node_t *node = 
         node_get_mutable_by_id(ocirc->cpath->prev->extend_info->identity_digest);
       extend_info_t *ei = extend_info_from_node(node, 0);
@@ -131,6 +136,8 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
         // XXX Todo alert the payment system to aboard
         return;
       }
+      /** retrieve the pointer we change the circuit but we keep the same descriptor*/
+      circ->desc = ocirc->desc;
       return;
     }
     else { /** We reache max retries */
@@ -147,7 +154,6 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
     return;
   }
   else { //XXX TODO
-    
     digestmap_remove(desc2circ, (char*) id);
   /** The circuit was open; so it was intentially closed by our side or someone in the path*/
 
@@ -166,6 +172,32 @@ mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
   byte id[DIGEST_LEN];
   mt_desc2digest(&ocirc->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(ocirc));
+  /** XXX notify payment module that the intermediary circuit is open */
+}
+
+/**
+ * XXX Todo check this code is properly called
+ */
+
+void
+mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
+  buf_free(circ->buf);
+  byte id[DIGEST_LEN];
+  mt_desc2digest(&circ->desc, &id);
+  if (digestmap_get(desc2circ, (char*) id)) {
+    digestmap_remove(desc2circ, (char*) id);
+  }
+  else {
+    log_info(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
+  }
+  mt_desc2digest(circ->desci, &id);
+  /** remove or intermediary map duplication */
+  if (digestmap_get(desc2circ, (char*) id)) {
+    digestmap_remove(desc2circ, (char*) id);
+  }
+  else {
+    log_info(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
+  }
 }
 
 /************************** Events *****************************/
@@ -275,8 +307,11 @@ mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   circuit_t *circ = digestmap_get(desc2circ, (char*) id);
   crypt_path_t *layer_start = NULL;
   tor_assert(circ);
-  if (circ->marked_for_close || circ->state !=
-      CIRCUIT_STATE_OPEN) {
+  if (circ->marked_for_close) {
+    log_info(LD_MT, "MoneTor: Tried to send a message over a circuit markerd for close");
+    return -2;
+  }
+  if (circ->state != CIRCUIT_STATE_OPEN) {
     log_info(LD_MT, "MoneTor: the circuit has a problem."
       " circ state: %s", circuit_state_to_string(circ->state));
     //XXX Todo maybe do something smarter if the circ is still not
@@ -298,7 +333,7 @@ mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   }
   else {
     log_warn(LD_MT, "Unrecognized command %d", command);
-    return -1;
+    return -2;
   }
 }
 
@@ -322,9 +357,16 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
 
   }
   else {
+    
+
+    orcirc = TO_OR_CIRCUIT(circ);
     //circ should a or_circuit_t of a normal circuit with
     //a normal client over one endpoint
     if (pcommand == MT_NTYPE_NAN_CLI_ESTAB1) {
+      /** First, we unpack the identity of the intermediary we have to connect to.
+       * If we already have a circuit towards that intermediary, that's nice. If not,
+       * launch a new circuit and notify the payment module as soon it opens */
+
       /* We have to open a circuit towards the interemdiary received */
       int_id_t int_id;
       unpack_int_id(msg, &int_id);
@@ -361,6 +403,8 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       log_info(LD_MT, "We don't have any current circuit towards %s that intermediary"
           " .. Building one. ", node_describe(ninter));
       /** We didn't find a circ connected/connecting to ninter */
+      mt_desc_t *desci = tor_malloc_zero(sizeof(mt_desc_t));
+      memcpy(desci, msg+sizeof(int_id_t), sizeof(mt_desc_t));
       if (!oricirc) {
         extend_info_t *ei = NULL;
         ei = extend_info_from_node(ninter, 0);
@@ -379,21 +423,30 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
           //XXX alert payment module
           return;
         }
-        increment(count);
-        oricirc->desc.id[0] = count[0];
-        oricirc->desc.id[1] = count[1];
-        oricirc->desc.party = MT_PARTY_INT;
+        oricirc->desci = desci;
+      }
+      else {
+        /** XXX: Should we notify the payment module about that it can send towards the
+         * intermediary without waiting?*/
+        log_info(LD_MT, "MoneTor: Cool, we already have a circuit towards that intermediary");
       }
 
-      mt_desc_t *desci = tor_malloc_zero(sizeof(mt_desc_t));
-      memcpy(desci, msg+sizeof(int_id_t), sizeof(mt_desc_t));
+      orcirc->desci = oricirc->desci;
 
-      mt_rpay_recv_multidesc(&oricirc->desc, desci, pcommand,
+      /** adding to digestmap desci => oricirc */
+      byte id[DIGEST_LEN];
+      mt_desc2digest(desci, &id);
+      digestmap_set(desc2circ, (char*) id, oricirc);
+
+      if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
          msg+sizeof(int_id_t)+sizeof(mt_desc_t),
-         msg_len-sizeof(int_id_t)-sizeof(mt_desc_t));
+         msg_len-sizeof(int_id_t)-sizeof(mt_desc_t)) < 0) {
+        log_info(LD_MT, "MoneTor: Payment module returnerd -1"
+            " we should stop prioritizing this circuit");
+        circ->mt_priority = 0;
+      }
       return;
     }
-    orcirc = TO_OR_CIRCUIT(circ);
     desc = &orcirc->desc;
     if (mt_rpay_recv(desc, pcommand, msg, msg_len) < 0) {
       log_info(LD_MT, "MoneTor: Payment module returnerd -1"
@@ -403,6 +456,12 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
   }
 }
 
+/**
+ * Called each time we relay a cell or recognize a
+ * RELAY_DATA cell
+ *
+ * Decrease the payment_window
+ */
 
 void mt_crelay_update_payment_window(circuit_t *circ) {
   if (get_options()->EnablePayment &&
@@ -475,6 +534,8 @@ int mt_crelay_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
  * successful payment has been made. The <b>desc</b> parameter contains the
  * identity of the paying client. This client should be familiar to the
  * controller through previous protocol executions.
+ *
+ * XXX remove
  */
 
 int mt_crelay_alert_payment(mt_desc_t* desc) {
@@ -488,4 +549,31 @@ int mt_crelay_alert_payment(mt_desc_t* desc) {
     return -1;
   }
   return 0;
+}
+
+/**
+ *
+ *
+ * XXX See what to do:
+ * 1) Notify the payment module with mt_rpay_abort()
+ * 2) R notifies C that it is about to close (this might be implicit in the circuit destroy)
+ * 3) R initializes a close with I
+ * 4) C waits some amount of time then attempts to close with I (since I must close with R before it can close with C)
+ * 5) If 4) fails, then C reconnects wtih R to try to request a proper close
+ * 6) If either C or R fails to close for any reason, then wait for a reasonable amount of time then bring all the relevant info to close on the ledger.
+ */
+
+void mt_crelay_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason) {
+  or_circuit_t *orcirc = NULL;
+  if (CIRCUIT_IS_ORIGIN(circ)) {
+    /** either a ledger circ or an interemdiary circ, we close. this circuit should be
+     * relaunched anyway, later */
+    circuit_mark_for_close(circ, reason);
+  }
+  else {
+    /** Before sending a destroy cell, let's try to close */
+    orcirc = TO_OR_CIRCUIT(circ);
+
+    // XXX No mt_rpay_close ??
+  }
 }

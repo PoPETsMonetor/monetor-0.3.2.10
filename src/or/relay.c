@@ -383,7 +383,12 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
         log_warn(LD_REND, "Error relaying cell across rendezvous; closing "
                  "circuits");
         /* XXXX Do this here, or just return -1? */
-        circuit_mark_for_close(circ, -reason);
+        if (get_options()->EnablePayment) {
+          circuit_mark_payment_channel_for_close(circ, 1, -reason);
+        }
+        else {
+          circuit_mark_for_close(circ, -reason);
+        }
         return reason;
       }
       return 0;
@@ -496,9 +501,12 @@ circuit_package_relay_cell(cell_t *cell, circuit_t *circ,
                            const char *filename, int lineno)
 {
   channel_t *chan; /* where to send the cell */
-
+  /** XXX MoneTor: add && circ->) {ayment_channel_has_closed? */
   if (circ->marked_for_close) {
     /* Circuit is marked; send nothing. */
+    /* if circuit marked but not the channel is not closed,
+     * then we might be trying to close the channel right now
+     */
     return 0;
   }
 
@@ -751,7 +759,7 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
             layer_start, cpath_layer, 0, filename, lineno) < 0) {
         log_info(LD_MT, "We are packaging several cells at once"
             " and one packaging failed ...");
-        return -1;
+        return -2;
       }
       payload_remains -= rph.length;
     }
@@ -862,7 +870,12 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
                                  TO_ORIGIN_CIRCUIT(circ)->cpath->prev,
                                  stream_id, filename, lineno) < 0) {
     log_warn(LD_BUG,"circuit_package_relay_cell failed. Closing.");
-    circuit_mark_for_close(circ, END_CIRC_REASON_INTERNAL);
+    if (get_options()->EnablePayment) {
+      circuit_mark_payment_channel_for_close(circ, 0, END_CIRC_REASON_INTERNAL);
+    }
+    else {
+      circuit_mark_for_close(circ, END_CIRC_REASON_INTERNAL);
+    }
     return -1;
   }
   return 0;

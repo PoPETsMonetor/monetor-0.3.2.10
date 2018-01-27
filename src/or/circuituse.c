@@ -1502,8 +1502,14 @@ circuit_expire_old_circuits_clientside(void)
                 circ->purpose);
       /* Don't do this magic for testing circuits. Their death is governed
        * by circuit_expire_building */
-      if (circ->purpose != CIRCUIT_PURPOSE_PATH_BIAS_TESTING)
-        circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+      if (circ->purpose != CIRCUIT_PURPOSE_PATH_BIAS_TESTING) {
+        if (get_options()->EnablePayment) {
+          circuit_mark_payment_channel_for_close(circ, 0, END_CIRC_REASON_FINISHED);
+        }
+        else {
+          circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+        }
+      }
     } else if (!circ->timestamp_dirty && circ->state == CIRCUIT_STATE_OPEN) {
       if (timercmp(&circ->timestamp_began, &cutoff, OP_LT)) {
         if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL ||
@@ -1518,7 +1524,12 @@ circuit_expire_old_circuits_clientside(void)
                     " that has been unused for %ld msec.",
                     U64_PRINTF_ARG(TO_ORIGIN_CIRCUIT(circ)->global_identifier),
                     tv_mdiff(&circ->timestamp_began, &now));
-          circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+          if (get_options()->EnablePayment) {
+            circuit_mark_payment_channel_for_close(circ, 0, END_CIRC_REASON_FINISHED);
+          }
+          else {
+            circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+          }
         } else if (!TO_ORIGIN_CIRCUIT(circ)->is_ancient) {
           /* Server-side rend joined circuits can end up really old, because
            * they are reused by clients for longer than normal. The client
@@ -1583,7 +1594,12 @@ circuit_expire_old_circuits_serverside(time_t now)
       log_info(LD_CIRC, "Closing circ_id %u (empty %d secs ago)",
                (unsigned)or_circ->p_circ_id,
                (int)(now - channel_when_last_xmit(or_circ->p_chan)));
-      circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(circ, 0, END_CIRC_REASON_FINISHED);
+      }
+      else {
+        circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+      }
     }
   }
   SMARTLIST_FOREACH_END(circ);

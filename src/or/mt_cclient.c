@@ -1,10 +1,10 @@
 /**
  * \file mt_cclient.c
  * Implement the controller logic for the MoneTor payment system when
- * this Tor instance is used as a client. This module interact with
+ * this Tor instance is used as a client. This module interacts with
  * mt_cpay.c module to produce and verify the crypto pieces.
  *
- * This module is responsible to select, build and maintan connection
+ * This module is responsible to select, build and maintain the connections
  * towards the ledger and the intermediaries. This module is also
  * responsible to track the number of cell received and sent that have
  * been relayed alongside a payment channel and to ensure payment have
@@ -166,7 +166,8 @@ static void
 intermediary_need_cleanup(intermediary_t *intermediary, time_t now) {
   if (intermediary->circuit_retries > INTERMEDIARY_MAX_RETRIES ||
       intermediary->is_reachable == INTERMEDIARY_REACHABLE_NO) {
-
+    
+    log_info(LD_MT, "MoneTor: Looks like we have to cleanup intermediary :/");
     /* Get all general circuit linked to this intermediary and
      * mark the payment as closed */
     // XXX MoneTor todo
@@ -365,14 +366,15 @@ run_cclient_housekeeping_event(time_t now) {
    
   log_info(LD_MT, "MoneTor: relay digestmap length: %d", digestmap_size(desc2circ));
   DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
-    if (!circ->mt_priority && !CIRCUIT_IS_ORIGIN(circ)) {
+    if (!CIRCUIT_IS_ORIGIN(circ) && !TO_ORIGIN_CIRCUIT(circ)->ppath) {
       continue;
     }
     /** Verify if we have enough remaining window */
     pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
     while (ppath_tmp != NULL) {
       if (ppath_tmp->window < LIMIT_PAYMENT_WINDOW &&
-          ppath_tmp->last_mt_cpay_succeeded) {
+          !ppath_tmp->payment_is_processing &&
+          !ppath_tmp->p_marked_for_close) {
         /** pay :-) */
         intermediary_t* intermediary = get_intermediary_by_role(ppath_tmp->position);
         if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
@@ -532,7 +534,7 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
    * a general circuit towards the ledger, then we may have
    * a reachability problem.. */
   if (TO_CIRCUIT(circ)->state != CIRCUIT_STATE_OPEN) {
-    now = time(NULL);
+    now = approx_time();
     log_info(LD_MT, "MoneTor: Looks like we did not extend a circuit successfully"
         " towards the ledger %lld", (long long) now);
     ledger->circuit_retries++;
@@ -563,7 +565,6 @@ void mt_cclient_update_payment_window(circuit_t *circ) {
 
 
 /**
- * XXX MoneTor: Todo
  * Called by the payment module to signal an event
  * 
  * Can be either:
@@ -574,29 +575,91 @@ void mt_cclient_update_payment_window(circuit_t *circ) {
  */
 
 int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
-  (void) signal;
-  (void) desc;
+  
+  byte id[DIGEST_LEN];
+  mt_desc2digest(desc, &id);
+  circuit_t *circ = digestmap_get(desc2circ, (char*) id);
+  origin_circuit_t *oricirc = NULL;
+  if (!circ) {
+    log_info(LD_MT, "MoneTor: received a signal linked to a desc "
+        " which is not in our map anymore?");
+    return -1;
+  }
+  oricirc = TO_ORIGIN_CIRCUIT(circ);
+  if (signal == MT_SIGNAL_PAYMENT_SUCCESS) {
+    /** Which one? */
+    pay_path_t *ppath_tmp = oricirc->ppath;
+    while (ppath_tmp) {
+      if (&ppath_tmp->desc == desc) {
+        ppath_tmp->window += 2000;
+        ppath_tmp->last_mt_cpay_succeeded = 1;
+        ppath_tmp->payment_is_processing = 0;
+        log_info(LD_MT, "MoneTor: payement succeeded :)");
+        break;
+      }
+      ppath_tmp = ppath_tmp->next;
+    }
+  }
+  else if (signal == MT_SIGNAL_PAYMENT_FAILURE) {
+    pay_path_t *ppath_tmp = oricirc->ppath;
+    while (ppath_tmp) {
+      if (&ppath_tmp->desc == desc) {
+        /** XXX see what to do if such error */
+        ppath_tmp->last_mt_cpay_succeeded = 0;
+        ppath_tmp->payment_is_processing = 0;
+        log_warn(LD_MT, "MoneTor: We got a payment failure!");
+        // XXX Do we try to close? .
+        break;
+      }
+      ppath_tmp = ppath_tmp->next;
+    }
+  }
+  else if (signal == MT_SIGNAL_CLOSE_SUCCESS ||
+           signal == MT_SIGNAL_CLOSE_FAILURE) {
+    tor_assert(oricirc->ppath);
+    pay_path_t *ppath_tmp = oricirc->ppath;
+    int has_closed = 0;
+    while (ppath_tmp) {
+      if (&ppath_tmp->desc == desc) {
+        ppath_tmp->p_has_closed = 1;
+        log_info(LD_MT, "MoneTor: Marking p_has_closed to 1 for circ");
+      }
+      has_closed += (int) ppath_tmp->p_has_closed;
+      ppath_tmp = ppath_tmp->next;
+    }
+    /** We mark the circuit for close once each mt_cpay_close
+     * succeeded of failed with each circuit member */
+    if (has_closed == 3) {
+      circuit_mark_for_close(circ, END_CIRC_REASON_NONE);
+    }
+  }
+  else {
+    log_info(LD_MT, "MoneTor: unhandled signal value");
+    return -1;
+  }
   return 0;
 }
 /**
- * XXX MoneTor -- TODO here: general_circuit_has_closed()
+ *
+ * Note: when this method is called, the payement channel must already
+ * be closed or we just abort
  */
 
 void mt_cclient_general_circ_has_closed(origin_circuit_t *oricirc) {
   if (oricirc->ppath) {
-    log_info(LD_MT, "a general circuit has closed");
+    log_info(LD_MT, "MoneTor: a general circuit has closed");
     byte id[DIGEST_LEN];
     crypt_path_t *cpath_tmp = oricirc->cpath;
     pay_path_t *ppath_tmp = oricirc->ppath;
-    // XXX rethink the tear-down system to close nanopayment
-    // then tear down
     while (cpath_tmp->next != oricirc->cpath && ppath_tmp) {
       mt_desc2digest(&ppath_tmp->desc, &id);
       if (digestmap_get(desc2circ, (char*) id)) {
         digestmap_remove(desc2circ, (char*) id);
       }
-      /*intermediary_t *intermediary = get_intermediary_by_identity(ppath_tmp->inter_ident);*/
-      /*mt_cpay_close(&ppath_tmp->desc, &intermediary->desc);*/
+      else {
+        log_info(LD_MT, "MoneTor: A descriptor is missing from our map?");
+      }
+      ppath_tmp = ppath_tmp->next;
     }
   }
 }
@@ -611,6 +674,10 @@ void mt_cclient_intermediary_circ_has_closed(origin_circuit_t *circ) {
   intermediary_t* intermediary = NULL;
   intermediary = mt_cclient_get_intermediary_from_ocirc(circ);
   time_t now;
+  byte id[DIGEST_LEN];
+  mt_desc2digest(&intermediary->desc, &id);
+  digestmap_remove(desc2circ, (char*) id);
+
   if (TO_CIRCUIT(circ)->state != CIRCUIT_STATE_OPEN) {
     // means that we did not reach the intermediary point for whatever reason
     // (probably timeout -- retry)
@@ -623,7 +690,6 @@ void mt_cclient_intermediary_circ_has_closed(origin_circuit_t *circ) {
       goto cleanup;
     }
 
-    /* maybe because extrainfo is not fresh anymore?  XXX change that :s*/
     node_t* node = node_get_mutable_by_id(intermediary->identity->identity);
     extend_info_t *ei = extend_info_from_node(node, 0);
     if (!ei) {
@@ -632,15 +698,9 @@ void mt_cclient_intermediary_circ_has_closed(origin_circuit_t *circ) {
     }
     extend_info_free(intermediary->ei);
     intermediary->ei = ei;
-  } else {
-    /* Remove desc ->circ from digestmap */
-    byte id[DIGEST_LEN];
-    mt_desc2digest(&intermediary->desc, &id);
-    digestmap_remove(desc2circ, (char*) id);
-    /* XXX Todo Circuit has been closed - notify the payment module */
   }
-
- cleanup:
+  return;
+cleanup:
   /* Do we need to cleanup our intermediary? */
   if (intermediary) {
     now = approx_time();
@@ -680,6 +740,47 @@ mt_cclient_intermediary_circ_has_opened(origin_circuit_t *circ) {
   /*XXX MoneTor - What do we do? notify payment, wait to full establishement of all circuits?*/
 }
 
+
+/**
+ * Mark the payment channel for close and try to close it.
+ *
+ * If the circuit does not hold a payment channel, just mark
+ * the circuit for close */
+void mt_cclient_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason) {
+  origin_circuit_t *oricirc = NULL;
+  if (circ->purpose != CIRCUIT_PURPOSE_C_GENERAL) {
+    circuit_mark_for_close(circ, reason);
+  }
+  else {
+    /** We have a general circuit, let's see if we have
+     * a payment channel over it */
+    oricirc = TO_ORIGIN_CIRCUIT(circ);
+    if (oricirc->ppath) {
+      pay_path_t *ppath_tmp = oricirc->ppath;
+      while (ppath_tmp) {
+        if (!ppath_tmp->p_marked_for_close) {
+          ppath_tmp->p_marked_for_close = 1;
+          log_info(LD_MT, "MoneTor: Trying to close the nanopayment channel");
+          intermediary_t *intermediary = get_intermediary_by_identity(ppath_tmp->inter_ident);
+          if (!abort) {
+            if (mt_cpay_close(&ppath_tmp->desc, &intermediary->desc) < 0) {
+              log_info(LD_MT, "MoneTor: We tried to close the channel and we got"
+                  " an error from the payment module. We mark this channel as closed");
+              /** XXX Ask thien-Nam if mt_cpay_close which returns -1 also send a
+               * signal FAILURE? */
+              ppath_tmp->p_has_closed = 1;
+            }
+          }
+          else {
+            /** mt_cpay_abort(..); */
+          }
+        }
+        ppath_tmp = ppath_tmp->next;
+      }
+    }
+  }
+}
+
 /**
  * Sending messages to intermediaries, relays and ledgers
  */
@@ -691,8 +792,16 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   byte id[DIGEST_LEN];
   mt_desc2digest(desc, &id);
   circuit_t *circ = digestmap_get(desc2circ, (char*) id);
-  if (!circ || circ->marked_for_close || 
-      circ->state != CIRCUIT_STATE_OPEN) {
+  if (!circ) {
+    log_info(LD_MT, "MoneTor: digestmap_get failed to return a circ for descriptor"
+        " %s", mt_desc_describe(desc));
+    return -2;
+  } 
+  if(circ->marked_for_close) {
+    log_info(LD_MT, "MoneTor: This is circuit is about to be freed");
+    return -2;
+  }
+  if (circ->state != CIRCUIT_STATE_OPEN) {
     /*If send_message is called by an event added by a worker
       thread, it is possible that our circuit has just been
       marked for close for whatever reason - It is unlikely, though
@@ -700,9 +809,7 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
     /** The proper way to handle this would be to try again to send
      * the message once a new circ is up (in the case of a ledger
      * circuit or an intermediary circuit)*/
-    /** If this is a general circuit, we should just cashout */
-    log_info(LD_MT, "MoneTor: digestmap_get failed to return a circ for descriptor"
-        " %s", mt_desc_describe(desc));
+    log_info(LD_MT, "MoneTor: Circ is not open: state: %s", circuit_state_to_string(circ->state));
     return -1;
   }
   if (command == RELAY_COMMAND_MT) {
@@ -725,11 +832,11 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
         }
         layer_start = layer_start->next;
         ppath_tmp = ppath_tmp->next;
-      } while(layer_start != TO_ORIGIN_CIRCUIT(circ)->cpath);
+      } while(layer_start != TO_ORIGIN_CIRCUIT(circ)->cpath && ppath_tmp);
       if (BUG(!found))
-        return -1;
+        return -2;
     }
-    // XXX Sending many cells depending of size
+
     return relay_send_pcommand_from_edge(circ, command, (uint8_t) type,
         layer_start, (const char*) msg, size);
   }
@@ -738,7 +845,7 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   }
   else {
     log_warn(LD_MT, "Unrecognized command %d", command);
-    return -1;
+    return -2;
   }
 }
 
@@ -756,11 +863,11 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
   if (!circ) {
     log_info(LD_MT, "MoneTor: digestmap_get failed to return a circ for descriptor"
         " %s", mt_desc_describe(desc1));
-    return -1;
+    return -2;
   }
-  /* Get the appropriate ppath+layer_start and identify related intermediary */
   layer_start = TO_ORIGIN_CIRCUIT(circ)->cpath;
   ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
+  /* Get the appropriate ppath+layer_start and identify related intermediary */
   int found = 0;
   do {
     if (desc1 == &ppath_tmp->desc) {
@@ -769,16 +876,17 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
     }
     layer_start = layer_start->next;
     ppath_tmp = ppath_tmp->next;
-  } while(layer_start != TO_ORIGIN_CIRCUIT(circ)->cpath);
+  } while(layer_start != TO_ORIGIN_CIRCUIT(circ)->cpath && ppath_tmp);
+
   if (!found) {
     log_info(LD_MT, "MoneTor: didn't find right ppath");
-    return -1;
+    return -2;
   }
   intermediary_t *intermediary = get_intermediary_by_identity(ppath_tmp->inter_ident);
   if (!intermediary) {
     log_info(LD_MT, "MoneTor: get_intermediary_by_identity failed for identity %s",
         ppath_tmp->inter_ident->identity);
-    return -1;
+    return -2;
   }
   // Now we have layer_start as well as the right intermediary
   /* Sends intermediary's fingerprint, as well as desc2 and msg */
@@ -820,6 +928,13 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
     }
     /*tor_free(msg);*/ //should be freed by mt_common
   }
+  else if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_LEDGER) {
+    desc = &ledger->desc;
+    log_info(LD_MT, "Processed a msg send by the ledger ");
+    if (mt_cpay_recv(desc, pcommand, msg, msg_len) < 0) {
+      log_info(LD_MT, "Payment module returned -1 for mt_ntype_t %hhx", pcommand);
+    }
+  }
   else if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
 
     pay_path_t *ppath = circ->ppath;
@@ -835,8 +950,7 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
     tor_assert(ppath);
     /* get the right desc */
     desc = &ppath->desc;
-    //XXX todo Buffering cells
-    log_info(LD_MT, "Processed a cell sent by relay linked to desc %s - calling mt_cpay_recv",
+    log_info(LD_MT, "Processed a msg sent by relay linked to desc %s - calling mt_cpay_recv",
         mt_desc_describe(desc));
     if (mt_cpay_recv(desc, pcommand, msg, msg_len) < 0) {
       /* De we retry or close? Let's assume easiest things -> we close*/

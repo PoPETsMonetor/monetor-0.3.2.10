@@ -73,6 +73,7 @@
 #include "mt_cclient.h"
 #include "mt_cintermediary.h"
 #include "mt_crelay.h"
+#include "mt_cledger.h"
 #include "networkstatus.h"
 #include "nodelist.h"
 #include "onion.h"
@@ -539,7 +540,8 @@ circuit_remove_from_origin_circuit_list(origin_circuit_t *origin_circ)
 }
 
 /** Add <b>origin_circ</b> to the global list of origin circuits. Called
- * when creating the circuit. */
+ * when creating the circuit. 
+ * */
 static void
 circuit_add_to_origin_circuit_list(origin_circuit_t *origin_circ)
 {
@@ -551,6 +553,14 @@ circuit_add_to_origin_circuit_list(origin_circuit_t *origin_circ)
 
 /** Detach from the global circuit list, and deallocate, all
  * circuits that have been marked for close.
+ *
+ * MoneTor: hack this function with following logic: When a circuit is marked
+ * for close but the payment channel did not closed yet, then ensure that we
+ * close properly the payment channel and wait for a close_success or a 
+ * close_failure before calling about_to_free and free.µ
+ *
+ * If we're here because we received a destroy cell, close the circuit 
+ * anyway
  */
 void
 circuit_close_all_marked(void)
@@ -579,8 +589,6 @@ circuit_close_all_marked(void)
     circuit_about_to_free(circ);
     circuit_free(circ);
   } SMARTLIST_FOREACH_END(circ);
-
-  smartlist_clear(circuits_pending_close);
 }
 
 /** Return a pointer to the global list of circuits. */
@@ -1497,8 +1505,14 @@ circuit_unlink_all_from_channel(channel_t *chan, int reason)
           "to mark");
       continue;
     }
-    if (!circ->marked_for_close)
-      circuit_mark_for_close(circ, reason);
+    if (!circ->marked_for_close) {
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(circ, 1, reason);
+      }
+      else {
+        circuit_mark_for_close(circ, reason);
+      }
+    }
   } SMARTLIST_FOREACH_END(circ);
 
   smartlist_free(detached);
@@ -2052,24 +2066,37 @@ circuit_about_to_free(circuit_t *circ)
      orig_reason);
   }
   
-  /* Notify the payment controller for any intermediary circuit closing*/
+  /* Notify the payment controller */
 
   if (circ->purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY) {
     mt_cclient_intermediary_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
   }
-  if (circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY) {
+  else if (circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY) {
     mt_crelay_intermediary_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
   }
-  if (circ->purpose == CIRCUIT_PURPOSE_I_LEDGER) {
+  else if (circ->purpose == CIRCUIT_PURPOSE_I_LEDGER) {
     mt_cintermediary_ledger_circ_has_closed(circ);
   }
   /* Notify payment controller when a general circuit has closed */
-  if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
+  else if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
     mt_cclient_general_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
   }
-  if (circ->purpose == CIRCUIT_PURPOSE_C_LEDGER) {
+  else if (circ->purpose == CIRCUIT_PURPOSE_C_LEDGER) {
     mt_cclient_ledger_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
   }
+  else if (circ->purpose == CIRCUIT_PURPOSE_INTERMEDIARY) {
+    mt_cintermediary_orcirc_has_closed(TO_OR_CIRCUIT(circ));
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_LEDGER) {
+    mt_cledger_orcirc_has_closed(TO_OR_CIRCUIT(circ));
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_OR && 
+      TO_OR_CIRCUIT(circ)->circuit_received_first_payment_cell) {
+    mt_crelay_orcirc_has_closed(TO_OR_CIRCUIT(circ));
+  }
+ 
+
+  
 
   /* Notify the HS subsystem for any intro point circuit closing so it can be
    * dealt with cleanly. */
@@ -2473,7 +2500,12 @@ circuits_handle_oom(size_t current_allocation)
     /* Now, kill the circuit. */
     n = n_cells_in_circ_queues(circ);
     if (! circ->marked_for_close) {
-      circuit_mark_for_close(circ, END_CIRC_REASON_RESOURCELIMIT);
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(circ, 1, END_CIRC_REASON_RESOURCELIMIT);
+      }
+      else {
+        circuit_mark_for_close(circ, END_CIRC_REASON_RESOURCELIMIT);
+      }
     }
     marked_circuit_free_cells(circ);
     freed = marked_circuit_free_stream_bytes(circ);

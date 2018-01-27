@@ -252,4 +252,10 @@ MOCK_DECL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2, m
  */
 MOCK_DECL(int, mt_paymod_signal, (mt_signal_t signal, mt_desc_t *desc));
 
+
+/**
+ * Should try to close the nanopayment channel
+ */
+void circuit_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason);
+
 #endif
