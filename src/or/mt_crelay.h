@@ -27,8 +27,6 @@ int mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
 void mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
     byte *msg, size_t msg_len);
 
-int mt_crelay_alert_payment(mt_desc_t *desc);
-
 ledger_t * mt_crelay_get_ledger(void);
 
 int mt_crelay_paymod_signal(mt_signal_t signal, mt_desc_t *desc);
