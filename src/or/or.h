@@ -2952,6 +2952,7 @@ typedef struct pay_path_t {
 
   unsigned int last_mt_cpay_succeeded : 1;
   
+  unsigned int first_payment_succeeded : 1;
   /** Tell whether we already called a mt_cpay_pay */
   unsigned int payment_is_processing : 1;
   /* Position type of the current hop */
