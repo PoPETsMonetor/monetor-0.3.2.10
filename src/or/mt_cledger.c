@@ -93,7 +93,12 @@ void mt_cledger_mark_payment_channel_for_close(circuit_t *circ, int abort, int r
   /** XXX Do we have to notify the payment module
    * for any specific circuit? Maybe that would be nice
    * for memory management */
-  (void) abort;
+  if (abort) {
+    log_info(LD_MT, "MoneTor: aborting a circuit");
+  }
+  else {
+    log_info(LD_MT, "MoneTor: should do a non-abort clean close of the circuit");
+  }
   circuit_mark_for_close(circ, reason);
 }
 
@@ -127,7 +132,7 @@ void mt_cledger_process_received_msg(circuit_t *circ, mt_ntype_t type,
   mt_desc_t *desc;
   or_circuit_t *orcirc;
 
-  if (circ->purpose == CIRCUIT_PURPOSE_LEDGER && CIRCUIT_IS_ORIGIN(circ)) {
+  if (circ->purpose == CIRCUIT_PURPOSE_LEDGER && CIRCUIT_IS_ORCIRC(circ)) {
     orcirc = TO_OR_CIRCUIT(circ);
     desc = &orcirc->desc;
     if (mt_lpay_recv(desc, type, msg, msg_len) < 0 ) {
