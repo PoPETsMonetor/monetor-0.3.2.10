@@ -2835,6 +2835,11 @@ router_choose_random_node(smartlist_t *excludedsmartlist,
        * version 3. */
       smartlist_add(excludednodes, node);
     }
+    /** Also adding the ledger to exclude node */
+    else if (node->is_ledger) {
+      log_info(LD_MT, "MoneTor: Adding ledger to excludenodes");
+      smartlist_add(excludenodes, node);
+    }
   } SMARTLIST_FOREACH_END(node);
 
   if ((r = routerlist_find_my_routerinfo()))
