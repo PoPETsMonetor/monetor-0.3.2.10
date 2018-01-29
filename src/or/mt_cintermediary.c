@@ -94,6 +94,7 @@ void
 run_cintermediary_scheduled_events(time_t now) {
   if (!intermediary_mode(get_options()))
     return;
+  /** uselss right now */
   run_cintermediary_housekeeping_event(now);
 
   run_cintermediary_build_circuit_event(now);
@@ -202,9 +203,17 @@ void mt_cintermediary_mark_payment_channel_for_close(circuit_t *circ, int abort,
     or_circuit_t *orcirc = TO_OR_CIRCUIT(circ);
     if (orcirc->circuit_received_first_payment_cell && !abort) {
       /** XXX We want a proper close?*/
+      log_warn(LD_MT, "MoneTor: We would like a proper close but not implemented");
+      circuit_mark_for_close(circ, reason);
     }
     else {
       // XXX What if we have received cell but abort was 1? 
+      if (!abort) {
+        log_warn(LD_MT, "MoneTor: We would like a proper close but not implemented");
+      }
+      else {
+        log_info(LD_MT, "MoneTor: Looks like we have to abort ~ marking this circ for close");
+      }
       circuit_mark_for_close(circ, reason);
     }
   }
@@ -228,11 +237,16 @@ mt_cintermediary_send_message(mt_desc_t *desc, mt_ntype_t pcommand,
   /** Might happen if the circuit has been closed */
   // We can go a bit further and re-send the command for 
   // ledger circuits when it is up again.
-  // XXX TODO
-  tor_assert(circ);
-  if (circ->marked_for_close || circ->state !=
-      CIRCUIT_STATE_OPEN) {
-    log_info(LD_MT, "MoneTor: the circuit has a problem."
+  if (!circ) {
+    log_warn(LD_MT, "Looks like the circuit his not within our map :/");
+    return -2;
+  }
+  if (circ->marked_for_close) {
+    log_warn(LD_MT, "Looks like the circuit has been marked for close");
+    return -2;
+  }
+  if (circ->state != CIRCUIT_STATE_OPEN) {
+    log_info(LD_MT, "MoneTor: the circuit is still building?."
       " circ state: %s", circuit_state_to_string(circ->state));
     return -1;
   }
@@ -252,20 +266,22 @@ mt_cintermediary_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
     tor_assert(ledger);
     desc = &ledger->desc;
     if (mt_ipay_recv(desc, pcommand, msg, msg_len) < 0) {
-      log_info(LD_MT, "Payment module returned -1 for mt_ntype_t %hhx", pcommand);
-      // XXX decides what to do
+      log_warn(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %hhx", pcommand);
+      circ->mt_priority = 0;
+      log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");
     }
   }
   else if (circ->purpose == CIRCUIT_PURPOSE_INTERMEDIARY) {
     orcirc = TO_OR_CIRCUIT(circ);
     desc = &orcirc->desc;
     if (mt_ipay_recv(desc, pcommand, msg, msg_len) < 0) {
-      log_info(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %hhx", pcommand);
-      // XXX decides what to do
+      log_warn(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %hhx", pcommand);
+      circ->mt_priority = 0;
+      log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");
     }
   }
   else {
-    log_info(LD_MT, "MoneTor: Processing circuit with unsupported purpose %s",
+    log_warn(LD_MT, "MoneTor: Processing circuit with unsupported purpose %s",
         circuit_purpose_to_string(circ->purpose));
   }
 }
