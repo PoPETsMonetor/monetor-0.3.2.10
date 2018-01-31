@@ -701,6 +701,6 @@ int mt_lpay_query_int_balance(byte (*addr)[MT_SZ_ADDR]){
 int mt_lpay_set_balance(byte (*addr)[MT_SZ_ADDR], int balance){
   mac_led_data_t* entry = calloc(1, sizeof(mac_led_data_t));
   entry->balance = balance;
-  digestmap_set(ledger.mac_accounts, (char*)addr, entry);
+  digestmap_set(ledger.mac_accounts, (char*)(*addr), entry);
   return MT_SUCCESS;
 }
