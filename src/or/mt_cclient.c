@@ -767,7 +767,10 @@ mt_cclient_intermediary_circ_has_opened(origin_circuit_t *circ) {
  * the circuit for close */
 void mt_cclient_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason) {
   origin_circuit_t *oricirc = NULL;
-  if (circ->purpose != CIRCUIT_PURPOSE_C_GENERAL) {
+  if (circ->purpose != CIRCUIT_PURPOSE_C_GENERAL || abort) {
+    if (abort) {
+      log_info(LD_MT, "We should abort the payment channel");
+    }
     circuit_mark_for_close(circ, reason);
   }
   else {
@@ -781,23 +784,19 @@ void mt_cclient_mark_payment_channel_for_close(circuit_t *circ, int abort, int r
           ppath_tmp->p_marked_for_close = 1;
           log_info(LD_MT, "MoneTor: Trying to close the nanopayment channel");
           intermediary_t *intermediary = get_intermediary_by_identity(ppath_tmp->inter_ident);
-          if (!abort) {
-            if (mt_cpay_close(&ppath_tmp->desc, &intermediary->desc) < 0) {
-              log_info(LD_MT, "MoneTor: We tried to close the channel and we got"
+          if (mt_cpay_close(&ppath_tmp->desc, &intermediary->desc) < 0) {
+            log_info(LD_MT, "MoneTor: We tried to close the channel and we got"
                   " an error from the payment module. We mark this channel as closed");
               /** XXX Ask thien-Nam if mt_cpay_close which returns -1 also send a
                * signal FAILURE? */
-              ppath_tmp->p_has_closed = 1;
-            }
-          }
-          else {
-            /** mt_cpay_abort(..); */
-            log_warn(LD_MT, "MoneTor: We abort for this circuit");
-            circuit_mark_for_close(circ, reason);
+            ppath_tmp->p_has_closed = 1;
           }
         }
         ppath_tmp = ppath_tmp->next;
       }
+    }
+    else {
+      circuit_mark_for_close(circ, reason);
     }
   }
 }

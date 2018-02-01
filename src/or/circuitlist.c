@@ -83,6 +83,7 @@
 #include "rendclient.h"
 #include "rendcommon.h"
 #include "rephist.h"
+#include "router.h"
 #include "routerlist.h"
 #include "routerset.h"
 #include "channelpadding.h"
@@ -589,6 +590,8 @@ circuit_close_all_marked(void)
     circuit_about_to_free(circ);
     circuit_free(circ);
   } SMARTLIST_FOREACH_END(circ);
+
+  smartlist_clear(circuits_pending_close);
 }
 
 /** Return a pointer to the global list of circuits. */
@@ -2067,7 +2070,8 @@ circuit_about_to_free(circuit_t *circ)
   }
   
   /* Notify the payment controller */
-
+  log_info(LD_MT, "MoneTor: Notify payment controller about circ with purpose %s has closed",
+      circuit_purpose_to_string(circ->purpose));
   if (circ->purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY) {
     mt_cclient_intermediary_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
   }
@@ -2079,7 +2083,10 @@ circuit_about_to_free(circuit_t *circ)
   }
   /* Notify payment controller when a general circuit has closed */
   else if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
-    mt_cclient_general_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
+    if (!authdir_mode(get_options()) && !intermediary_mode(get_options()) &&
+        !server_mode(get_options())) {
+      mt_cclient_general_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
+    }
   }
   else if (circ->purpose == CIRCUIT_PURPOSE_C_LEDGER) {
     mt_cclient_ledger_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
@@ -2092,7 +2099,9 @@ circuit_about_to_free(circuit_t *circ)
   }
   else if (circ->purpose == CIRCUIT_PURPOSE_OR && 
       TO_OR_CIRCUIT(circ)->circuit_received_first_payment_cell) {
-    mt_crelay_orcirc_has_closed(TO_OR_CIRCUIT(circ));
+    if (server_mode(get_options())) {
+      mt_crelay_orcirc_has_closed(TO_OR_CIRCUIT(circ));
+    }
   }
  
 
