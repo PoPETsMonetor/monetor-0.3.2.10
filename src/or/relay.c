@@ -786,6 +786,7 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
   cell_t cell;
   relay_header_t rh;
   cell_direction_t cell_direction;
+  crypt_path_t *layer_stop = NULL;
   /* XXXX NM Split this function into a separate versions per circuit type? */
 
   tor_assert(circ);
@@ -797,6 +798,7 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
     tor_assert(cpath_layer);
     cell.circ_id = circ->n_circ_id;
     cell_direction = CELL_DIRECTION_OUT;
+    layer_stop = TO_ORIGIN_CIRCUIT(circ)->cpath->prev;
   } else {
     tor_assert(! cpath_layer);
     cell.circ_id = TO_OR_CIRCUIT(circ)->p_circ_id;
@@ -867,8 +869,7 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
   }
 
   if (circuit_package_relay_cell(&cell, circ, cell_direction, cpath_layer,
-                                 TO_ORIGIN_CIRCUIT(circ)->cpath->prev,
-                                 stream_id, filename, lineno) < 0) {
+                                 layer_stop, stream_id, filename, lineno) < 0) {
     log_warn(LD_BUG,"circuit_package_relay_cell failed. Closing.");
     if (get_options()->EnablePayment) {
       circuit_mark_payment_channel_for_close(circ, 0, END_CIRC_REASON_INTERNAL);
