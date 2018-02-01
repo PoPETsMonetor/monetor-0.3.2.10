@@ -173,7 +173,7 @@ uint64_t rand_uint64(void) {
 /*
  * Should be called by the tor_init() function - initialize all environment
  * for the payment system
- *
+ * XXX TODO
  */
 void mt_init(void){
   log_info(LD_MT, "MoneTor: Initializing the payment system");

@@ -26,7 +26,7 @@ mt_cledger_init(void) {
   // XXX check with Thien-Nam wheter I am responsible
   // to init.
   log_info(LD_MT, "MoneTor: initialization of the ledger payment module");
-  mt_lpay_init();
+  /*mt_lpay_init();*/
 }
 
 /**

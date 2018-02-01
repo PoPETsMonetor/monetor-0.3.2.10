@@ -29,7 +29,7 @@ mt_crelay_init(void) {
   count[0] = rand_uint64();
   count[1] = rand_uint64();
   log_info(LD_MT, "MoneTor: initialization of payment relay code");
-  mt_rpay_init();
+  /*mt_rpay_init();*/
 }
 
 void mt_crelay_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
@@ -179,6 +179,7 @@ mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
   mt_desc2digest(&ocirc->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(ocirc));
   /** XXX notify payment module that the intermediary circuit is open */
+  mt_rpay_set_status(&ocirc->desc, 1);
 }
 
 

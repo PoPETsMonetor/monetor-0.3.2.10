@@ -2778,9 +2778,9 @@ connection_ap_handshake_attach_circuit(entry_connection_t *conn)
      * the attachment. */
 
     /*
-     * XXX MoneTor - Attach intermediaries to that circuit
+     * Should launch payment on general circs and avoid begindir circs
      */
-    if (get_options()->EnablePayment) {
+    if (get_options()->EnablePayment && !conn->use_begindir && !conn->want_onehop) {
       if (!circ->ppath) {
           circ->ppath = circuit_init_ppath(NULL);
           circ->ppath->next = circuit_init_ppath(circ->ppath);
