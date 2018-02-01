@@ -180,10 +180,18 @@ void mt_init(void){
   count[0] = rand_uint64();
   count[1] = rand_uint64();
   /** Only one should properly complete */
-  mt_cclient_init();
-  mt_crelay_init();
-  mt_cledger_init();
-  mt_cintermediary_init();
+  if (authdir_mode(get_options())) {
+    mt_cledger_init();
+  }
+  else if (intermediary_mode(get_options())) {
+    mt_cintermediary_init();
+  }
+  else if (server_mode(get_options())) {
+    mt_crelay_init();
+  }
+  else {
+    mt_cclient_init();
+  }
 }
 /**
  * Initialize ledger info
