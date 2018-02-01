@@ -53,7 +53,7 @@ run_cledger_housekeeping_event(time_t now) {
 
 
 void run_cledger_scheduled_events(time_t now) {
-  if (!authdir_mode(get_options()))
+  if (!ledger_mode(get_options()))
     return;
   run_cledger_housekeeping_event(now);
 }

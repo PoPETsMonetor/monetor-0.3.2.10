@@ -292,7 +292,7 @@ run_crelay_build_circuit_event(time_t now) {
 void
 run_crelay_scheduled_events(time_t now) {
   if (intermediary_mode(get_options()) ||
-      authdir_mode(get_options()))
+      ledger_mode(get_options()))
     return;
   /* Make sure our controller is healthy */
   run_crelay_housekeeping_event(now);

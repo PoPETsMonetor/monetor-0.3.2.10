@@ -180,7 +180,7 @@ void mt_init(void){
   count[0] = rand_uint64();
   count[1] = rand_uint64();
   /** Only one should properly complete */
-  if (authdir_mode(get_options())) {
+  if (ledger_mode(get_options())) {
     mt_cledger_init();
   }
   else if (intermediary_mode(get_options())) {
@@ -233,7 +233,7 @@ int mt_check_enough_fund(void) {
  */
 void monetor_run_scheduled_events(time_t now) {
 
-  if (authdir_mode(get_options()) || authdir_mode_v3(get_options())) {
+  if (ledger_mode(get_options())) {
     run_cledger_scheduled_events(now);
   }
   if (intermediary_mode(get_options())) {
@@ -404,7 +404,7 @@ MOCK_IMPL(void,
     relay_pheader_t* rph, crypt_path_t *layer_hint, uint8_t* payload)) {
   (void) rh; //need to refactor
   size_t msg_len = mt_token_get_size_of(rph->pcommand);
-  if(authdir_mode(get_options()) || intermediary_mode(get_options()) ||
+  if(ledger_mode(get_options()) || intermediary_mode(get_options()) ||
       server_mode(get_options())) {
     /**
      * We basically have 2 situations - We receive a payment cell over
@@ -422,7 +422,7 @@ MOCK_IMPL(void,
         /* Try to know if the cell comes from a client, a relay
          * or a intermediary */
         mt_party_t party = mt_common_whose_other_edge(rph->pcommand);
-        if (authdir_mode(get_options())) {
+        if (ledger_mode(get_options())) {
           circuit_change_purpose(circ, CIRCUIT_PURPOSE_LEDGER);
           mt_cledger_init_desc_and_add(orcirc, party);
         }
@@ -444,7 +444,7 @@ MOCK_IMPL(void,
           byte *msg = tor_malloc(msg_len);
           buf_get_bytes(orcirc->buf, (char*) msg, msg_len);
           buf_clear(orcirc->buf);
-          if (authdir_mode(get_options())) {
+          if (ledger_mode(get_options())) {
             mt_cledger_process_received_msg(circ, rph->pcommand, msg, msg_len);
           }
           else if (intermediary_mode(get_options())) {
@@ -494,7 +494,7 @@ MOCK_IMPL(void,
       else {
         /** No need to buffer */
         tor_assert(rph->length == msg_len);
-        if (authdir_mode(get_options())) {
+        if (ledger_mode(get_options())) {
           mt_cledger_process_received_msg(circ, rph->pcommand, payload,
               rph->length);
         }
@@ -711,7 +711,7 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
       }
     /* Sending from authority */
     case MT_NTYPE_MAC_AUT_MINT:
-      if (authdir_mode(get_options())) {
+      if (ledger_mode(get_options())) {
         return mt_cledger_send_message(desc, type, msg, size);
       }
       else {
@@ -763,7 +763,7 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
       else if (server_mode(get_options())) {
         return mt_crelay_send_message(desc, command, type, msg, size);
       }
-      else if (authdir_mode(get_options())) {
+      else if (ledger_mode(get_options())) {
         return mt_cledger_send_message(desc, type, msg, size);
       }
       else {
@@ -846,7 +846,7 @@ int mt_common_send_direct_cell_payment(circuit_t *circ, mt_ntype_t type,
 MOCK_IMPL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2,
       mt_ntype_t type, byte* msg, int size)) {
 
-  if (authdir_mode(get_options()) || intermediary_mode(get_options()) ||
+  if (ledger_mode(get_options()) || intermediary_mode(get_options()) ||
       server_mode(get_options())) {
     log_info(LD_BUG, "MoneTor: this function should only be called on a client");
     return -1;
@@ -858,7 +858,7 @@ MOCK_IMPL(int, mt_paymod_signal, (mt_signal_t signal, mt_desc_t *desc)){
   
   log_info(LD_MT, "MoneTor: received signal %s for desc %s", 
       mt_signal_describe(signal), mt_desc_describe(desc));
-  if (authdir_mode(get_options())) {
+  if (ledger_mode(get_options())) {
     return mt_cledger_paymod_signal(signal, desc);
   }
   else if (intermediary_mode(get_options())) {
@@ -885,7 +885,7 @@ MOCK_IMPL(int, mt_paymod_signal, (mt_signal_t signal, mt_desc_t *desc)){
 void circuit_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason) {
   log_info(LD_MT, "MoneTor: Trying to close a circuit that might have a payment channel"
       " associated.");
-  if (authdir_mode(get_options())) {
+  if (ledger_mode(get_options())) {
     mt_cledger_mark_payment_channel_for_close(circ, abort, reason);
   }
   else if (intermediary_mode(get_options())) {

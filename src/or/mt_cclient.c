@@ -525,7 +525,7 @@ void
 run_cclient_scheduled_events(time_t now) {
   /* If we're a authority or a relay,
    * we don't enable payment */
-  if (authdir_mode(get_options()) ||
+  if (ledger_mode(get_options()) ||
       server_mode(get_options()))
     return;
   /*Make sure our controller is healthy*/

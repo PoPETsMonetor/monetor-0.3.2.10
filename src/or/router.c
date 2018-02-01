@@ -1342,6 +1342,13 @@ intermediary_mode(const or_options_t *options)
 {
   return options->Intermediary && server_mode(options);
 }
+/** Return 1 if we are configure to be the ledger, if not return 0
+ */
+int
+ledger_mode(const or_options_t *options)
+{
+  return options->Ledger && server_mode(options);
+}
 
 /** Look at a variety of factors, and return 0 if we don't want to
  * advertise the fact that we have a DirPort open or begindir support, else
