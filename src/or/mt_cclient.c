@@ -199,6 +199,12 @@ intermediary_need_cleanup(intermediary_t *intermediary, time_t now) {
 void
 mt_cclient_launch_payment(origin_circuit_t* circ) {
   log_info(LD_MT, "MoneTor - Initiating payment - calling payment module");
+  
+  if (router_have_consensus_path() == CONSENSUS_PATH_UNKNOWN ||
+      !have_completed_a_circuit()) {
+    log_warn(LD_MT, "MoneTor: Looks like we launch a payment while we still not bootstrapped?");
+    return;
+  }
   increment(count);
   circ->ppath->desc.id[0] = count[0];
   circ->ppath->desc.id[1] = count[1];
