@@ -97,49 +97,24 @@ static void test_mt_lpay(void *arg)
   byte aut_0_sk[MT_SZ_SK];
   mt_desc_t aut_0_desc;
 
-  // seutp ledger
-  byte led_0_pk[MT_SZ_PK];
-  byte led_0_sk[MT_SZ_SK];
+  byte* pp_temp;
+  byte* aut_0_pk_temp;
+  byte* aut_0_sk_temp;
 
-  /********************************************************************/
-  //TODO replace with torrc
+  tor_assert(mt_hex2bytes(MT_PP_HEX, &pp_temp) == MT_SZ_PP);
+  tor_assert(mt_hex2bytes(MT_AUT_PK_HEX, &aut_0_pk_temp) == MT_SZ_PK);
+  tor_assert(mt_hex2bytes(MT_AUT_SK_HEX, &aut_0_sk_temp) == MT_SZ_SK);
 
-  mt_crypt_setup(&pp);
-  mt_crypt_keygen(&pp, &aut_0_pk, &aut_0_sk);
-  mt_crypt_keygen(&pp, &led_0_pk, &led_0_sk);
+  memcpy(pp, pp_temp, MT_SZ_PP);
+  memcpy(aut_0_pk, aut_0_pk_temp, MT_SZ_PK);
+  memcpy(aut_0_sk, aut_0_sk_temp, MT_SZ_SK);
+
+  free(pp_temp);
+  free(aut_0_pk_temp);
+  free(aut_0_sk_temp);
 
   aut_0_desc.id[0] = 1;
   aut_0_desc.party = MT_PARTY_AUT;
-
-  or_options_t* options = (or_options_t*)get_options();
-
-  mt_bytes2hex(pp, MT_SZ_PP, &options->moneTorPP);
-  mt_bytes2hex(led_0_pk, MT_SZ_PK, &options->moneTorPK);
-  mt_bytes2hex(led_0_sk, MT_SZ_SK, &options->moneTorSK);
-  mt_bytes2hex(aut_0_pk, MT_SZ_PK, &options->moneTorAuthorityPK);
-
-  options->moneTorFee = MT_FEE;
-  options->moneTorTax = MT_TAX;
-
-  /* FILE* fp; */
-
-  /* fp = fopen("mt_config_temp/pp", "rb"); */
-  /* tor_assert(fread(pp, 1, MT_SZ_PP, fp) == MT_SZ_PP); */
-  /* fclose(fp); */
-
-  /* fp = fopen("mt_config_temp/aut_pk", "rb"); */
-  /* tor_assert(fread(aut_0_pk, 1, MT_SZ_PK, fp) == MT_SZ_PK); */
-  /* fclose(fp); */
-
-  /* fp = fopen("mt_config_temp/aut_sk", "rb"); */
-  /* tor_assert(fread(aut_0_sk, 1, MT_SZ_SK, fp) == MT_SZ_SK); */
-  /* fclose(fp); */
-
-  /* fp = fopen("mt_config_temp/aut_desc", "rb"); */
-  /* tor_assert(fread(&aut_0_desc, 1, sizeof(mt_desc_t), fp) == sizeof(mt_desc_t)); */
-  /* fclose(fp); */
-
-  /********************************************************************/
 
   mt_lpay_init();
   mt_payment_public_t public = mt_lpay_get_payment_public();

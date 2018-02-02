@@ -95,6 +95,7 @@ mt_cclient_process_received_msg_mock(origin_circuit_t *circ, crypt_path_t *cpath
 }
 
 static void test_mt_process_msg(void *args) {
+  (void)args;
 
  /*  (void) args; */
  /*  origin_circuit_t *circ = origin_circuit_new(); */

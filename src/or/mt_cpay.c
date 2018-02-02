@@ -122,9 +122,17 @@ typedef struct {
 
   // structure to run message buffering functionality
   mt_msgbuf_t* msgbuf;
+
+  // module-level callback (not associated with particular channel)
+  byte faucet_pk[MT_SZ_PK];
+  byte faucet_sk[MT_SZ_SK];
+  byte faucet_addr[MT_SZ_ADDR];
+  mt_callback_t mod_callback;
+
 } mt_cpay_t;
 
 // functions to initialize new protocols
+static int init_mac_any_trans(void);
 static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
 static int init_chn_end_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
 static int init_nan_cli_setup1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
@@ -179,57 +187,40 @@ int mt_cpay_init(void){
 
   // TODO: get this to work
   // cpu_init();
+
   client.msgbuf = mt_messagebuffer_init();
 
-  byte pp[MT_SZ_PP];
-  byte pk[MT_SZ_PK];
-  byte sk[MT_SZ_SK];
-  mt_desc_t ledger;
-  int fee;
-  int tax;
-  int cli_bal;
+  // load in hardcoded values
+  byte* pp_temp;
+  byte* faucet_pk_temp;
+  byte* faucet_sk_temp;
 
-  /********************************************************************/
-  // load values from torrc
+  tor_assert(mt_hex2bytes(MT_PP_HEX, &pp_temp) == MT_SZ_PP);
+  tor_assert(mt_hex2bytes(MT_FAUCET_PK_HEX, &faucet_pk_temp) == MT_SZ_PK);
+  tor_assert(mt_hex2bytes(MT_FAUCET_SK_HEX, &faucet_sk_temp) == MT_SZ_SK);
 
-  const or_options_t* options = get_options();
+  memcpy(client.pp, pp_temp, MT_SZ_PP);
+  memcpy(client.faucet_pk, faucet_pk_temp, MT_SZ_PK);
+  memcpy(client.faucet_sk, faucet_sk_temp, MT_SZ_SK);
 
-  byte* temp_pp;
-  byte* temp_pk;
-  byte* temp_sk;
+  free(pp_temp);
+  free(faucet_pk_temp);
+  free(faucet_sk_temp);
 
-  fee = options->moneTorFee;
-  tax = options->moneTorTax;
-  cli_bal = options->moneTorBalance;
-
-  tor_assert(mt_hex2bytes(options->moneTorPP, &temp_pp) == MT_SZ_PP);
-  tor_assert(mt_hex2bytes(options->moneTorPK, &temp_pk) == MT_SZ_PK);
-  tor_assert(mt_hex2bytes(options->moneTorSK, &temp_sk) == MT_SZ_SK);
-
-  memcpy(pp, temp_pp, MT_SZ_PP);
-  memcpy(pk, temp_pk, MT_SZ_PK);
-  memcpy(sk, temp_sk, MT_SZ_SK);
-
-  free(temp_pp);
-  free(temp_pk);
-  free(temp_sk);
-
-  /********************************************************************/
+  // setup crypto keys
+  mt_crypt_keygen(&client.pp, &client.pk, &client.sk);
+  mt_pk2addr(&client.pk, &client.addr);
+  mt_pk2addr(&client.faucet_pk, &client.faucet_addr);
 
   // set ledger
-  ledger.id[0] = 0;
-  ledger.id[1] = 0;
-  ledger.party = MT_PARTY_LED;
+  client.ledger.id[0] = 0;
+  client.ledger.id[1] = 0;
+  client.ledger.party = MT_PARTY_LED;
 
-  // copy in values crypto fields
-  memcpy(client.pp, pp, MT_SZ_PP);
-  memcpy(client.pk, pk, MT_SZ_PK);
-  memcpy(client.sk, sk, MT_SZ_SK);
-  mt_pk2addr(&client.pk, &client.addr);
-  client.ledger = ledger;
-  client.fee = fee;
-  client.tax = tax;
-  client.mac_balance = cli_bal;
+  // setup system parameters
+  client.fee = MT_FEE;
+  client.tax = MT_WINDOW;
+  client.mac_balance = MT_CLI_CHN_VAL * 10000;
   client.chn_balance = 0;
   client.chn_number = 0;
 
@@ -242,8 +233,6 @@ int mt_cpay_init(void){
   client.nans_reqclosed = digestmap_new();
   client.chns_spent = smartlist_new();
   client.chns_transition = digestmap_new();
-
-  // TODO generate new channels
   return MT_SUCCESS;
 }
 
@@ -256,6 +245,7 @@ int mt_cpay_init(void){
  * error.
  */
 int mt_cpay_pay(mt_desc_t* rdesc, mt_desc_t* idesc){
+
   // determine whether this is a standard or direct payment
   if(mt_desc_comp(rdesc, idesc) != 0){
     return pay_helper(rdesc, idesc);
@@ -329,7 +319,7 @@ static int pay_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
     return init_chn_end_setup(chn, &pid);
   }
 
-  log_debug(LD_MT, "insufficient funds to create new channel");
+  log_debug(LD_MT, "insufficient funds to start channel\n");
   return MT_ERROR;
 }
 
@@ -400,7 +390,7 @@ static int dpay_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
     return init_chn_end_setup(chn, &pid);
   }
 
-  log_debug(LD_MT, "insufficient funds to create new channel");
+  log_debug(LD_MT, "insufficient funds to start channel\n");
   return MT_ERROR;
 }
 
@@ -616,7 +606,34 @@ int mt_cpay_import(byte* import){
   return MT_SUCCESS;
 }
 
-/******************************* Channel Setup **************************/
+/**************************** Ledger Calls ******************************/
+
+static int init_mac_any_trans(void){
+
+  byte pid[DIGEST_LEN] = {0};
+
+  // initialize transfer token
+  mac_any_trans_t token;
+  token.val_from = MT_CLI_CHN_VAL * 100;
+  token.val_to = token.val_from - client.fee;
+  memcpy(token.from, client.faucet_addr, MT_SZ_ADDR);
+  memcpy(token.to, client.addr, MT_SZ_ADDR);
+
+  // update local data
+  client.mac_balance += token.val_to;
+
+  // send setup message
+  byte* msg;
+  byte* signed_msg;
+  int msg_size = pack_mac_any_trans(&token, &pid, &msg);
+  int signed_msg_size = mt_create_signed_msg(msg, msg_size,
+					     &client.faucet_pk, &client.faucet_sk, &signed_msg);
+  int result = mt_buffer_message(client.msgbuf, &client.ledger, MT_NTYPE_MAC_ANY_TRANS,
+				 signed_msg, signed_msg_size);
+  tor_free(msg);
+  tor_free(signed_msg);
+  return result;
+}
 
 static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
@@ -629,6 +646,7 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   token.val_to = 105 * 30;
   memcpy(token.from, client.addr, MT_SZ_ADDR);
   memcpy(token.chn, chn->data.addr, MT_SZ_ADDR);
+
   // skip public for now
 
   // update local data
@@ -652,19 +670,27 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
 static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byte (*pid)[DIGEST_LEN]){
 
+  if(mt_desc_comp(desc, &client.ledger) != 0)
+    return MT_ERROR;
+
+  // if this is confirmation of mac_any_trans call then ignore and return success
+  byte zeros[DIGEST_LEN] = {0};
+  if(memcmp(*pid, zeros, DIGEST_LEN) == 0){
+    return MT_SUCCESS;
+  }
+
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
     log_debug(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
-  if(mt_desc_comp(desc, &client.ledger) != 0)
-    return MT_ERROR;
 
   if(token->success != MT_CODE_SUCCESS)
     return MT_ERROR;
 
   digestmap_remove(client.chns_transition, (char*)*pid);
   smartlist_add(client.chns_setup, chn);
+
   if(chn->callback.fn){
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
   }
@@ -1183,9 +1209,7 @@ static int help_nan_int_close8(void* args){
   byte pid[DIGEST_LEN];
   memcpy(pid, ((mt_wcom_args_t*)args)->pid, DIGEST_LEN);
   tor_free(args);
-
   digestmap_remove(client.chns_transition, (char*)pid);
-  //smartlist_add(client.chns_estab, chn);
 
   // if sufficient funds left then move channel to establish state, otherwise move to spent
   if(chn->data.balance >= MT_NAN_LEN * (MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100))

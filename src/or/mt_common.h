@@ -92,7 +92,7 @@ int mt_bytes2hex(byte* bytes, int size, char** hex_out);
 /**
  * Converts a hex digest (c-string) into a malloc'd byte string
  */
-int mt_hex2bytes(char* hex, byte** bytes_out);
+int mt_hex2bytes(const char* hex, byte** bytes_out);
 
 /**
  * Create malloc'd hash chain of the given size using the given head

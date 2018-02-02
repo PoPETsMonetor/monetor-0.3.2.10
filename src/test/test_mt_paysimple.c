@@ -329,6 +329,11 @@ static workqueue_entry_t* mock_cpuworker_queue_work(workqueue_priority_t priorit
  */
 static void test_mt_paysimple(void *arg){
 
+  /*********************************************************************/
+  // considering returning this module since paymulti covers it
+  /*********************************************************************/
+  return;
+
   printf("\n\n------------ begin paysimple ------------\n\n");
 
   (void)arg;

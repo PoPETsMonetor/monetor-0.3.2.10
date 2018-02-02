@@ -6,6 +6,8 @@
 #include "or.h"
 #include "mt_crypto.h"
 
+#pragma GCC diagnostic ignored "-Wstack-protector"
+
 static void test_mt_crypto(void *arg)
 {
   (void) arg;

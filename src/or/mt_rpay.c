@@ -113,9 +113,16 @@ typedef struct {
 
   // structure to run message buffering functionality
   mt_msgbuf_t* msgbuf;
+
+  // module-level callback (not associated with particular channel)
+  byte faucet_pk[MT_SZ_PK];
+  byte faucet_sk[MT_SZ_SK];
+  byte faucet_addr[MT_SZ_ADDR];
+  mt_callback_t mod_callback;
 } mt_rpay_t;
 
 // functions to initialize new protocols
+static int init_mac_any_trans(void);
 static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
 static int init_chn_end_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
 static int init_nan_end_close1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
@@ -155,54 +162,39 @@ int mt_rpay_init(void){
 
   // TODO: get this to work
   // cpu_init();
+
   relay.msgbuf = mt_messagebuffer_init();
 
-  byte pp[MT_SZ_PP];
-  byte pk[MT_SZ_PK];
-  byte sk[MT_SZ_SK];
-  mt_desc_t ledger;
-  int fee;
-  int rel_bal;
+  // load in hardcoded values
+  byte* pp_temp;
+  byte* faucet_pk_temp;
+  byte* faucet_sk_temp;
 
-  /********************************************************************/
-  // load values from torrc
+  tor_assert(mt_hex2bytes(MT_PP_HEX, &pp_temp) == MT_SZ_PP);
+  tor_assert(mt_hex2bytes(MT_FAUCET_PK_HEX, &faucet_pk_temp) == MT_SZ_PK);
+  tor_assert(mt_hex2bytes(MT_FAUCET_SK_HEX, &faucet_sk_temp) == MT_SZ_SK);
 
-  const or_options_t* options = get_options();
+  memcpy(relay.pp, pp_temp, MT_SZ_PP);
+  memcpy(relay.faucet_pk, faucet_pk_temp, MT_SZ_PK);
+  memcpy(relay.faucet_sk, faucet_sk_temp, MT_SZ_SK);
 
-  byte* temp_pp;
-  byte* temp_pk;
-  byte* temp_sk;
+  free(pp_temp);
+  free(faucet_pk_temp);
+  free(faucet_sk_temp);
 
-  fee = options->moneTorFee;
-  rel_bal = options->moneTorBalance;
-
-  tor_assert(mt_hex2bytes(options->moneTorPP, &temp_pp) == MT_SZ_PP);
-  tor_assert(mt_hex2bytes(options->moneTorPK, &temp_pk) == MT_SZ_PK);
-  tor_assert(mt_hex2bytes(options->moneTorSK, &temp_sk) == MT_SZ_SK);
-
-  memcpy(pp, temp_pp, MT_SZ_PP);
-  memcpy(pk, temp_pk, MT_SZ_PK);
-  memcpy(sk, temp_sk, MT_SZ_SK);
-
-  free(temp_pp);
-  free(temp_pk);
-  free(temp_sk);
-
-  /********************************************************************/
+  // setup crypto keys
+  mt_crypt_keygen(&relay.pp, &relay.pk, &relay.sk);
+  mt_pk2addr(&relay.pk, &relay.addr);
+  mt_pk2addr(&relay.faucet_pk, &relay.faucet_addr);
 
   // set ledger
-  ledger.id[0] = 0;
-  ledger.id[1] = 0;
-  ledger.party = MT_PARTY_LED;
+  relay.ledger.id[0] = 0;
+  relay.ledger.id[1] = 0;
+  relay.ledger.party = MT_PARTY_LED;
 
-  // copy macro-level crypto fields
-  memcpy(relay.pp, pp, MT_SZ_PP);
-  memcpy(relay.pk, pk, MT_SZ_PK);
-  memcpy(relay.sk, sk, MT_SZ_SK);
-  mt_pk2addr(&relay.pk, &relay.addr);
-  relay.ledger = ledger;
-  relay.fee = fee;
-  relay.mac_balance = rel_bal;
+  // setup system parameters
+  relay.fee = MT_FEE;
+  relay.mac_balance = MT_CLI_CHN_VAL * 10000;
   relay.chn_balance = 0;
   relay.chn_number = 0;
 
@@ -213,7 +205,6 @@ int mt_rpay_init(void){
   relay.chns_spent = smartlist_new();
   relay.chns_transition = digestmap_new();
   relay.clis_idesc = digestmap_new();
-
   return MT_SUCCESS;
 }
 
@@ -387,7 +378,34 @@ int mt_rpay_import(byte* import){
 }
 
 
-/******************************* Channel Escrow *************************/
+/***************************** Ledger Calls *****************************/
+
+static int init_mac_any_trans(void){
+
+  byte pid[DIGEST_LEN] = {0};
+
+  // initialize transfer token
+  mac_any_trans_t token;
+  token.val_from = MT_REL_CHN_VAL * 50;
+  token.val_to = token.val_from - relay.fee;
+  memcpy(token.from, relay.faucet_addr, MT_SZ_ADDR);
+  memcpy(token.to, relay.addr, MT_SZ_ADDR);
+
+  // update local data
+  relay.mac_balance += token.val_to;
+
+  // send setup message
+  byte* msg;
+  byte* signed_msg;
+  int msg_size = pack_mac_any_trans(&token, &pid, &msg);
+  int signed_msg_size = mt_create_signed_msg(msg, msg_size,
+					     &relay.faucet_pk, &relay.faucet_sk, &signed_msg);
+  int result = mt_buffer_message(relay.msgbuf, &relay.ledger, MT_NTYPE_MAC_ANY_TRANS,
+				 signed_msg, signed_msg_size);
+  tor_free(msg);
+  tor_free(signed_msg);
+  return result;
+}
 
 static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
@@ -422,14 +440,20 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
 static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byte (*pid)[DIGEST_LEN]){
 
+  if(mt_desc_comp(desc, &relay.ledger) != 0)
+    return MT_ERROR;
+
+  // if this is confirmation of mac_any_trans call then ignore and return success
+  byte zeros[DIGEST_LEN] = {0};
+  if(memcmp(*pid, zeros, DIGEST_LEN) == 0){
+    return MT_SUCCESS;
+  }
+
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
   if(chn == NULL){
     log_debug(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
-
-  if(mt_desc_comp(desc, &relay.ledger) != 0)
-    return MT_ERROR;
 
   if(token->success != MT_CODE_SUCCESS)
     return MT_ERROR;
@@ -591,7 +615,7 @@ static int handle_nan_cli_estab1(mt_desc_t* desc, nan_cli_estab1_t* token, byte 
   byte rpid[DIGEST_LEN];
   mt_crypt_rand(DIGEST_LEN, rpid);
 
-  // if we have a channel setup then establish it
+  // if we have a channel set up then establish it
   if((chn = digestmap_smartlist_pop_last(relay.chns_setup, (char*)idigest))){
     digestmap_set(relay.chns_transition, (char*)rpid, chn);
     chn->callback = (mt_callback_t){.fn = mt_rpay_recv, .dref1 = *desc, .arg2 = MT_NTYPE_NAN_CLI_ESTAB1};
@@ -599,13 +623,19 @@ static int handle_nan_cli_estab1(mt_desc_t* desc, nan_cli_estab1_t* token, byte 
     return init_chn_end_estab1(chn, &rpid);
   }
 
-  // setup a new channel with the intermediary
-  chn = new_channel();
-  digestmap_set(relay.chns_transition, (char*)rpid, chn);
-  chn->idesc = *intermediary;
-  chn->callback = (mt_callback_t){.fn = mt_rpay_recv, .dref1 = *desc, .arg2 = MT_NTYPE_NAN_CLI_ESTAB1};
-  chn->callback.arg4 = pack_nan_cli_estab1(token, pid, &chn->callback.arg3);
-  return init_chn_end_setup(chn, &rpid);
+  // if we have money left then set up a new channel with the intermediary
+  if(relay.mac_balance >= relay.fee){
+    chn = new_channel();
+    digestmap_set(relay.chns_transition, (char*)rpid, chn);
+    chn->idesc = *intermediary;
+    chn->callback = (mt_callback_t){.fn = mt_rpay_recv, .dref1 = *desc,
+				    .arg2 = MT_NTYPE_NAN_CLI_ESTAB1};
+    chn->callback.arg4 = pack_nan_cli_estab1(token, pid, &chn->callback.arg3);
+    return init_chn_end_setup(chn, &rpid);
+  }
+
+  log_debug(LD_MT, "insufficient funds to start channel\n");
+  return MT_ERROR;
 }
 
 static int handle_nan_int_estab3(mt_desc_t* desc, nan_int_estab3_t* token, byte (*pid)[DIGEST_LEN]){
