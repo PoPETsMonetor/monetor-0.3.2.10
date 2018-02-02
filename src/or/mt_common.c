@@ -236,7 +236,7 @@ void monetor_run_scheduled_events(time_t now) {
   if (ledger_mode(get_options())) {
     run_cledger_scheduled_events(now);
   }
-  if (intermediary_mode(get_options())) {
+  else if (intermediary_mode(get_options())) {
     run_cintermediary_scheduled_events(now);
   }
   else if (server_mode(get_options())) {
