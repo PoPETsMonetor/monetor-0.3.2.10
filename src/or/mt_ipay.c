@@ -134,9 +134,6 @@ static mt_ipay_t intermediary;
  */
 int mt_ipay_init(void){
 
-  // TODO: get this to work
-   cpu_init();
-
   intermediary.msgbuf = mt_messagebuffer_init();
 
   // load in hardcoded values

@@ -45,7 +45,8 @@ worker_state_new(void *arg)
   worker_state_t *ws;
   (void)arg;
   ws = tor_malloc_zero(sizeof(worker_state_t));
-  ws->onion_keys = server_onion_keys_new();
+  if(server_mode(get_options()))
+    ws->onion_keys = server_onion_keys_new();
   return ws;
 }
 static void
@@ -596,4 +597,3 @@ cpuworker_cancel_circ_handshake(or_circuit_t *circ)
     circ->workqueue_entry = NULL;
   }
 }
-

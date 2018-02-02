@@ -2541,10 +2541,9 @@ do_main_loop(void)
   now = time(NULL);
   directory_info_has_arrived(now, 1, 0);
 
-  if (server_mode(get_options())) {
-    /* launch cpuworkers. Need to do this *after* we've read the onion key. */
-    cpu_init();
-  }
+  /* launch cpuworkers. Need to do this *after* we've read the onion key. */
+  cpu_init();
+
   consdiffmgr_enable_background_compression();
 
   /* Setup shared random protocol subsystem. */
@@ -3178,7 +3177,7 @@ tor_init(int argc, char *argv[])
   if (tor_init_libevent_rng() < 0) {
     log_warn(LD_NET, "Problem initializing libevent RNG.");
   }
-  
+
   /* Initialize the payment subsystem */
   mt_init();
 
