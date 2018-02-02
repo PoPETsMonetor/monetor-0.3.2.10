@@ -1739,6 +1739,9 @@ route_len_for_purpose(uint8_t purpose, extend_info_t *exit_ei)
     /* intermediary circuit launched by clients */
   case CIRCUIT_PURPOSE_R_INTERMEDIARY:
     /* intermediary circuit launched by relays */
+  case CIRCUIT_PURPOSE_C_LEDGER:
+  case CIRCUIT_PURPOSE_R_LEDGER:
+  case CIRCUIT_PURPOSE_I_LEDGER:
     known_purpose = 1;
     routelen++;
     break;
@@ -2278,6 +2281,11 @@ warn_if_last_router_excluded(origin_circuit_t *circ,
     case CIRCUIT_PURPOSE_C_INTERMEDIARY:
     case CIRCUIT_PURPOSE_R_INTERMEDIARY:
       description = "chosen intermediary point";
+      break;
+    case CIRCUIT_PURPOSE_C_LEDGER:
+    case CIRCUIT_PURPOSE_R_LEDGER:
+    case CIRCUIT_PURPOSE_I_LEDGER:
+      description = "requested ledger node";
       break;
     }
 

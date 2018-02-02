@@ -55,6 +55,7 @@ ledger_t * mt_crelay_get_ledger(void) {
  */
 void
 mt_crelay_ledger_circ_has_opened(origin_circuit_t *ocirc) {
+  log_info(LD_MT, "MoneTor: Yay! one ledger circuit has opened");
   ledger->circuit_retries = 0;
   ledger->is_reachable = LEDGER_REACHABLE_YES;
   /* Generate new desc and add this circ into desc2circ */

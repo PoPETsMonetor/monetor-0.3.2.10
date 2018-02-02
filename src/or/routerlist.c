@@ -2811,6 +2811,7 @@ router_choose_random_node(smartlist_t *excludedsmartlist,
   const int direct_conn = (flags & CRN_DIRECT_CONN) != 0;
   const int rendezvous_v3 = (flags & CRN_RENDEZVOUS_V3) != 0;
   const int need_intermediary = (flags & CRN_NEED_INTERMEDIARY) != 0;
+  const int need_ledger = (flags & CRN_NEED_LEDGER) != 0;
   
   smartlist_t *sl=smartlist_new(),
     *excludednodes=smartlist_new();
@@ -2836,7 +2837,7 @@ router_choose_random_node(smartlist_t *excludedsmartlist,
       smartlist_add(excludednodes, node);
     }
     /** Also adding the ledger to exclude node */
-    else if (node->is_ledger) {
+    else if (node->is_ledger && !need_ledger) {
       log_info(LD_MT, "MoneTor: Adding ledger to excludenodes");
       smartlist_add(excludednodes, node);
     }

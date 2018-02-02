@@ -736,6 +736,7 @@ cleanup:
 
 void 
 mt_cclient_ledger_circ_has_opened(origin_circuit_t *circ) {
+  log_info(LD_MT, "MoneTor: Yay! one ledger circuit has opened");
   ledger->circuit_retries = 0;
   ledger->is_reachable = LEDGER_REACHABLE_YES;
   /*Circ is already in the smartlist*/

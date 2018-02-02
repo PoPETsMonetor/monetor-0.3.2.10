@@ -5605,6 +5605,7 @@ typedef enum {
    * is required for hidden service version >= 3. */
   CRN_RENDEZVOUS_V3 = 1<<9,
   CRN_NEED_INTERMEDIARY = 1<<10,
+  CRN_NEED_LEDGER = 1<<11,
 } router_crn_flags_t;
 
 /** Return value for router_add_to_routerlist() and dirserv_add_descriptor() */
