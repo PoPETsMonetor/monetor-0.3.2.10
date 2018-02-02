@@ -39,6 +39,7 @@
 #include "or.h"
 #include "config.h"
 #include "workqueue.h"
+#include "cpuworker.h"
 #include "mt_common.h"
 #include "mt_messagebuffer.h"
 #include "mt_ipay.h"
@@ -134,7 +135,7 @@ static mt_ipay_t intermediary;
 int mt_ipay_init(void){
 
   // TODO: get this to work
-  // cpu_init();
+   cpu_init();
 
   intermediary.msgbuf = mt_messagebuffer_init();
 

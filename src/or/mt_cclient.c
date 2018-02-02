@@ -151,7 +151,7 @@ mt_cclient_init(void) {
   count[0] = rand_uint64();
   count[1] = rand_uint64();
   log_info(LD_MT, "MoneTor: initialization of payment client module");
-  /*mt_cpay_init();*/
+  mt_cpay_init();
 }
 
 /**

@@ -186,7 +186,7 @@ static mt_cpay_t client;
 int mt_cpay_init(void){
 
   // TODO: get this to work
-  // cpu_init();
+   cpu_init();
 
   client.msgbuf = mt_messagebuffer_init();
 

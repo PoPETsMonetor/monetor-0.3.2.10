@@ -298,6 +298,6 @@ void mt_cintermediary_init(void) {
   count[0] = rand_uint64();
   count[1] = rand_uint64();
   log_info(LD_MT, "MoneTor: Initialization of the intermediary payment module");
-  /*mt_ipay_init();*/
+  mt_ipay_init();
 }
 

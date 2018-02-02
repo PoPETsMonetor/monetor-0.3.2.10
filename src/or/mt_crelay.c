@@ -29,7 +29,7 @@ mt_crelay_init(void) {
   count[0] = rand_uint64();
   count[1] = rand_uint64();
   log_info(LD_MT, "MoneTor: initialization of payment relay code");
-  /*mt_rpay_init();*/
+  mt_rpay_init();
 }
 
 void mt_crelay_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {

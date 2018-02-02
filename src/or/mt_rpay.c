@@ -161,7 +161,7 @@ static mt_rpay_t relay;
 int mt_rpay_init(void){
 
   // TODO: get this to work
-  // cpu_init();
+   cpu_init();
 
   relay.msgbuf = mt_messagebuffer_init();
 
