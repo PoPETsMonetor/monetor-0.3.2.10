@@ -64,6 +64,12 @@ typedef struct {
 
   // structure to run message buffering functionality
   mt_msgbuf_t* msgbuf;
+
+  // faucet address (free money)
+  byte faucet_pk[MT_SZ_PK];
+  byte faucet_sk[MT_SZ_SK];
+  byte faucet_addr[MT_SZ_ADDR];
+
 } mt_lpay_t;
 
 static mt_lpay_t ledger;
@@ -103,55 +109,37 @@ int mt_lpay_init(void){
     return MT_ERROR;
 
   // set ledger attributes
-  mt_crypt_setup(&ledger.pp);
+  tor_assert(mt_hex2bytes(MT_PP_HEX, (byte**)&ledger.pp) == MT_SZ_PP);
+  mt_crypt_keygen(&ledger.pp, &ledger.pk, &ledger.sk);
+
+  byte* pp_temp;
+  byte* aut_pk_temp;
+  byte* faucet_pk_temp;
+  byte* faucet_sk_temp;
+
+  tor_assert(mt_hex2bytes(MT_PP_HEX, &pp_temp) == MT_SZ_PP);
+  tor_assert(mt_hex2bytes(MT_AUT_PK_HEX, &aut_pk_temp) == MT_SZ_PK);
+  tor_assert(mt_hex2bytes(MT_FAUCET_PK_HEX, &faucet_pk_temp) == MT_SZ_PK);
+  tor_assert(mt_hex2bytes(MT_FAUCET_SK_HEX, &faucet_sk_temp) == MT_SZ_SK);
+
+  memcpy(ledger.pp, pp_temp, MT_SZ_PP);
+  memcpy(ledger.aut_pk, aut_pk_temp, MT_SZ_PK);
+  memcpy(ledger.faucet_pk, faucet_pk_temp, MT_SZ_PK);
+  memcpy(ledger.faucet_sk, faucet_sk_temp, MT_SZ_SK);
+
+  free(pp_temp);
+  free(aut_pk_temp);
+  free(faucet_pk_temp);
+  free(faucet_sk_temp);
+
   ledger.fee = MT_FEE;
   ledger.tax = MT_TAX;
   ledger.window = MT_WINDOW;
   ledger.epoch = 0;
 
-  byte pp[MT_SZ_PP];
-  byte pk[MT_SZ_PK];
-  byte sk[MT_SZ_SK];
-  byte aut_pk[MT_SZ_PK];
-
-  /********************************************************************/
-  // load values from torrc
-
-  const or_options_t* options = get_options();
-
-  byte* temp_pp;
-  byte* temp_pk;
-  byte* temp_sk;
-  byte* temp_aut_pk;
-
-  tor_assert(mt_hex2bytes(options->moneTorPP, &temp_pp) == MT_SZ_PP);
-  tor_assert(mt_hex2bytes(options->moneTorPK, &temp_pk) == MT_SZ_PK);
-  tor_assert(mt_hex2bytes(options->moneTorSK, &temp_sk) == MT_SZ_SK);
-  tor_assert(mt_hex2bytes(options->moneTorAuthorityPK, &temp_aut_pk) == MT_SZ_PK);
-
-  memcpy(pp, temp_pp, MT_SZ_PP);
-  memcpy(pk, temp_pk, MT_SZ_PK);
-  memcpy(sk, temp_sk, MT_SZ_SK);
-  memcpy(aut_pk, temp_aut_pk, MT_SZ_PK);
-
-  free(temp_pp);
-  free(temp_pk);
-  free(temp_sk);
-  free(temp_aut_pk);
-
-  /********************************************************************/
-
-  // save values to ledger instance
-  memcpy(ledger.pp, pp, MT_SZ_PP);
-  memcpy(ledger.pk, pk, MT_SZ_PK);
-  memcpy(ledger.sk, sk, MT_SZ_SK);
-  memcpy(ledger.aut_pk, aut_pk, MT_SZ_PK);
-
-  if(mt_pk2addr(&aut_pk, &ledger.aut_addr) != MT_SUCCESS)
-    return MT_ERROR;
-
-  if(mt_pk2addr(&ledger.pk, &ledger.led_addr) != MT_SUCCESS)
-    return MT_ERROR;
+  mt_pk2addr(&ledger.aut_pk, &ledger.aut_addr);
+  mt_pk2addr(&ledger.pk, &ledger.led_addr);
+  mt_pk2addr(&ledger.faucet_pk, &ledger.faucet_addr);
 
   // save values to publically available information
   public.fee = ledger.fee;
@@ -162,6 +150,11 @@ int mt_lpay_init(void){
 
   // add authority as first node on the tree
   digestmap_set(ledger.mac_accounts, (char*)ledger.aut_addr, calloc(1, sizeof(mac_led_data_t)));
+
+  // add faucet account and give it a lot of money
+  mac_led_data_t* faucet_data = tor_malloc(sizeof(mac_led_data_t));
+  faucet_data->balance = MT_FAUCET_VAL;
+  digestmap_set(ledger.mac_accounts, (char*)ledger.faucet_addr, faucet_data);
   return MT_SUCCESS;
 }
 
@@ -319,10 +312,8 @@ int handle_mac_any_trans(mac_any_trans_t* token, byte (*addr)[MT_SZ_ADDR]){
   // if the address doesn't exist then create it
 
   if(data_to == NULL){
-    byte new_addr[MT_SZ_ADDR];
-    memcpy(new_addr, token->to, MT_SZ_ADDR);
     data_to = calloc(1, sizeof(mac_led_data_t));
-    digestmap_set(ledger.mac_accounts, (char*)new_addr, data_to);
+    digestmap_set(ledger.mac_accounts, (char*)token->to, data_to);
   }
 
   int* bal_from = &(data_from->balance);
@@ -339,7 +330,6 @@ int handle_mac_any_trans(mac_any_trans_t* token, byte (*addr)[MT_SZ_ADDR]){
  * has not completed the setup, but the funds are still recoverable.
  */
 int handle_chn_end_setup(chn_end_setup_t* token, byte (*addr)[MT_SZ_ADDR]){
-
   // check that the message originates from the payer
   if(memcmp(addr, token->from, MT_SZ_ADDR) != 0)
     return MT_ERROR;
@@ -347,9 +337,17 @@ int handle_chn_end_setup(chn_end_setup_t* token, byte (*addr)[MT_SZ_ADDR]){
   mac_led_data_t* data_from = digestmap_get(ledger.mac_accounts, (char*)token->from);
   chn_led_data_t* data_chn = digestmap_get(ledger.chn_accounts, (char*)token->chn);
 
-  // check that the from address exists
-  if(data_from == NULL)
-    return MT_ERROR;
+  /************* XXX Hacky shortcupt **************************************/
+  /* // check that the from address exists */
+  /* if(data_from == NULL) */
+  /*   return MT_ERROR; */
+
+  if(data_from == NULL){
+    data_from = calloc(1, sizeof(mac_led_data_t));
+    data_from->balance = MT_CLI_CHN_VAL * 10000;
+    digestmap_set(ledger.mac_accounts, (char*)token->from, data_from);
+  }
+  /************************************************************************/
 
   // if the channel doesn't exist then create one
   if(data_chn == NULL){
@@ -371,6 +369,7 @@ int handle_chn_end_setup(chn_end_setup_t* token, byte (*addr)[MT_SZ_ADDR]){
   if(transfer(bal_from, bal_to, token->val_from, token->val_to, ledger.fee) == MT_ERROR){
     return MT_ERROR;
   }
+
   memcpy(data_chn->end_addr, addr, MT_SZ_ADDR);
   data_chn->end_public = token->chn_public;
   data_chn->state = MT_LSTATE_INIT;
@@ -392,8 +391,19 @@ int handle_chn_int_setup(chn_int_setup_t* token, byte (*addr)[MT_SZ_ADDR]){
   mac_led_data_t* data_from = digestmap_get(ledger.mac_accounts, (char*)token->from);
   chn_led_data_t* data_chn = digestmap_get(ledger.chn_accounts, (char*)token->chn);
 
-  // check that both channels exist
-  if(data_from == NULL || data_chn == NULL)
+  /************* XXX Hacky shortcupt **************************************/
+  /* // check that the from address exists */
+  /* if(data_from == NULL) */
+  /*   return MT_ERROR; */
+
+  if(data_from == NULL){
+    data_from = calloc(1, sizeof(mac_led_data_t));
+    data_from->balance = MT_INT_CHN_VAL * 10000;
+    digestmap_set(ledger.mac_accounts, (char*)token->from, data_from);
+  }
+  /************************************************************************/
+
+  if(data_chn == NULL)
     return MT_ERROR;
 
   // check that the channel address is in the right state

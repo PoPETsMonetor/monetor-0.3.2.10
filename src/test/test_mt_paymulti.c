@@ -801,14 +801,7 @@ static void test_mt_paymulti(void *arg){
   // make sure we have enough relays to connect to
   tt_assert(REL_NUM >= REL_CONNS);
 
-  int result;
-
   /****************************** Setup **********************************/
-
-  int mint_val = (MT_CLI_CHN_VAL + MT_REL_CHN_VAL + MT_INT_CHN_VAL) * 2000;
-  int cli_trans_val = (MT_CLI_CHN_VAL + MT_FEE) * 100;
-  int rel_trans_val = (MT_REL_CHN_VAL + MT_FEE) * 100;
-  int int_trans_val = (MT_INT_CHN_VAL + MT_FEE) * 100;
 
   // setup all of the parties and add to _ctx maps
   uint32_t ids = 1;
@@ -839,57 +832,48 @@ static void test_mt_paymulti(void *arg){
   *aut_status = 1;
   digestmap_set(statuses, (char*)aut_digest, aut_status);
 
-  mt_crypt_setup(&pp);
-  mt_crypt_keygen(&pp, &aut_pk, &aut_sk);
   mt_crypt_keygen(&pp, &led_pk, &led_sk);
 
-  or_options_t* options = (or_options_t*)get_options();
+  /* or_options_t* options = (or_options_t*)get_options(); */
 
-  mt_bytes2hex(aut_pk, MT_SZ_PK, &options->moneTorAuthorityPK);
+  /* mt_bytes2hex(aut_pk, MT_SZ_PK, &options->moneTorAuthorityPK); */
 
-  mt_bytes2hex(pp, MT_SZ_PP, &options->moneTorPP);
-  mt_bytes2hex(led_pk, MT_SZ_PK, &options->moneTorPK);
-  mt_bytes2hex(led_sk, MT_SZ_SK, &options->moneTorSK);
+  /* mt_bytes2hex(pp, MT_SZ_PP, &options->moneTorPP); */
+  /* mt_bytes2hex(led_pk, MT_SZ_PK, &options->moneTorPK); */
+  /* mt_bytes2hex(led_sk, MT_SZ_SK, &options->moneTorSK); */
 
-  options->moneTorFee = MT_FEE;
-  options->moneTorTax = MT_TAX;
+  /* options->moneTorFee = MT_FEE; */
+  /* options->moneTorTax = MT_TAX; */
 
-  byte aut_addr[MT_SZ_ADDR];
+  byte* pp_temp;
+  byte* aut_pk_temp;
+  byte* aut_sk_temp;
+
+  tor_assert(mt_hex2bytes(MT_PP_HEX, &pp_temp) == MT_SZ_PP);
+  tor_assert(mt_hex2bytes(MT_AUT_PK_HEX, &aut_pk_temp) == MT_SZ_PK);
+  tor_assert(mt_hex2bytes(MT_AUT_SK_HEX, &aut_sk_temp) == MT_SZ_SK);
+
+  memcpy(pp, pp_temp, MT_SZ_PP);
+  memcpy(aut_pk, aut_pk_temp, MT_SZ_PK);
+  memcpy(aut_sk, aut_sk_temp, MT_SZ_SK);
+
+  free(pp_temp);
+  free(aut_pk_temp);
+  free(aut_sk_temp);
+
   byte led_addr[MT_SZ_ADDR];
-  mt_pk2addr(&aut_pk, &aut_addr);
   mt_pk2addr(&led_pk, &led_addr);
 
   // initialize ledger and save relevant "public" values
   tt_assert(mt_lpay_init() == MT_SUCCESS);
 
-  // authority mints money
-
-  mac_aut_mint_t mint = {.value = mint_val};
-  byte mint_id[DIGEST_LEN];
-  mt_crypt_rand(DIGEST_LEN, mint_id);
-
-  byte* packed_mint;
-  byte* signed_mint;
-  int packed_mint_size = pack_mac_aut_mint(&mint, &mint_id, &packed_mint);
-  int signed_mint_size = mt_create_signed_msg(packed_mint, packed_mint_size,
-					      &aut_pk, &aut_sk, &signed_mint);
-  result = mt_lpay_recv(&aut_desc, MT_NTYPE_MAC_AUT_MINT, signed_mint, signed_mint_size);
-  tt_assert(result == MT_SUCCESS);
-
   // initialize clients
-
   for(int i = 0; i < CLI_NUM; i++){
     mt_desc_t cli_desc;
-    byte cli_pk[MT_SZ_PK];
-    byte cli_sk[MT_SZ_SK];
     cli_desc.party = MT_PARTY_CLI;
-    mt_crypt_keygen(&pp, &cli_pk, &cli_sk);
     cli_desc.id[0] = ids++;
     cli_desc.id[1] = 0;
 
-    mt_bytes2hex(cli_pk, MT_SZ_PK, &options->moneTorPK);
-    mt_bytes2hex(cli_sk, MT_SZ_SK, &options->moneTorSK);
-    options->moneTorBalance = cli_trans_val;
     tt_assert(mt_cpay_init() == MT_SUCCESS);
 
     byte digest[DIGEST_LEN];
@@ -905,46 +889,19 @@ static void test_mt_paymulti(void *arg){
     *ctx = (context_t){.desc = cli_desc, .state = pay_export};
     digestmap_set(cli_ctx, (char*)digest, ctx);
 
-    // send money from authority to client
-
-    byte cli_addr[MT_SZ_ADDR];
-    mt_pk2addr(&cli_pk, &cli_addr);
-
-    mac_any_trans_t cli_trans = {.val_to = cli_trans_val, .val_from = cli_trans_val + MT_FEE};
-    memcpy(cli_trans.from, aut_addr, MT_SZ_ADDR);
-    memcpy(cli_trans.to, cli_addr, MT_SZ_ADDR);
-    byte cli_trans_id[DIGEST_LEN];
-    mt_crypt_rand(DIGEST_LEN, cli_trans_id);
-
-    byte* packed_cli_trans;
-    byte* signed_cli_trans;
-    int packed_cli_trans_size = pack_mac_any_trans(&cli_trans, &cli_trans_id, &packed_cli_trans);
-    int signed_cli_trans_size = mt_create_signed_msg(packed_cli_trans, packed_cli_trans_size,
-						     &aut_pk, &aut_sk, &signed_cli_trans);
-    result = mt_lpay_recv(&aut_desc, MT_NTYPE_MAC_ANY_TRANS, signed_cli_trans, signed_cli_trans_size);
-    tt_assert(result == MT_SUCCESS);
-    tt_assert(mt_lpay_query_mac_balance(&cli_addr) == cli_trans_val);
-
     int* balance = tor_malloc(sizeof(int));
-    *balance = cli_trans.val_to;
+    *balance = MT_CLI_CHN_VAL * 10000;
     digestmap_set(exp_balance, (char*)digest, balance);
   }
 
   // initialize relays
-
   for(int i = 0; i < REL_NUM; i++){
 
     mt_desc_t rel_desc;
-    byte rel_pk[MT_SZ_PK];
-    byte rel_sk[MT_SZ_SK];
     rel_desc.party = MT_PARTY_REL;
-    mt_crypt_keygen(&pp, &rel_pk, &rel_sk);
     rel_desc.id[0] = ids++;
     rel_desc.id[1] = 0;
 
-    mt_bytes2hex(rel_pk, MT_SZ_PK, &options->moneTorPK);
-    mt_bytes2hex(rel_sk, MT_SZ_SK, &options->moneTorSK);
-    options->moneTorBalance = rel_trans_val;
     tt_assert(mt_rpay_init() == MT_SUCCESS);
 
     byte digest[DIGEST_LEN];
@@ -960,46 +917,19 @@ static void test_mt_paymulti(void *arg){
     *ctx = (context_t){.desc = rel_desc, .state = pay_export};
     digestmap_set(rel_ctx, (char*)digest, ctx);
 
-    // send money from authority to relay
-
-    byte rel_addr[MT_SZ_ADDR];
-    mt_pk2addr(&rel_pk, &rel_addr);
-
-    mac_any_trans_t rel_trans = {.val_to = rel_trans_val, .val_from = rel_trans_val + MT_FEE};
-    memcpy(rel_trans.from, aut_addr, MT_SZ_ADDR);
-    memcpy(rel_trans.to, rel_addr, MT_SZ_ADDR);
-    byte rel_trans_id[DIGEST_LEN];
-    mt_crypt_rand(DIGEST_LEN, rel_trans_id);
-
-    byte* packed_rel_trans;
-    byte* signed_rel_trans;
-    int packed_rel_trans_size = pack_mac_any_trans(&rel_trans, &rel_trans_id, &packed_rel_trans);
-    int signed_rel_trans_size = mt_create_signed_msg(packed_rel_trans, packed_rel_trans_size,
-						     &aut_pk, &aut_sk, &signed_rel_trans);
-    result = mt_lpay_recv(&aut_desc, MT_NTYPE_MAC_ANY_TRANS, signed_rel_trans, signed_rel_trans_size);
-    tt_assert(result == MT_SUCCESS);
-    tt_assert(mt_lpay_query_mac_balance(&rel_addr) == rel_trans_val);
-
     int* balance = tor_malloc(sizeof(int));
-    *balance = rel_trans.val_to;
+    *balance = MT_CLI_CHN_VAL * 10000;
     digestmap_set(exp_balance, (char*)digest, balance);
   }
 
   // initialize intermediaries
-
   for(int i = 0; i < INT_NUM; i++){
 
     mt_desc_t int_desc;
-    byte int_pk[MT_SZ_PK];
-    byte int_sk[MT_SZ_SK];
     int_desc.party = MT_PARTY_INT;
-    mt_crypt_keygen(&pp, &int_pk, &int_sk);
     int_desc.id[0] = ids++;
     int_desc.id[1] = ids++;
 
-    mt_bytes2hex(int_pk, MT_SZ_PK, &options->moneTorPK);
-    mt_bytes2hex(int_sk, MT_SZ_SK, &options->moneTorSK);
-    options->moneTorBalance = int_trans_val;
     tt_assert(mt_ipay_init() == MT_SUCCESS);
 
     byte digest[DIGEST_LEN];
@@ -1015,28 +945,8 @@ static void test_mt_paymulti(void *arg){
     *ctx = (context_t){.desc = int_desc, .state = pay_export};
     digestmap_set(int_ctx, (char*)digest, ctx);
 
-    // send money from authority to intermediary
-
-    byte int_addr[MT_SZ_ADDR];
-    mt_pk2addr(&int_pk, &int_addr);
-
-    mac_any_trans_t int_trans = {.val_to = int_trans_val, .val_from = int_trans_val + MT_FEE};
-    memcpy(int_trans.from, aut_addr, MT_SZ_ADDR);
-    memcpy(int_trans.to, int_addr, MT_SZ_ADDR);
-    byte int_trans_id[DIGEST_LEN];
-    mt_crypt_rand(DIGEST_LEN, int_trans_id);
-
-    byte* packed_int_trans;
-    byte* signed_int_trans;
-    int packed_int_trans_size = pack_mac_any_trans(&int_trans, &int_trans_id, &packed_int_trans);
-    int signed_int_trans_size = mt_create_signed_msg(packed_int_trans, packed_int_trans_size,
-						     &aut_pk, &aut_sk, &signed_int_trans);
-    result = mt_lpay_recv(&aut_desc, MT_NTYPE_MAC_ANY_TRANS, signed_int_trans, signed_int_trans_size);
-    tt_assert(result == MT_SUCCESS);
-    tt_assert(mt_lpay_query_mac_balance(&int_addr) == int_trans_val);
-
     int* balance = tor_malloc(sizeof(int));
-    *balance = int_trans.val_to;
+    *balance = MT_INT_CHN_VAL * 10000;
     digestmap_set(exp_balance, (char*)digest, balance);
   }
 

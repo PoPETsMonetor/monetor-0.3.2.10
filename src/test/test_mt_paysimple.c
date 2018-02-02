@@ -324,268 +324,273 @@ static workqueue_entry_t* mock_cpuworker_queue_work(workqueue_priority_t priorit
   return (workqueue_entry_t*)1;
 }
 
+/*********************************************************************/
+// considering returning this module since paymulti covers it
+/*********************************************************************/
+
+
 /**
  * Execute paysimple test
  */
 static void test_mt_paysimple(void *arg){
 
-  printf("\n\n------------ begin paysimple ------------\n\n");
+ /*  printf("\n\n------------ begin paysimple ------------\n\n"); */
 
-  (void)arg;
+ /*  (void)arg; */
 
-  // The reply_fn in the mocked cpuworker function returns an int for testing
-  // convenience. This cast is used to avoid warnings in the MOCK command
-  typedef workqueue_entry_t* (*cpuworker_fn)(workqueue_priority_t,
-					     workqueue_reply_t (*)(void*, void*),
-					     void (*)(void*), void*);
-  MOCK(mt_send_message, mock_send_message);
-  MOCK(mt_send_message_multidesc, mock_send_message_multidesc);
-  MOCK(mt_paymod_signal, mock_paymod_signal);
-  MOCK(cpuworker_queue_work, (cpuworker_fn)mock_cpuworker_queue_work);
+ /*  // The reply_fn in the mocked cpuworker function returns an int for testing */
+ /*  // convenience. This cast is used to avoid warnings in the MOCK command */
+ /*  typedef workqueue_entry_t* (*cpuworker_fn)(workqueue_priority_t, */
+ /* 					     workqueue_reply_t (*)(void*, void*), */
+ /* 					     void (*)(void*), void*); */
+ /*  MOCK(mt_send_message, mock_send_message); */
+ /*  MOCK(mt_send_message_multidesc, mock_send_message_multidesc); */
+ /*  MOCK(mt_paymod_signal, mock_paymod_signal); */
+ /*  MOCK(cpuworker_queue_work, (cpuworker_fn)mock_cpuworker_queue_work); */
 
-  /****************************** Setup **********************************/
+ /*  /\****************************** Setup **********************************\/ */
 
-  // initial balances each party will have
+ /*  // initial balances each party will have */
 
-  int mint_val = (MT_CLI_CHN_VAL + MT_REL_CHN_VAL + MT_INT_CHN_VAL) * 20;
-  int cli_trans_val = (MT_CLI_CHN_VAL + MT_FEE) * 10;
-  int rel_trans_val = (MT_REL_CHN_VAL + MT_FEE) * 10;
-  int int_trans_val = (MT_INT_CHN_VAL + MT_FEE) * 10;
+ /*  int mint_val = (MT_CLI_CHN_VAL + MT_REL_CHN_VAL + MT_INT_CHN_VAL) * 20; */
+ /*  int cli_trans_val = (MT_CLI_CHN_VAL + MT_FEE) * 10; */
+ /*  int rel_trans_val = (MT_REL_CHN_VAL + MT_FEE) * 10; */
+ /*  int int_trans_val = (MT_INT_CHN_VAL + MT_FEE) * 10; */
 
-  // declare values to save to the disk
+ /*  // declare values to save to the disk */
 
-  byte pp[MT_SZ_PP];
+ /*  byte pp[MT_SZ_PP]; */
 
-  byte aut_pk[MT_SZ_PK];
-  byte aut_sk[MT_SZ_SK];
-  aut_desc.party = MT_PARTY_AUT;
+ /*  byte aut_pk[MT_SZ_PK]; */
+ /*  byte aut_sk[MT_SZ_SK]; */
+ /*  aut_desc.party = MT_PARTY_AUT; */
 
-  byte led_pk[MT_SZ_PK];
-  byte led_sk[MT_SZ_SK];
-  led_desc.party = MT_PARTY_LED;
+ /*  byte led_pk[MT_SZ_PK]; */
+ /*  byte led_sk[MT_SZ_SK]; */
+ /*  led_desc.party = MT_PARTY_LED; */
 
-  byte cli_pk[MT_SZ_PK];
-  byte cli_sk[MT_SZ_SK];
-  cli_desc.party = MT_PARTY_CLI;
+ /*  byte cli_pk[MT_SZ_PK]; */
+ /*  byte cli_sk[MT_SZ_SK]; */
+ /*  cli_desc.party = MT_PARTY_CLI; */
 
-  byte rel_pk[MT_SZ_PK];
-  byte rel_sk[MT_SZ_SK];
-  rel_desc.party = MT_PARTY_REL;
+ /*  byte rel_pk[MT_SZ_PK]; */
+ /*  byte rel_sk[MT_SZ_SK]; */
+ /*  rel_desc.party = MT_PARTY_REL; */
 
-  byte int_pk[MT_SZ_PK];
-  byte int_sk[MT_SZ_SK];
-  int_desc.party = MT_PARTY_INT;
+ /*  byte int_pk[MT_SZ_PK]; */
+ /*  byte int_sk[MT_SZ_SK]; */
+ /*  int_desc.party = MT_PARTY_INT; */
 
-  // define values to save to disk
+ /*  // define values to save to disk */
 
-  mt_crypt_setup(&pp);
-  mt_crypt_keygen(&pp, &aut_pk, &aut_sk);
-  mt_crypt_keygen(&pp, &led_pk, &led_sk);
-  mt_crypt_keygen(&pp, &cli_pk, &cli_sk);
-  mt_crypt_keygen(&pp, &rel_pk, &rel_sk);
-  mt_crypt_keygen(&pp, &int_pk, &int_sk);
+ /*  mt_crypt_setup(&pp); */
+ /*  mt_crypt_keygen(&pp, &aut_pk, &aut_sk); */
+ /*  mt_crypt_keygen(&pp, &led_pk, &led_sk); */
+ /*  mt_crypt_keygen(&pp, &cli_pk, &cli_sk); */
+ /*  mt_crypt_keygen(&pp, &rel_pk, &rel_sk); */
+ /*  mt_crypt_keygen(&pp, &int_pk, &int_sk); */
 
-  led_desc.id[0] = 0;
-  led_desc.id[1] = 0;
+ /*  led_desc.id[0] = 0; */
+ /*  led_desc.id[1] = 0; */
 
-  uint32_t ids = 1;
-  aut_desc.id[0] = ids++;
-  cli_desc.id[0] = ids++;
-  rel_desc.id[0] = ids++;
-  int_desc.id[0] = ids++;
+ /*  uint32_t ids = 1; */
+ /*  aut_desc.id[0] = ids++; */
+ /*  cli_desc.id[0] = ids++; */
+ /*  rel_desc.id[0] = ids++; */
+ /*  int_desc.id[0] = ids++; */
 
-  aut_desc.id[1] = 0;
-  cli_desc.id[1] = 0;
-  rel_desc.id[1] = 0;
-  int_desc.id[1] = 0;
+ /*  aut_desc.id[1] = 0; */
+ /*  cli_desc.id[1] = 0; */
+ /*  rel_desc.id[1] = 0; */
+ /*  int_desc.id[1] = 0; */
 
-  // write values to disk as separate files in the tor/ directory
-  // TODO: this should go through torcc instead
+ /*  // write values to disk as separate files in the tor/ directory */
+ /*  // TODO: this should go through torcc instead */
 
-  or_options_t* options = (or_options_t*)get_options();
+ /*  or_options_t* options = (or_options_t*)get_options(); */
 
-  mt_bytes2hex(aut_pk, MT_SZ_PK, &options->moneTorAuthorityPK);
-  mt_bytes2hex(pp, MT_SZ_PP, &options->moneTorPP);
-  options->moneTorFee = MT_FEE;
-  options->moneTorTax = MT_TAX;
+ /*  mt_bytes2hex(aut_pk, MT_SZ_PK, &options->moneTorAuthorityPK); */
+ /*  mt_bytes2hex(pp, MT_SZ_PP, &options->moneTorPP); */
+ /*  options->moneTorFee = MT_FEE; */
+ /*  options->moneTorTax = MT_TAX; */
 
-  // initiate ledger
-  mt_bytes2hex(led_pk, MT_SZ_PK, &options->moneTorPK);
-  mt_bytes2hex(led_sk, MT_SZ_SK, &options->moneTorSK);
-  tt_assert(mt_lpay_init() == MT_SUCCESS);
+ /*  // initiate ledger */
+ /*  mt_bytes2hex(led_pk, MT_SZ_PK, &options->moneTorPK); */
+ /*  mt_bytes2hex(led_sk, MT_SZ_SK, &options->moneTorSK); */
+ /*  tt_assert(mt_lpay_init() == MT_SUCCESS); */
 
-  mt_bytes2hex(cli_pk, MT_SZ_PK, &options->moneTorPK);
-  mt_bytes2hex(cli_sk, MT_SZ_SK, &options->moneTorSK);
-  options->moneTorBalance = cli_trans_val;
-  tt_assert(mt_cpay_init() == MT_SUCCESS);
+ /*  mt_bytes2hex(cli_pk, MT_SZ_PK, &options->moneTorPK); */
+ /*  mt_bytes2hex(cli_sk, MT_SZ_SK, &options->moneTorSK); */
+ /*  options->moneTorBalance = cli_trans_val; */
+ /*  tt_assert(mt_cpay_init() == MT_SUCCESS); */
 
-  mt_bytes2hex(rel_pk, MT_SZ_PK, &options->moneTorPK);
-  mt_bytes2hex(rel_sk, MT_SZ_SK, &options->moneTorSK);
-  options->moneTorBalance = rel_trans_val;
-  tt_assert(mt_rpay_init() == MT_SUCCESS);
+ /*  mt_bytes2hex(rel_pk, MT_SZ_PK, &options->moneTorPK); */
+ /*  mt_bytes2hex(rel_sk, MT_SZ_SK, &options->moneTorSK); */
+ /*  options->moneTorBalance = rel_trans_val; */
+ /*  tt_assert(mt_rpay_init() == MT_SUCCESS); */
 
-  mt_bytes2hex(int_pk, MT_SZ_PK, &options->moneTorPK);
-  mt_bytes2hex(int_sk, MT_SZ_SK, &options->moneTorSK);
-  options->moneTorBalance = int_trans_val;
-  tt_assert(mt_ipay_init() == MT_SUCCESS);
+ /*  mt_bytes2hex(int_pk, MT_SZ_PK, &options->moneTorPK); */
+ /*  mt_bytes2hex(int_sk, MT_SZ_SK, &options->moneTorSK); */
+ /*  options->moneTorBalance = int_trans_val; */
+ /*  tt_assert(mt_ipay_init() == MT_SUCCESS); */
 
-  // decalre and define addresses for ledger interaction
-  byte aut_addr[MT_SZ_ADDR];
-  byte led_addr[MT_SZ_ADDR];
-  byte cli_addr[MT_SZ_ADDR];
-  byte rel_addr[MT_SZ_ADDR];
-  byte int_addr[MT_SZ_ADDR];
+ /*  // decalre and define addresses for ledger interaction */
+ /*  byte aut_addr[MT_SZ_ADDR]; */
+ /*  byte led_addr[MT_SZ_ADDR]; */
+ /*  byte cli_addr[MT_SZ_ADDR]; */
+ /*  byte rel_addr[MT_SZ_ADDR]; */
+ /*  byte int_addr[MT_SZ_ADDR]; */
 
-  mt_pk2addr(&aut_pk, &aut_addr);
-  mt_pk2addr(&led_pk, &led_addr);
-  mt_pk2addr(&cli_pk, &cli_addr);
-  mt_pk2addr(&rel_pk, &rel_addr);
-  mt_pk2addr(&int_pk, &int_addr);
+ /*  mt_pk2addr(&aut_pk, &aut_addr); */
+ /*  mt_pk2addr(&led_pk, &led_addr); */
+ /*  mt_pk2addr(&cli_pk, &cli_addr); */
+ /*  mt_pk2addr(&rel_pk, &rel_addr); */
+ /*  mt_pk2addr(&int_pk, &int_addr); */
 
-  int result; // generic variable to track function call success/failure
+ /*  int result; // generic variable to track function call success/failure */
 
-  // authority mints money
+ /*  // authority mints money */
 
-  mac_aut_mint_t mint = {.value = mint_val};
-  byte mint_id[DIGEST_LEN];
-  mt_crypt_rand(DIGEST_LEN, mint_id);
+ /*  mac_aut_mint_t mint = {.value = mint_val}; */
+ /*  byte mint_id[DIGEST_LEN]; */
+ /*  mt_crypt_rand(DIGEST_LEN, mint_id); */
 
-  byte* packed_mint;
-  byte* signed_mint;
-  int packed_mint_size = pack_mac_aut_mint(&mint, &mint_id, &packed_mint);
-  int signed_mint_size = mt_create_signed_msg(packed_mint, packed_mint_size,
-					      &aut_pk, &aut_sk, &signed_mint);
+ /*  byte* packed_mint; */
+ /*  byte* signed_mint; */
+ /*  int packed_mint_size = pack_mac_aut_mint(&mint, &mint_id, &packed_mint); */
+ /*  int signed_mint_size = mt_create_signed_msg(packed_mint, packed_mint_size, */
+ /* 					      &aut_pk, &aut_sk, &signed_mint); */
 
-  memcpy(&dst_desc, &aut_desc, sizeof(mt_desc_t));
-  result = mt_send_message(&led_desc, MT_NTYPE_MAC_AUT_MINT, signed_mint, signed_mint_size);
-  tt_assert(result == MT_SUCCESS);
+ /*  memcpy(&dst_desc, &aut_desc, sizeof(mt_desc_t)); */
+ /*  result = mt_send_message(&led_desc, MT_NTYPE_MAC_AUT_MINT, signed_mint, signed_mint_size); */
+ /*  tt_assert(result == MT_SUCCESS); */
 
-  // send money from authority to client
+ /*  // send money from authority to client */
 
-  mac_any_trans_t cli_trans = {.val_to = cli_trans_val, .val_from = cli_trans_val + MT_FEE};
-  memcpy(cli_trans.from, aut_addr, MT_SZ_ADDR);
-  memcpy(cli_trans.to, cli_addr, MT_SZ_ADDR);
-  byte cli_trans_id[DIGEST_LEN];
-  mt_crypt_rand(DIGEST_LEN, cli_trans_id);
+ /*  mac_any_trans_t cli_trans = {.val_to = cli_trans_val, .val_from = cli_trans_val + MT_FEE}; */
+ /*  memcpy(cli_trans.from, aut_addr, MT_SZ_ADDR); */
+ /*  memcpy(cli_trans.to, cli_addr, MT_SZ_ADDR); */
+ /*  byte cli_trans_id[DIGEST_LEN]; */
+ /*  mt_crypt_rand(DIGEST_LEN, cli_trans_id); */
 
-  byte* packed_cli_trans;
-  byte* signed_cli_trans;
-  int packed_cli_trans_size = pack_mac_any_trans(&cli_trans, &cli_trans_id, &packed_cli_trans);
-  int signed_cli_trans_size = mt_create_signed_msg(packed_cli_trans, packed_cli_trans_size,
-						   &aut_pk, &aut_sk, &signed_cli_trans);
-  memcpy(&dst_desc, &aut_desc, sizeof(mt_desc_t));
-  result = mt_send_message(&led_desc, MT_NTYPE_MAC_ANY_TRANS, signed_cli_trans, signed_cli_trans_size);
-  tt_assert(result == MT_SUCCESS);
+ /*  byte* packed_cli_trans; */
+ /*  byte* signed_cli_trans; */
+ /*  int packed_cli_trans_size = pack_mac_any_trans(&cli_trans, &cli_trans_id, &packed_cli_trans); */
+ /*  int signed_cli_trans_size = mt_create_signed_msg(packed_cli_trans, packed_cli_trans_size, */
+ /* 						   &aut_pk, &aut_sk, &signed_cli_trans); */
+ /*  memcpy(&dst_desc, &aut_desc, sizeof(mt_desc_t)); */
+ /*  result = mt_send_message(&led_desc, MT_NTYPE_MAC_ANY_TRANS, signed_cli_trans, signed_cli_trans_size); */
+ /*  tt_assert(result == MT_SUCCESS); */
 
-  // send money from authority to relay
+ /*  // send money from authority to relay */
 
-  mac_any_trans_t rel_trans = {.val_to = rel_trans_val, .val_from = rel_trans_val + MT_FEE};
-  memcpy(rel_trans.from, aut_addr, MT_SZ_ADDR);
-  memcpy(rel_trans.to, rel_addr, MT_SZ_ADDR);
-  byte rel_trans_id[DIGEST_LEN];
-  mt_crypt_rand(DIGEST_LEN, rel_trans_id);
+ /*  mac_any_trans_t rel_trans = {.val_to = rel_trans_val, .val_from = rel_trans_val + MT_FEE}; */
+ /*  memcpy(rel_trans.from, aut_addr, MT_SZ_ADDR); */
+ /*  memcpy(rel_trans.to, rel_addr, MT_SZ_ADDR); */
+ /*  byte rel_trans_id[DIGEST_LEN]; */
+ /*  mt_crypt_rand(DIGEST_LEN, rel_trans_id); */
 
-  byte* packed_rel_trans;
-  byte* signed_rel_trans;
-  int packed_rel_trans_size = pack_mac_any_trans(&rel_trans, &rel_trans_id, &packed_rel_trans);
-  int signed_rel_trans_size = mt_create_signed_msg(packed_rel_trans, packed_rel_trans_size,
-						   &aut_pk, &aut_sk, &signed_rel_trans);
-  memcpy(&dst_desc, &aut_desc, sizeof(mt_desc_t));
-  result = mt_send_message(&led_desc, MT_NTYPE_MAC_ANY_TRANS, signed_rel_trans, signed_rel_trans_size);
-  tt_assert(result == MT_SUCCESS);
+ /*  byte* packed_rel_trans; */
+ /*  byte* signed_rel_trans; */
+ /*  int packed_rel_trans_size = pack_mac_any_trans(&rel_trans, &rel_trans_id, &packed_rel_trans); */
+ /*  int signed_rel_trans_size = mt_create_signed_msg(packed_rel_trans, packed_rel_trans_size, */
+ /* 						   &aut_pk, &aut_sk, &signed_rel_trans); */
+ /*  memcpy(&dst_desc, &aut_desc, sizeof(mt_desc_t)); */
+ /*  result = mt_send_message(&led_desc, MT_NTYPE_MAC_ANY_TRANS, signed_rel_trans, signed_rel_trans_size); */
+ /*  tt_assert(result == MT_SUCCESS); */
 
-  // send money from authority to intermediary
+ /*  // send money from authority to intermediary */
 
-  mac_any_trans_t int_trans = {.val_to = int_trans_val, .val_from = int_trans_val + MT_FEE};
-  memcpy(int_trans.from, aut_addr, MT_SZ_ADDR);
-  memcpy(int_trans.to, int_addr, MT_SZ_ADDR);
-  byte int_trans_id[DIGEST_LEN];
-  mt_crypt_rand(DIGEST_LEN, int_trans_id);
+ /*  mac_any_trans_t int_trans = {.val_to = int_trans_val, .val_from = int_trans_val + MT_FEE}; */
+ /*  memcpy(int_trans.from, aut_addr, MT_SZ_ADDR); */
+ /*  memcpy(int_trans.to, int_addr, MT_SZ_ADDR); */
+ /*  byte int_trans_id[DIGEST_LEN]; */
+ /*  mt_crypt_rand(DIGEST_LEN, int_trans_id); */
 
-  byte* packed_int_trans;
-  byte* signed_int_trans;
-  int packed_int_trans_size = pack_mac_any_trans(&int_trans, &int_trans_id, &packed_int_trans);
-  int signed_int_trans_size = mt_create_signed_msg(packed_int_trans, packed_int_trans_size,
-						   &aut_pk, &aut_sk, &signed_int_trans);
-  memcpy(&dst_desc, &aut_desc, sizeof(mt_desc_t));
-  result = mt_send_message(&led_desc, MT_NTYPE_MAC_ANY_TRANS, signed_int_trans, signed_int_trans_size);
-  tt_assert(result == MT_SUCCESS);
+ /*  byte* packed_int_trans; */
+ /*  byte* signed_int_trans; */
+ /*  int packed_int_trans_size = pack_mac_any_trans(&int_trans, &int_trans_id, &packed_int_trans); */
+ /*  int signed_int_trans_size = mt_create_signed_msg(packed_int_trans, packed_int_trans_size, */
+ /* 						   &aut_pk, &aut_sk, &signed_int_trans); */
+ /*  memcpy(&dst_desc, &aut_desc, sizeof(mt_desc_t)); */
+ /*  result = mt_send_message(&led_desc, MT_NTYPE_MAC_ANY_TRANS, signed_int_trans, signed_int_trans_size); */
+ /*  tt_assert(result == MT_SUCCESS); */
 
-  // make sure balances are what we expect them to be
-  tt_assert(mt_lpay_query_mac_balance(&cli_addr) == cli_trans_val);
-  tt_assert(mt_lpay_query_mac_balance(&rel_addr) == rel_trans_val);
-  tt_assert(mt_lpay_query_mac_balance(&int_addr) == int_trans_val);
+ /*  // make sure balances are what we expect them to be */
+ /*  tt_assert(mt_lpay_query_mac_balance(&cli_addr) == cli_trans_val); */
+ /*  tt_assert(mt_lpay_query_mac_balance(&rel_addr) == rel_trans_val); */
+ /*  tt_assert(mt_lpay_query_mac_balance(&int_addr) == int_trans_val); */
 
-  /**************************** Protocol Tests ***************************/
+ /*  /\**************************** Protocol Tests ***************************\/ */
 
-  int num_pay = 20;
-  int num_dpay = 20;
+ /*  int num_pay = 20; */
+ /*  int num_dpay = 20; */
 
-  // send payments to a relay through the intermediary
+ /*  // send payments to a relay through the intermediary */
 
-  for(int i = 0; i < num_pay; i++){
-    printf("\n");
-    memcpy(&dst_desc, &cli_desc, sizeof(mt_desc_t));
-    tt_assert(mt_cpay_pay(&rel_desc, &int_desc) == MT_SUCCESS);
-  }
+ /*  for(int i = 0; i < num_pay; i++){ */
+ /*    printf("\n"); */
+ /*    memcpy(&dst_desc, &cli_desc, sizeof(mt_desc_t)); */
+ /*    tt_assert(mt_cpay_pay(&rel_desc, &int_desc) == MT_SUCCESS); */
+ /*  } */
 
-  // close the channel
+ /*  // close the channel */
 
-  printf("\n");
-  memcpy(&dst_desc, &cli_desc, sizeof(mt_desc_t));
-  tt_assert(mt_cpay_close(&rel_desc, &int_desc) == MT_SUCCESS);
+ /*  printf("\n"); */
+ /*  memcpy(&dst_desc, &cli_desc, sizeof(mt_desc_t)); */
+ /*  tt_assert(mt_cpay_close(&rel_desc, &int_desc) == MT_SUCCESS); */
 
-  // send direct payments to the intermediary
+ /*  // send direct payments to the intermediary */
 
-  for(int i = 0; i < num_dpay; i++){
-    printf("\n");
-    memcpy(&dst_desc, &cli_desc, sizeof(mt_desc_t));
-    tt_assert(mt_cpay_pay(&int_desc, &int_desc) == MT_SUCCESS);
-  }
+ /*  for(int i = 0; i < num_dpay; i++){ */
+ /*    printf("\n"); */
+ /*    memcpy(&dst_desc, &cli_desc, sizeof(mt_desc_t)); */
+ /*    tt_assert(mt_cpay_pay(&int_desc, &int_desc) == MT_SUCCESS); */
+ /*  } */
 
-  // close the channel
+ /*  // close the channel */
 
-  printf("\n");
-  memcpy(&dst_desc, &cli_desc, sizeof(mt_desc_t));
-  tt_assert(mt_cpay_close(&int_desc, &int_desc) == MT_SUCCESS);
+ /*  printf("\n"); */
+ /*  memcpy(&dst_desc, &cli_desc, sizeof(mt_desc_t)); */
+ /*  tt_assert(mt_cpay_close(&int_desc, &int_desc) == MT_SUCCESS); */
 
-  // make sure channel balances are what we expect them to be;
+ /*  // make sure channel balances are what we expect them to be; */
 
-  int cli_bal = mt_cpay_mac_balance() + mt_cpay_chn_balance();
-  int rel_bal = mt_rpay_mac_balance() + mt_rpay_chn_balance();
-  int int_bal = mt_ipay_mac_balance() + mt_ipay_chn_balance();
+ /*  int cli_bal = mt_cpay_mac_balance() + mt_cpay_chn_balance(); */
+ /*  int rel_bal = mt_rpay_mac_balance() + mt_rpay_chn_balance(); */
+ /*  int int_bal = mt_ipay_mac_balance() + mt_ipay_chn_balance(); */
 
-  int MT_NAN_TAX = MT_NAN_VAL * MT_TAX / 100;
-  int cli_exp = cli_trans_val - (num_pay + num_dpay) * (MT_NAN_VAL + MT_NAN_TAX);
-  int rel_exp = rel_trans_val + num_pay * MT_NAN_VAL;
-  int int_exp = int_trans_val + num_pay * MT_NAN_TAX + num_dpay * (MT_NAN_VAL + MT_NAN_TAX);
-  cli_exp -= mt_cpay_chn_number() * MT_FEE;
-  rel_exp -= mt_rpay_chn_number() * MT_FEE;
-  int_exp -= mt_ipay_chn_number() * MT_FEE;
+ /*  int MT_NAN_TAX = MT_NAN_VAL * MT_TAX / 100; */
+ /*  int cli_exp = cli_trans_val - (num_pay + num_dpay) * (MT_NAN_VAL + MT_NAN_TAX); */
+ /*  int rel_exp = rel_trans_val + num_pay * MT_NAN_VAL; */
+ /*  int int_exp = int_trans_val + num_pay * MT_NAN_TAX + num_dpay * (MT_NAN_VAL + MT_NAN_TAX); */
+ /*  cli_exp -= mt_cpay_chn_number() * MT_FEE; */
+ /*  rel_exp -= mt_rpay_chn_number() * MT_FEE; */
+ /*  int_exp -= mt_ipay_chn_number() * MT_FEE; */
 
-  tt_assert(cli_bal == cli_exp);
-  tt_assert(rel_bal == rel_exp);
-  tt_assert(int_bal == int_exp);
+ /*  tt_assert(cli_bal == cli_exp); */
+ /*  tt_assert(rel_bal == rel_exp); */
+ /*  tt_assert(int_bal == int_exp); */
 
-  printf("\n-------------- end paysimple ------------\n\n");
+ /*  printf("\n-------------- end paysimple ------------\n\n"); */
 
- done:;
+ /* done:; */
 
-  tor_assert(mt_lpay_clear() == MT_SUCCESS);
+ /*  tor_assert(mt_lpay_clear() == MT_SUCCESS); */
 
-  UNMOCK(mt_send_message);
-  UNMOCK(mt_send_message_multidesc);
-  UNMOCK(mt_paymod_signal);
-  UNMOCK(cpuworker_queue_work);
+ /*  UNMOCK(mt_send_message); */
+ /*  UNMOCK(mt_send_message_multidesc); */
+ /*  UNMOCK(mt_paymod_signal); */
+ /*  UNMOCK(cpuworker_queue_work); */
 
-  tor_free(signed_mint);
-  tor_free(packed_mint);
-  tor_free(packed_cli_trans);
-  tor_free(signed_cli_trans);
-  tor_free(packed_rel_trans);
-  tor_free(signed_rel_trans);
-  tor_free(packed_int_trans);
-  tor_free(signed_int_trans);
+ /*  tor_free(signed_mint); */
+ /*  tor_free(packed_mint); */
+ /*  tor_free(packed_cli_trans); */
+ /*  tor_free(signed_cli_trans); */
+ /*  tor_free(packed_rel_trans); */
+ /*  tor_free(signed_rel_trans); */
+ /*  tor_free(packed_int_trans); */
+ /*  tor_free(signed_int_trans); */
 }
 
 struct testcase_t mt_paysimple_tests[] = {

@@ -2947,11 +2947,11 @@ typedef struct pay_path_t {
    *    anymore
    * */
   unsigned int p_marked_for_close : 1;
-  
+
   unsigned int p_has_closed : 1;
 
   unsigned int last_mt_cpay_succeeded : 1;
-  
+
   unsigned int first_payment_succeeded : 1;
   /** Tell whether we already called a mt_cpay_pay */
   unsigned int payment_is_processing : 1;
@@ -3241,7 +3241,7 @@ typedef struct circuit_t {
    * closing this circuit.
    */
   int marked_for_close_orig_reason;
-  
+
   /** Unique ID for measuring tunneled network status requests. */
   uint64_t dirreq_id;
 
@@ -3643,7 +3643,7 @@ typedef struct or_circuit_t {
    * This cell is has been sent by a Tor client
    */
   mt_desc_t desc;
-  
+
   /**
    * Contains a pointer to an existing intermediary descriptor
    */
@@ -4806,15 +4806,6 @@ typedef struct {
   /* An ordered list of scheduler_types mapped from Schedulers. */
   smartlist_t *SchedulerTypes_;
 
-  /* moneTor configurations for the payment module */
-  char* moneTorAuthorityPK;
-  int moneTorFee;
-  int moneTorTax;
-
-  char* moneTorPP;
-  char* moneTorPK;
-  char* moneTorSK;
-  int moneTorBalance;
 } or_options_t;
 
 #define LOG_PROTOCOL_WARN (get_protocol_warning_severity_level())
@@ -5736,6 +5727,11 @@ typedef enum {
 
 //-------------------------- Public Payment Parameters ----------------------//
 
+#define MT_FEE 5
+#define MT_TAX 5
+#define MT_WINDOW 5
+
+#define MT_FAUCET_VAL 2147483647
 #define MT_NAN_VAL 100
 #define MT_NAN_LEN 1000
 #define MT_CLI_CHN_VAL 105 * 1000
@@ -5758,19 +5754,6 @@ typedef enum {
 #define MT_SZ_ZKP 128
 
 #define MT_SZ_ADDR DIGEST_LEN
-
-//---------------------------- Tor-Facing API -------------------------------//
-
-// TODO: remove the Tor-based structs; these are only here so the test compile
-//       we obviously do not need them after integration with Tor
-
-/* #define MT_PAYLOAD_SIZE 497 */
-
-
-/* typedef int (*mt_set_prem)(mt_desc_t); */
-/* //typedef int (*mt_open_conn(/\*some notion of a unique idenity (ED5519 idenity??*\/); */
-/* typedef int (*mt_send_cells)(mt_desc_t, cell_t*, int); */
-/* typedef int (*mt_close_conn)(mt_desc_t); */
 
 //---------------------------- Controller States ----------------------------//
 
@@ -6046,9 +6029,6 @@ typedef struct {
   int val_to;
   byte from[MT_SZ_ADDR];
   byte to[MT_SZ_ADDR];
-
-  byte pk[MT_SZ_PK];
-  byte sig[MT_SZ_SIG];
 } mac_any_trans_t;
 
 typedef struct {
@@ -6057,9 +6037,6 @@ typedef struct {
   byte from[MT_SZ_ADDR];
   byte chn[MT_SZ_ADDR];
   chn_end_public_t chn_public;
-
-  byte pk[MT_SZ_PK];
-  byte sig[MT_SZ_SIG];
 } chn_end_setup_t;
 
 typedef struct {

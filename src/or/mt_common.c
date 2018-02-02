@@ -91,7 +91,7 @@ int mt_bytes2hex(byte* bytes, int size, char** hex_out){
 /**
  * Converts a hex digest (c-string) into a malloc'd byte string; return size
  */
-int mt_hex2bytes(char* hex, byte** bytes_out){
+int mt_hex2bytes(const char* hex, byte** bytes_out){
 
   tor_assert(strlen(hex) >= 2);
   int size = (strlen(hex) - 2) / 2;
@@ -787,7 +787,7 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
 
 int mt_common_send_direct_cell_payment(circuit_t *circ, mt_ntype_t type,
     byte *msg, int size, cell_direction_t direction) {
-  
+
   or_circuit_t *orcirc = NULL;
   cell_t cell;
   relay_pheader_t rph;
@@ -855,8 +855,8 @@ MOCK_IMPL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2,
 }
 
 MOCK_IMPL(int, mt_paymod_signal, (mt_signal_t signal, mt_desc_t *desc)){
-  
-  log_info(LD_MT, "MoneTor: received signal %s for desc %s", 
+
+  log_info(LD_MT, "MoneTor: received signal %s for desc %s",
       mt_signal_describe(signal), mt_desc_describe(desc));
   if (ledger_mode(get_options())) {
     return mt_cledger_paymod_signal(signal, desc);
@@ -875,7 +875,7 @@ MOCK_IMPL(int, mt_paymod_signal, (mt_signal_t signal, mt_desc_t *desc)){
 /**
  * Mark the payment channel for close and try to accomplish
  * a nanopayment close. If abort is true, then we just
- * abort the protocol 
+ * abort the protocol
  *
  * This function should call circuit_mark_for_close() if
  * no control cell to close the circuit has to be sent
@@ -898,4 +898,3 @@ void circuit_mark_payment_channel_for_close(circuit_t *circ, int abort, int reas
     mt_cclient_mark_payment_channel_for_close(circ, abort, reason);
   }
 }
-

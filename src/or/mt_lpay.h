@@ -12,10 +12,6 @@
 
 #include "or.h"
 
-#define MT_FEE 5
-#define MT_TAX 5
-#define MT_WINDOW 5
-
 typedef struct {
   byte pp[MT_SZ_PP];
   int fee;
