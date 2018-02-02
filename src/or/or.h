@@ -4806,15 +4806,6 @@ typedef struct {
   /* An ordered list of scheduler_types mapped from Schedulers. */
   smartlist_t *SchedulerTypes_;
 
-  /* moneTor configurations for the payment module */
-  char* moneTorAuthorityPK;
-  int moneTorFee;
-  int moneTorTax;
-
-  char* moneTorPP;
-  char* moneTorPK;
-  char* moneTorSK;
-  int moneTorBalance;
 } or_options_t;
 
 #define LOG_PROTOCOL_WARN (get_protocol_warning_severity_level())
