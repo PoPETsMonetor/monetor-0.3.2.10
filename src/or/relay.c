@@ -744,7 +744,7 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
         " we are about to send %d cells", nbr_cells);
     int payload_remains = payload_len;
     for (int i = 0; i < nbr_cells; i++) {
-      if (i == nbr_cells) {
+      if (i == nbr_cells-1) {
         rh.length = payload_remains+RELAY_PHEADER_SIZE;
         rph.length = payload_remains;
       }

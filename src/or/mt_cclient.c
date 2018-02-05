@@ -262,22 +262,25 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
     //XXX MoneTor - Do we mark the payment for close?
     circ->ppath->p_marked_for_close = 1;
     // If first one marked for close, do we close the others?
+    log_info(LD_MT, "MoneTor: mt_cpay_pay returned -1");
   }
-  log_info(LD_MT, "MoneTor - Calling payment module for direct payment"
+  log_info(LD_MT, "MoneTor - Calling payment module for payment of middle node"
       " with param %s and %s", mt_desc_describe(&middle->desc),
       mt_desc_describe(&intermediary_g->desc));
   /* Payment to the middle relay involving intermediary */
   retVal = mt_cpay_pay(&middle->desc, &intermediary_g->desc);
   if (retVal < 0) {
     middle->p_marked_for_close = 1;
+    log_info(LD_MT, "MoneTor: mt_cpay_pay returned -1");
   }
-  log_info(LD_MT, "MoneTor - Calling payment module for direct payment"
+  log_info(LD_MT, "MoneTor - Calling payment module for payment of exit node"
       " with param %s and %s", mt_desc_describe(&exit->desc),
       mt_desc_describe(&intermediary_e->desc));
   /* Payment to the exit relay involving intermediary */
   retVal = mt_cpay_pay(&exit->desc, &intermediary_e->desc);
   if (retVal < 0) {
     exit->p_marked_for_close = 1;
+    log_info(LD_MT, "MoneTor: mt_cpay_pay returned -1");
   }
 }
 
@@ -468,7 +471,7 @@ run_cclient_build_circuit_event(time_t now) {
     }
     ledger_init(&ledger, node, ei, now);
   }
-  /* How many of them do we build? */
+  /* How many of them do we build? ~ Default 1 */
   while (smartlist_len(ledgercircs) < NBR_LEDGER_CIRCUITS &&
          ledger->circuit_retries < NBR_LEDGER_CIRCUITS*LEDGER_MAX_RETRIES) {
     /* this is just about load balancing */
@@ -549,14 +552,14 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
   }
   smartlist_remove(ledgercircs, circ);
   byte id[DIGEST_LEN];
-  mt_desc2digest(&circ->desc, &id);
+  mt_desc2digest(&ledger->desc, &id);
   if (digestmap_get(desc2circ, (char*) id)) {
     digestmap_remove(desc2circ, (char*) id);
     log_info(LD_MT, "MoneTor: ledger circ has closed. Removed %s from our internal structure",
       mt_desc_describe(&circ->desc));
   }
   else {
-    log_warn(LD_MT, "MoneTor: looks like we didn't have this desc in our map %s", mt_desc_describe(&circ->desc));
+    log_warn(LD_MT, "MoneTor: in ledger_circ_has_closed, looks like we didn't have this desc in our map %s", mt_desc_describe(&circ->desc));
   }
 }
 
@@ -701,7 +704,7 @@ void mt_cclient_intermediary_circ_has_closed(origin_circuit_t *circ) {
     log_info(LD_MT, "MoneTor: removing desc linked to an interemdiary circuit");
   }
   else {
-    log_warn(LD_MT, "MoneTor: desc %s not in our map?", mt_desc_describe(&intermediary->desc));
+    log_warn(LD_MT, "MoneTor: in intermediary_circ_has_closed, desc %s not in our map?", mt_desc_describe(&intermediary->desc));
   }
 
   if (TO_CIRCUIT(circ)->state != CIRCUIT_STATE_OPEN) {
@@ -742,11 +745,11 @@ mt_cclient_ledger_circ_has_opened(origin_circuit_t *circ) {
   /*Circ is already in the smartlist*/
   /*Need  a new desc and add this circ in desc2circ */
   increment(count);
-  circ->desc.id[0] = count[0]; // To change later 
-  circ->desc.id[1] = count[1];
-  circ->desc.party = MT_PARTY_LED;
+  /*circ->desc.id[0] = count[0]; // To change later */
+  /*circ->desc.id[1] = count[1];*/
+  /*circ->desc.party = MT_PARTY_LED;*/
   byte id[DIGEST_LEN];
-  mt_desc2digest(&circ->desc, &id);
+  mt_desc2digest(&ledger->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
 }
 
@@ -820,7 +823,7 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   mt_desc2digest(desc, &id);
   circuit_t *circ = digestmap_get(desc2circ, (char*) id);
   if (!circ) {
-    log_warn(LD_MT, "MoneTor: digestmap_get failed to return a circ for descriptor"
+    log_warn(LD_MT, "MoneTor: in mt_cclient_send_message, digestmap_get failed to return a circ for descriptor"
         " %s", mt_desc_describe(desc));
     return -2;
   } 

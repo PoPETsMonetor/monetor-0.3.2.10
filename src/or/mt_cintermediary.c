@@ -108,11 +108,11 @@ void mt_cintermediary_ledger_circ_has_opened(origin_circuit_t *circ) {
   ledger->is_reachable = LEDGER_REACHABLE_YES;
   /* Generate new desc and add this circ into desc2circ */
   increment(count);
-  circ->desc.id[0] = count[0];
-  circ->desc.id[1] = count[1];
-  circ->desc.party = MT_PARTY_LED;
+  /*circ->desc.id[0] = count[0];*/
+  /*circ->desc.id[1] = count[1];*/
+  /*circ->desc.party = MT_PARTY_LED;*/
   byte id[DIGEST_LEN];
-  mt_desc2digest(&circ->desc, &id);
+  mt_desc2digest(&ledger->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
 }
 
@@ -131,7 +131,7 @@ void mt_cintermediary_ledger_circ_has_closed(circuit_t *circ) {
   smartlist_remove(ledgercircs, circ);
   /* XXX Todo should also remove from desc2circ */
   byte id[DIGEST_LEN];
-  mt_desc2digest(&TO_ORIGIN_CIRCUIT(circ)->desc, &id);
+  mt_desc2digest(&ledger->desc, &id);
   if (digestmap_get(desc2circ, (char*) id)) {
     digestmap_remove(desc2circ, (char*) id);
     log_info(LD_MT, "MoneTor: ledger circ has closed. Removed %s from our internal structure",
