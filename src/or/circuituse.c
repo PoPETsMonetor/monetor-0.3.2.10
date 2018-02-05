@@ -1726,6 +1726,9 @@ circuit_has_opened(origin_circuit_t *circ)
     case CIRCUIT_PURPOSE_R_INTERMEDIARY:
       mt_crelay_intermediary_circ_has_opened(circ);
       break;
+    case CIRCUIT_PURPOSE_R_LEDGER:
+      mt_crelay_ledger_circ_has_opened(circ);
+      break;
     case CIRCUIT_PURPOSE_C_GENERAL:
       /* Tell any AP connections that have been waiting for a new
        * circuit that one is ready. */

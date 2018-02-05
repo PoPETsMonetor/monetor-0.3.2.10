@@ -2055,7 +2055,8 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
                               cell->payload+RELAY_HEADER_SIZE);
       return 0;
     case RELAY_COMMAND_MT:
-      
+      log_info(LD_MT, "MoneTor: received a RELAY_COMMAND_MT, unpacking and calling"
+          " mt_proces_received_relaycell");
       relay_pheader_unpack(&rph, cell->payload+RELAY_HEADER_SIZE);
       mt_process_received_relaycell(circ, &rh, &rph, layer_hint,
           cell->payload+RELAY_HEADER_SIZE+RELAY_PHEADER_SIZE);
