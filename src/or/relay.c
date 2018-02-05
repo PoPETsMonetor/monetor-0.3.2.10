@@ -709,12 +709,20 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
     cell.circ_id = circ->n_circ_id;
     cell_direction = CELL_DIRECTION_OUT;
     cpath_layer = TO_ORIGIN_CIRCUIT(circ)->cpath->prev; //layer stop
+    log_info(LD_MT, "MoneTor: listing path:");
+    circuit_log_path(LOG_INFO, LD_MT, TO_ORIGIN_CIRCUIT(circ));
   }
   else {
     cell.circ_id = TO_OR_CIRCUIT(circ)->p_circ_id;
     cell_direction = CELL_DIRECTION_IN;
     cpath_layer = NULL;
   }
+  
+  if (cell_direction == CELL_DIRECTION_OUT && circ->n_chan) {
+    /* if we're using relaybandwidthrate, this conn wants priority */
+    channel_timestamp_client(circ->n_chan);
+  }
+
   rh.command = relay_command;
   rh.stream_id = 0;
   rph.pcommand = relay_pcommand;
