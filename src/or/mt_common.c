@@ -204,9 +204,9 @@ ledger_init(ledger_t **ledger, const node_t *node, extend_info_t *ei,
   *ledger = tor_malloc_zero(sizeof(ledger_t));
   memcpy((*ledger)->identity.identity, node->identity, DIGEST_LEN);
   (*ledger)->is_reachable = LEDGER_REACHABLE_MAYBE;
-  increment(count);
-  (*ledger)->desc.id[0] = count[0];
-  (*ledger)->desc.id[1] = count[1];
+  /*increment(count);*/
+  (*ledger)->desc.id[0] = 0;
+  (*ledger)->desc.id[1] = 0;
   (*ledger)->desc.party = MT_PARTY_LED;
   (*ledger)->ei = ei;
   log_info(LD_MT, "Ledger created at %lld", (long long) now);
