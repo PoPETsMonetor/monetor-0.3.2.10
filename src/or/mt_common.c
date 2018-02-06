@@ -759,15 +759,19 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
         }
         break;
     case MT_NTYPE_MAC_ANY_TRANS:
+    case MT_NTYPE_ANY_LED_CONFIRM:
+    case MT_NTYPE_MAC_LED_DATA:
+    case MT_NTYPE_CHN_LED_DATA:
+    case MT_NTYPE_CHN_LED_QUERY:
       command = RELAY_COMMAND_MT;
-      if (intermediary_mode(get_options())) {
+      if (ledger_mode(get_options())) {
+        return mt_cledger_send_message(desc, type, msg, size);
+      }
+      else if (intermediary_mode(get_options())) {
         return mt_cintermediary_send_message(desc, type, msg, size);
       }
       else if (server_mode(get_options())) {
         return mt_crelay_send_message(desc, command, type, msg, size);
-      }
-      else if (ledger_mode(get_options())) {
-        return mt_cledger_send_message(desc, type, msg, size);
       }
       else {
         return mt_cclient_send_message(desc, command, type, msg, size);

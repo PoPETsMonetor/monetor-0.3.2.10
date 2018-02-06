@@ -135,8 +135,10 @@ void mt_cledger_process_received_msg(circuit_t *circ, mt_ntype_t type,
   if (circ->purpose == CIRCUIT_PURPOSE_LEDGER && CIRCUIT_IS_ORCIRC(circ)) {
     orcirc = TO_OR_CIRCUIT(circ);
     desc = &orcirc->desc;
-    if (mt_lpay_recv(desc, type, msg, msg_len) < 0 ) {
-      log_info(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %hhx", type);
+    log_debug(LD_MT, "MoneTor: Calling mt_lpay_t for type %s, with payload of size %lu",
+        mt_token_describe(type), msg_len);
+    if (mt_lpay_recv(desc, type, msg, msg_len) < 0) {
+      log_warn(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %hhx", type);
       // XXX decide What to do now? 
     }
   }

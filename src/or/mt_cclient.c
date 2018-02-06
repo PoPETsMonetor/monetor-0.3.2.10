@@ -910,7 +910,7 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
   } while(layer_start != TO_ORIGIN_CIRCUIT(circ)->cpath && ppath_tmp);
 
   if (!found) {
-    log_warn(LD_MT, "MoneTor: didn't find right ppath");
+    log_warn(LD_MT, "MoneTor: didn't find right ppath in mt_cclient_send_message_multidesc");
     return -2;
   }
   intermediary_t *intermediary = get_intermediary_by_identity(ppath_tmp->inter_ident);
@@ -921,6 +921,7 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
   }
   // Now we have layer_start as well as the right intermediary
   /* Sends intermediary's fingerprint, as well as desc2 and msg */
+  log_info(LD_MT, "MoneTor: Now send intermediary's fingerprint as well as desc2 and msg");
   int_id_t int_id;
   memcpy(int_id.identity, intermediary->identity->identity, DIGEST_LEN);
   byte *msg_int_id;
