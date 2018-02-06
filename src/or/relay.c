@@ -722,7 +722,7 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
     /* if we're using relaybandwidthrate, this conn wants priority */
     channel_timestamp_client(circ->n_chan);
   }
-
+  cell.command = CELL_RELAY;
   rh.command = relay_command;
   rh.stream_id = 0;
   rph.pcommand = relay_pcommand;
