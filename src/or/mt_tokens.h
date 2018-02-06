@@ -148,5 +148,6 @@ int unpack_nan_end_close7(byte* str, int size, nan_end_close7_t* tkn_out, byte(*
 int unpack_nan_int_close8(byte* str, int size, nan_int_close8_t* tkn_out, byte(*pid_out)[DIGEST_LEN]);
 
 size_t mt_token_get_size_of(mt_ntype_t type);
+const char* mt_token_describe(mt_ntype_t type);
 
 #endif

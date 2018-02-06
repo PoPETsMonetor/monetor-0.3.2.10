@@ -403,6 +403,7 @@ MOCK_IMPL(void,
     mt_process_received_relaycell, (circuit_t *circ, relay_header_t* rh,
     relay_pheader_t* rph, crypt_path_t *layer_hint, uint8_t* payload)) {
   (void) rh; //need to refactor
+  log_debug(LD_MT, "Received cell for token %s", mt_token_describe(rph->pcommand));
   size_t msg_len = mt_token_get_size_of(rph->pcommand);
   if(ledger_mode(get_options()) || intermediary_mode(get_options()) ||
       server_mode(get_options())) {
