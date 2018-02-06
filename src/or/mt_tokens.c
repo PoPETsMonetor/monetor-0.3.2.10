@@ -711,12 +711,13 @@ size_t mt_token_get_size_of(mt_ntype_t type) {
       return sizeof(nan_int_close8_t)+strlen;
     case MT_NTYPE_MAC_AUT_MINT:
       return sizeof(mac_aut_mint_t)+strlen;
+    /** Any signed message have also MT_SZ_PK+MT_SZ_SIG */
     case MT_NTYPE_MAC_ANY_TRANS:
-      return sizeof(mac_any_trans_t)+strlen;
+      return sizeof(mac_any_trans_t)+MT_SZ_PK+MT_SZ_SIG+strlen;
     case MT_NTYPE_CHN_END_SETUP:
-      return sizeof(chn_end_setup_t)+strlen;
+      return sizeof(chn_end_setup_t)+MT_SZ_PK+MT_SZ_SIG+strlen;
     case MT_NTYPE_CHN_INT_SETUP:
-      return sizeof(chn_int_setup_t)+strlen;
+      return sizeof(chn_int_setup_t)+MT_SZ_PK+MT_SZ_SIG+strlen;
     case MT_NTYPE_CHN_INT_REQCLOSE:
       return sizeof(chn_int_reqclose_t)+strlen;
     case MT_NTYPE_CHN_END_CLOSE:
@@ -738,7 +739,7 @@ size_t mt_token_get_size_of(mt_ntype_t type) {
     case MT_NTYPE_CHN_LED_QUERY:
       return sizeof(chn_led_query_t)+strlen;
     default:
-      log_info(LD_MT, "BUG - unknown type %hhx", type);
+      log_warn(LD_MT, "BUG - unknown type %hhx", type);
       return 0;
   }
 }

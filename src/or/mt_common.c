@@ -630,7 +630,7 @@ int mt_process_received_directpaymentcell(circuit_t *circ, cell_t *cell) {
         if (buf_datalen(oricirc->buf) == msg_len) {
           byte *msg = tor_malloc_zero(msg_len);
           buf_get_bytes(oricirc->ppath->buf, (char*) msg, msg_len);
-          buf_clear(orcirc->buf);
+          buf_clear(oricirc->ppath->buf);
           mt_cclient_process_received_msg(oricirc, oricirc->cpath, rph.pcommand,
               msg, msg_len);
           tor_free(msg);
@@ -830,11 +830,14 @@ int mt_common_send_direct_cell_payment(circuit_t *circ, mt_ntype_t type,
   }
   tor_assert(remaining_payload == 0);
   update_circuit_on_cmux(circ, direction);
-  if (direction == CELL_DIRECTION_OUT) {
+  if (direction == CELL_DIRECTION_OUT && circ->n_chan) {
     scheduler_channel_has_waiting_cells(circ->n_chan);
   }
-  else {
+  else if (orcirc->p_chan){
     scheduler_channel_has_waiting_cells(orcirc->p_chan);
+  }
+  else {
+    log_warn(LD_MT, "MoneTor: circ->n_chan or orcirc->p_chan is null?");
   }
   return 0;
 }
