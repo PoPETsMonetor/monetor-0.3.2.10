@@ -88,7 +88,7 @@ void mt_crelay_ledger_circ_has_closed(origin_circuit_t *circ) {
         mt_desc_describe(&circ->desc));
   }
   else {
-    log_info(LD_MT, "MoneTor: Looks like our desc wasn't in our map? %s", mt_desc_describe(&circ->desc));
+    log_info(LD_MT, "MoneTor: in mt_crelay_ledger_circ_has_closed, Looks like our desc wasn't in our map? %s", mt_desc_describe(&circ->desc));
   }
 }
 

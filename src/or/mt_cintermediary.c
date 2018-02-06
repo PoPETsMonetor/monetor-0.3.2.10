@@ -80,8 +80,8 @@ run_cintermediary_build_circuit_event(time_t now) {
     }
   }
   if (ledger->circuit_retries >= NBR_LEDGER_CIRCUITS*LEDGER_MAX_RETRIES) {
-    log_info(LD_MT, "MoneTor: It looks like we reach maximum cicuit launch"
-        " towards the ledger. What is going on?");
+    log_warn(LD_MT, "MoneTor: It looks like we reach maximum cicuit launch"
+        " towards the ledger. Did the ledger crash?");
   }
   return;
  err:
@@ -139,7 +139,7 @@ void mt_cintermediary_ledger_circ_has_closed(circuit_t *circ) {
   }
   else{
     log_info(LD_MT,
-        "MoneTor: desc %s not found in our map", mt_desc_describe(&TO_ORIGIN_CIRCUIT(circ)->desc));
+        "MoneTor: in mt_cintermediary_ledger_circ_has_closed, desc %s not found in our map", mt_desc_describe(&TO_ORIGIN_CIRCUIT(circ)->desc));
   }
 }
 

@@ -482,7 +482,12 @@ typedef enum {
 #define CIRCUIT_PURPOSE_REND_POINT_WAITING 3
 /** OR-side circuit purpose: At OR, both circuits have this purpose. */
 #define CIRCUIT_PURPOSE_REND_ESTABLISHED 4
-#define CIRCUIT_PURPOSE_OR_MAX_ 4
+/** OR-side circuit on a intermerdiary */
+#define CIRCUIT_PURPOSE_INTERMEDIARY 5
+/** OR-side circuit on a ledger */
+#define CIRCUIT_PURPOSE_LEDGER 6
+
+#define CIRCUIT_PURPOSE_OR_MAX_ 6
 
 /* these circuits originate at this node */
 
@@ -506,61 +511,57 @@ typedef enum {
  *     the service, and are talking to it.
  */
 /** Client-side circuit purpose: Normal circuit, with cpath. */
-#define CIRCUIT_PURPOSE_C_GENERAL 5
+#define CIRCUIT_PURPOSE_C_GENERAL 7
 /** Client-side circuit purpose: at the client, connecting to intro point. */
-#define CIRCUIT_PURPOSE_C_INTRODUCING 6
+#define CIRCUIT_PURPOSE_C_INTRODUCING 8
 /** Client-side circuit purpose: at the client, sent INTRODUCE1 to intro point,
  * waiting for ACK/NAK. */
-#define CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT 7
+#define CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT 9
 /** Client-side circuit purpose: at the client, introduced and acked, closing.
  */
-#define CIRCUIT_PURPOSE_C_INTRODUCE_ACKED 8
+#define CIRCUIT_PURPOSE_C_INTRODUCE_ACKED 10
 /** Client-side circuit purpose: at the client, waiting for ack. */
-#define CIRCUIT_PURPOSE_C_ESTABLISH_REND 9
+#define CIRCUIT_PURPOSE_C_ESTABLISH_REND 11
 /** Client-side circuit purpose: at the client, waiting for the service. */
-#define CIRCUIT_PURPOSE_C_REND_READY 10
+#define CIRCUIT_PURPOSE_C_REND_READY 12
 /** Client-side circuit purpose: at the client, waiting for the service,
  * INTRODUCE has been acknowledged. */
-#define CIRCUIT_PURPOSE_C_REND_READY_INTRO_ACKED 11
+#define CIRCUIT_PURPOSE_C_REND_READY_INTRO_ACKED 13
 /** Client-side circuit purpose: at the client, rendezvous established. */
-#define CIRCUIT_PURPOSE_C_REND_JOINED 12
+#define CIRCUIT_PURPOSE_C_REND_JOINED 14
 /** This circuit is used for build time measurement only */
-#define CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT 13
-#define CIRCUIT_PURPOSE_C_MAX_ 13
-/** Hidden-service-side circuit purpose: at the service, waiting for
- * introductions. */
-#define CIRCUIT_PURPOSE_S_ESTABLISH_INTRO 14
-/** Hidden-service-side circuit purpose: at the service, successfully
- * established intro. */
-#define CIRCUIT_PURPOSE_S_INTRO 15
-/** Hidden-service-side circuit purpose: at the service, connecting to rend
- * point. */
-#define CIRCUIT_PURPOSE_S_CONNECT_REND 16
-/** Hidden-service-side circuit purpose: at the service, rendezvous
- * established. */
-#define CIRCUIT_PURPOSE_S_REND_JOINED 17
-/** A testing circuit; not meant to be used for actual traffic. */
-#define CIRCUIT_PURPOSE_TESTING 18
-/** A controller made this circuit and Tor should not use it. */
-#define CIRCUIT_PURPOSE_CONTROLLER 19
-/** This circuit is used for path bias probing only */
-#define CIRCUIT_PURPOSE_PATH_BIAS_TESTING 20
-
-#define CIRCUIT_PURPOSE_C_INTERMEDIARY 21
-
+#define CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT 15
 /** This circuit is used for whatever interaction with the ledger from
  * client, intermediary or relay (no need to divide at first glance)*/
-#define CIRCUIT_PURPOSE_C_LEDGER 22
+#define CIRCUIT_PURPOSE_C_LEDGER 16
+#define CIRCUIT_PURPOSE_C_INTERMEDIARY 17
 
-#define CIRCUIT_PURPOSE_R_INTERMEDIARY 23
+#define CIRCUIT_PURPOSE_C_MAX_ 17
+/** Hidden-service-side circuit purpose: at the service, waiting for
+ * introductions. */
+#define CIRCUIT_PURPOSE_S_ESTABLISH_INTRO 18
+/** Hidden-service-side circuit purpose: at the service, successfully
+ * established intro. */
+#define CIRCUIT_PURPOSE_S_INTRO 19
+/** Hidden-service-side circuit purpose: at the service, connecting to rend
+ * point. */
+#define CIRCUIT_PURPOSE_S_CONNECT_REND 20
+/** Hidden-service-side circuit purpose: at the service, rendezvous
+ * established. */
+#define CIRCUIT_PURPOSE_S_REND_JOINED 21
+/** A testing circuit; not meant to be used for actual traffic. */
+#define CIRCUIT_PURPOSE_TESTING 22
+/** A controller made this circuit and Tor should not use it. */
+#define CIRCUIT_PURPOSE_CONTROLLER 23
+/** This circuit is used for path bias probing only */
+#define CIRCUIT_PURPOSE_PATH_BIAS_TESTING 24
 
-#define CIRCUIT_PURPOSE_I_LEDGER 24
-/** OR-side circuit on a intermerdiary */
-#define CIRCUIT_PURPOSE_INTERMEDIARY 25
+
+#define CIRCUIT_PURPOSE_R_INTERMEDIARY 25
+
+#define CIRCUIT_PURPOSE_I_LEDGER 26
 /** ledger circuit on a relay */
-#define CIRCUIT_PURPOSE_R_LEDGER 26
-/** OR-side circuit on a ledger */
-#define CIRCUIT_PURPOSE_LEDGER 27
+#define CIRCUIT_PURPOSE_R_LEDGER 27
 
 #define CIRCUIT_PURPOSE_MAX_ 27
 /** A catch-all for unrecognized purposes. Currently we don't expect
