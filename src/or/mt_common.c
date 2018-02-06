@@ -294,7 +294,8 @@ void relay_pheader_pack(uint8_t *dest, const relay_header_t* rh,
   set_uint16(dest+3, htons(rh->stream_id));
   memcpy(dest+5, rh->integrity, 4);
   set_uint16(dest+9, htons(rh->length));
-  set_uint8(dest+10, rph->pcommand);
+  set_uint8(dest+11, rph->pcommand);
+  set_uint16(dest+12, htons(rph->length));
 }
 
 /** Unpack the network order buffer src into relay_pheader_t
@@ -403,7 +404,8 @@ MOCK_IMPL(void,
     mt_process_received_relaycell, (circuit_t *circ, relay_header_t* rh,
     relay_pheader_t* rph, crypt_path_t *layer_hint, uint8_t* payload)) {
   (void) rh; //need to refactor
-  log_debug(LD_MT, "Received cell for token %s", mt_token_describe(rph->pcommand));
+  log_debug(LD_MT, "Received cell for token %s with payload length of %d",
+      mt_token_describe(rph->pcommand), rph->length);
   size_t msg_len = mt_token_get_size_of(rph->pcommand);
   if(ledger_mode(get_options()) || intermediary_mode(get_options()) ||
       server_mode(get_options())) {
@@ -457,8 +459,8 @@ MOCK_IMPL(void,
           tor_free(msg);
         }
         else {
-          log_info(LD_MT, "Buffering one received payment cell of type %hhx"
-              " current buf datlen %lu", rph->pcommand, buf_datalen(orcirc->buf));
+          log_info(LD_MT, "Buffering one received payment cell of type %s"
+              " current buf datlen %lu", mt_token_describe(rph->pcommand), buf_datalen(orcirc->buf));
           return;
         }
       }
@@ -772,7 +774,7 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
       }
 
     default:
-      log_warn(LD_MT, "MoneTor - Unrecognized type");
+      log_warn(LD_MT, "MoneTor - Unrecognized type %s", mt_token_describe(type));
       return -1;
   }
   log_info(LD_MT, "MoneTor: We should not reach this.. we return -1");
