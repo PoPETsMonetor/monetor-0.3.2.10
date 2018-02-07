@@ -260,6 +260,19 @@ const char* mt_desc_describe(mt_desc_t* desc) {
   return "";
 }
 
+/**
+ * Returns 1 if both structure have the same digest
+ * 0 otherwise
+ */
+
+int mt_desc_eq(mt_desc_t* desc1, mt_desc_t* desc2) {
+  byte id1[DIGEST_LEN];
+  byte id2[DIGEST_LEN];
+  mt_desc2digest(desc1, &id1);
+  mt_desc2digest(desc2, &id2);
+  return tor_memeq(id1, id2, DIGEST_LEN);
+}
+
 const char* mt_signal_describe(mt_signal_t signal) {
   switch (signal) {
     case MT_SIGNAL_PAYMENT_SUCCESS: return "Last mt_cpay_pay call is successful";

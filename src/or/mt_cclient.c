@@ -608,7 +608,7 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
     /** Which one? */
     pay_path_t *ppath_tmp = oricirc->ppath;
     while (ppath_tmp) {
-      if (&ppath_tmp->desc == desc) {
+      if (mt_desc_eq(&ppath_tmp->desc, desc)) {
         if (!ppath_tmp->first_payment_succeeded) {
           log_info(LD_MT, "MoneTor: Yay! First payment succeded");
           ppath_tmp->first_payment_succeeded = 1;
@@ -628,7 +628,7 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
   else if (signal == MT_SIGNAL_PAYMENT_FAILURE) {
     pay_path_t *ppath_tmp = oricirc->ppath;
     while (ppath_tmp) {
-      if (&ppath_tmp->desc == desc) {
+      if (mt_desc_eq(&ppath_tmp->desc, desc)) {
         ppath_tmp->last_mt_cpay_succeeded = 0;
         ppath_tmp->payment_is_processing = 0;
         log_warn(LD_MT, "MoneTor: We got a payment failure!");
@@ -643,7 +643,7 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
     pay_path_t *ppath_tmp = oricirc->ppath;
     int has_closed = 0;
     while (ppath_tmp) {
-      if (&ppath_tmp->desc == desc) {
+      if (mt_desc_eq(&ppath_tmp->desc, desc)) {
         ppath_tmp->p_has_closed = 1;
         log_info(LD_MT, "MoneTor: Marking p_has_closed to 1 for circ");
       }
@@ -856,7 +856,7 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
       pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
       int found = 0;
       do {
-        if (desc == &ppath_tmp->desc) {
+        if (mt_desc_eq(desc, &ppath_tmp->desc)) {
           found = 1;
           break;
         }
@@ -901,7 +901,7 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
   /* Get the appropriate ppath+layer_start and identify related intermediary */
   int found = 0;
   do {
-    if (desc1 == &ppath_tmp->desc) {
+    if (mt_desc_eq(desc1, &ppath_tmp->desc)) {
       found = 1;
       break;
     }

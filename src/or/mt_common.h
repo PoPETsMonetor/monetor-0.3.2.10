@@ -170,6 +170,12 @@ void unpack_int_id(byte *str, int_id_t* ind_id_out);
 const char* mt_desc_describe(mt_desc_t *desc);
 
 /**
+ * Returns 1 if both structure have the same digest
+ * 0 otherwise
+ */
+
+int mt_desc_eq(mt_desc_t* desc1, mt_desc_t* desc2);
+/**
  * Gives a string description of mt_signal_t
  */
 const char* mt_signal_describe(mt_signal_t signal);
