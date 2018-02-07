@@ -132,7 +132,6 @@ typedef struct {
 } mt_cpay_t;
 
 // functions to initialize new protocols
-static int init_mac_any_trans(void);
 static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
 static int init_chn_end_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
 static int init_nan_cli_setup1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
@@ -217,7 +216,7 @@ int mt_cpay_init(void){
   // setup system parameters
   client.fee = MT_FEE;
   client.tax = MT_WINDOW;
-  client.mac_balance = MT_CLI_CHN_VAL * 10000;
+  client.mac_balance = 0;
   client.chn_balance = 0;
   client.chn_number = 0;
 
@@ -313,7 +312,7 @@ static int pay_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
   }
 
   // set up channel if possible; callback pay_helper
-  if(client.mac_balance >= MT_CLI_CHN_VAL + client.fee){
+  if((client.mac_balance >= MT_CLI_CHN_VAL + client.fee) || get_options()->MoneTorPublicMint){
     log_info(LD_MT, "MoneTor: Trying to set up the channel ~ Callback pay_helper");
     chn = new_channel();
     digestmap_set(client.chns_transition, (char*)pid, chn);
@@ -385,7 +384,7 @@ static int dpay_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
   }
 
   // setup channel if possible; callback dpay_helper
-  if(client.mac_balance >= MT_CLI_CHN_VAL + client.fee){
+  if((client.mac_balance >= MT_CLI_CHN_VAL + client.fee) || get_options()->MoneTorPublicMint){
     chn = new_channel();
     digestmap_set(client.chns_transition, (char*)pid, chn);
     chn->idesc = *idesc;
@@ -611,33 +610,6 @@ int mt_cpay_import(byte* import){
 
 /**************************** Ledger Calls ******************************/
 
-static int init_mac_any_trans(void){
-
-  byte pid[DIGEST_LEN] = {0};
-
-  // initialize transfer token
-  mac_any_trans_t token;
-  token.val_from = MT_CLI_CHN_VAL * 100;
-  token.val_to = token.val_from - client.fee;
-  memcpy(token.from, client.faucet_addr, MT_SZ_ADDR);
-  memcpy(token.to, client.addr, MT_SZ_ADDR);
-
-  // update local data
-  client.mac_balance += token.val_to;
-
-  // send setup message
-  byte* msg;
-  byte* signed_msg;
-  int msg_size = pack_mac_any_trans(&token, &pid, &msg);
-  int signed_msg_size = mt_create_signed_msg(msg, msg_size,
-					     &client.faucet_pk, &client.faucet_sk, &signed_msg);
-  int result = mt_buffer_message(client.msgbuf, &client.ledger, MT_NTYPE_MAC_ANY_TRANS,
-				 signed_msg, signed_msg_size);
-  tor_free(msg);
-  tor_free(signed_msg);
-  return result;
-}
-
 static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // initialize setup token
@@ -645,8 +617,6 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   chn_end_setup_t token;
   token.val_from = MT_CLI_CHN_VAL + client.fee;
   token.val_to = MT_CLI_CHN_VAL;
-  token.val_from = 105 * 30 + 5;
-  token.val_to = 105 * 30;
   memcpy(token.from, client.addr, MT_SZ_ADDR);
   memcpy(token.chn, chn->data.addr, MT_SZ_ADDR);
 
@@ -654,7 +624,7 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // update local data
   client.chn_number ++;
-  client.mac_balance -= token.val_from;
+  client.mac_balance -= 0;//get_options()->MoneTorPublicMint ? 0 : token.val_from;
   client.chn_balance += token.val_to;
   chn->data.balance = token.val_to;
 

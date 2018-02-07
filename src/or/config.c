@@ -210,6 +210,8 @@ DUMMY_TYPECHECK_INSTANCE(or_options_t);
  * be chosen first.
  */
 static config_var_t option_vars_[] = {
+
+  V(MoneTorPublicMint,           BOOL,     "0"),
   V(AccountingMax,               MEMUNIT,  "0 bytes"),
   VAR("AccountingRule",          STRING,   AccountingRule_option,  "max"),
   V(AccountingStart,             STRING,   NULL),
@@ -8106,7 +8108,7 @@ verify_and_store_outbound_address(sa_family_t family, tor_addr_t *addr,
 /* Parse a list of address lines for a specific destination type.
  * Will store them into the options if not validate_only. If a
  * problem occurs, a suitable error message is store in msg.
- * Returns 0 on success or -1 if any address is already set.
+ * Returns 0 on sucess or -1 if any address is already set.
  */
 static int
 parse_outbound_address_lines(const config_line_t *lines, outbound_addr_t type,

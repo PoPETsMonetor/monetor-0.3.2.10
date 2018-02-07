@@ -337,17 +337,18 @@ int handle_chn_end_setup(chn_end_setup_t* token, byte (*addr)[MT_SZ_ADDR]){
   mac_led_data_t* data_from = digestmap_get(ledger.mac_accounts, (char*)token->from);
   chn_led_data_t* data_chn = digestmap_get(ledger.chn_accounts, (char*)token->chn);
 
-  /************* XXX Hacky shortcupt **************************************/
-  /* // check that the from address exists */
-  /* if(data_from == NULL) */
-  /*   return MT_ERROR; */
-
-  if(data_from == NULL){
-    data_from = calloc(1, sizeof(mac_led_data_t));
-    data_from->balance = MT_CLI_CHN_VAL * 10000;
-    digestmap_set(ledger.mac_accounts, (char*)token->from, data_from);
+  // if MoneTorPublicMint is on then user can set up channels for free
+  if(!get_options()->MoneTorPublicMint){
+    if(data_from == NULL)
+      return MT_ERROR;
   }
-  /************************************************************************/
+  else {
+    if(data_from == NULL){
+      data_from = calloc(1, sizeof(mac_led_data_t));
+      digestmap_set(ledger.mac_accounts, (char*)token->from, data_from);
+    }
+    data_from->balance += token->val_from;
+  }
 
   // if the channel doesn't exist then create one
   if(data_chn == NULL){
@@ -391,17 +392,18 @@ int handle_chn_int_setup(chn_int_setup_t* token, byte (*addr)[MT_SZ_ADDR]){
   mac_led_data_t* data_from = digestmap_get(ledger.mac_accounts, (char*)token->from);
   chn_led_data_t* data_chn = digestmap_get(ledger.chn_accounts, (char*)token->chn);
 
-  /************* XXX Hacky shortcupt **************************************/
-  /* // check that the from address exists */
-  /* if(data_from == NULL) */
-  /*   return MT_ERROR; */
-
-  if(data_from == NULL){
-    data_from = calloc(1, sizeof(mac_led_data_t));
-    data_from->balance = MT_INT_CHN_VAL * 10000;
-    digestmap_set(ledger.mac_accounts, (char*)token->from, data_from);
+  // if MoneTorPublicMint is on then user can set up channels for free
+  if(!get_options()->MoneTorPublicMint){
+    if(data_from == NULL)
+      return MT_ERROR;
   }
-  /************************************************************************/
+  else {
+    if(data_from == NULL){
+      data_from = calloc(1, sizeof(mac_led_data_t));
+      digestmap_set(ledger.mac_accounts, (char*)token->from, data_from);
+    }
+    data_from->balance += token->val_from;
+  }
 
   if(data_chn == NULL)
     return MT_ERROR;

@@ -122,7 +122,6 @@ typedef struct {
 } mt_rpay_t;
 
 // functions to initialize new protocols
-static int init_mac_any_trans(void);
 static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
 static int init_chn_end_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
 static int init_nan_end_close1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
@@ -191,7 +190,7 @@ int mt_rpay_init(void){
 
   // setup system parameters
   relay.fee = MT_FEE;
-  relay.mac_balance = MT_CLI_CHN_VAL * 10000;
+  relay.mac_balance = 0;
   relay.chn_balance = 0;
   relay.chn_number = 0;
 
@@ -377,33 +376,6 @@ int mt_rpay_import(byte* import){
 
 /***************************** Ledger Calls *****************************/
 
-static int init_mac_any_trans(void){
-
-  byte pid[DIGEST_LEN] = {0};
-
-  // initialize transfer token
-  mac_any_trans_t token;
-  token.val_from = MT_REL_CHN_VAL * 50;
-  token.val_to = token.val_from - relay.fee;
-  memcpy(token.from, relay.faucet_addr, MT_SZ_ADDR);
-  memcpy(token.to, relay.addr, MT_SZ_ADDR);
-
-  // update local data
-  relay.mac_balance += token.val_to;
-
-  // send setup message
-  byte* msg;
-  byte* signed_msg;
-  int msg_size = pack_mac_any_trans(&token, &pid, &msg);
-  int signed_msg_size = mt_create_signed_msg(msg, msg_size,
-					     &relay.faucet_pk, &relay.faucet_sk, &signed_msg);
-  int result = mt_buffer_message(relay.msgbuf, &relay.ledger, MT_NTYPE_MAC_ANY_TRANS,
-				 signed_msg, signed_msg_size);
-  tor_free(msg);
-  tor_free(signed_msg);
-  return result;
-}
-
 static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // TODO finish initializing channel
@@ -418,8 +390,9 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // update local data
   relay.chn_number ++;
-  relay.mac_balance -= token.val_from;
+  relay.mac_balance -= get_options()->MoneTorPublicMint ? 0 : token.val_from;
   relay.chn_balance += token.val_to;
+  chn->data.balance = token.val_to;
 
   // send setup message
   byte* msg;
@@ -621,7 +594,7 @@ static int handle_nan_cli_estab1(mt_desc_t* desc, nan_cli_estab1_t* token, byte 
   }
 
   // if we have money left then set up a new channel with the intermediary
-  if(relay.mac_balance >= relay.fee){
+  if((relay.mac_balance >= relay.fee) || get_options()->MoneTorPublicMint){
     chn = new_channel();
     digestmap_set(relay.chns_transition, (char*)rpid, chn);
     chn->idesc = *intermediary;

@@ -4807,6 +4807,8 @@ typedef struct {
   /* An ordered list of scheduler_types mapped from Schedulers. */
   smartlist_t *SchedulerTypes_;
 
+  int MoneTorPublicMint;
+
 } or_options_t;
 
 #define LOG_PROTOCOL_WARN (get_protocol_warning_severity_level())

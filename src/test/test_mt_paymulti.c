@@ -834,16 +834,8 @@ static void test_mt_paymulti(void *arg){
 
   mt_crypt_keygen(&pp, &led_pk, &led_sk);
 
-  /* or_options_t* options = (or_options_t*)get_options(); */
-
-  /* mt_bytes2hex(aut_pk, MT_SZ_PK, &options->moneTorAuthorityPK); */
-
-  /* mt_bytes2hex(pp, MT_SZ_PP, &options->moneTorPP); */
-  /* mt_bytes2hex(led_pk, MT_SZ_PK, &options->moneTorPK); */
-  /* mt_bytes2hex(led_sk, MT_SZ_SK, &options->moneTorSK); */
-
-  /* options->moneTorFee = MT_FEE; */
-  /* options->moneTorTax = MT_TAX; */
+  or_options_t* options = (or_options_t*)get_options();
+  options->MoneTorPublicMint = 1;
 
   byte* pp_temp;
   byte* aut_pk_temp;
@@ -890,7 +882,7 @@ static void test_mt_paymulti(void *arg){
     digestmap_set(cli_ctx, (char*)digest, ctx);
 
     int* balance = tor_malloc(sizeof(int));
-    *balance = MT_CLI_CHN_VAL * 10000;
+    *balance = 0;
     digestmap_set(exp_balance, (char*)digest, balance);
   }
 
@@ -918,7 +910,7 @@ static void test_mt_paymulti(void *arg){
     digestmap_set(rel_ctx, (char*)digest, ctx);
 
     int* balance = tor_malloc(sizeof(int));
-    *balance = MT_CLI_CHN_VAL * 10000;
+    *balance = 0;
     digestmap_set(exp_balance, (char*)digest, balance);
   }
 
@@ -946,7 +938,7 @@ static void test_mt_paymulti(void *arg){
     digestmap_set(int_ctx, (char*)digest, ctx);
 
     int* balance = tor_malloc(sizeof(int));
-    *balance = MT_INT_CHN_VAL * 10000;
+    *balance = 0;
     digestmap_set(exp_balance, (char*)digest, balance);
   }
 
@@ -994,22 +986,29 @@ static void test_mt_paymulti(void *arg){
   MAP_FOREACH(digestmap_, cli_ctx, const char*, digest, context_t*, ctx){
     mt_cpay_import(ctx->state);
     int bal = mt_cpay_mac_balance() + mt_cpay_chn_balance();
-    int exp = *(int*)digestmap_get(exp_balance, digest) - MT_FEE * mt_cpay_chn_number();
+    int exp = *(int*)digestmap_get(exp_balance, digest);
+    exp -= MT_FEE * mt_cpay_chn_number();
+    exp += mt_cpay_chn_number() * (MT_CLI_CHN_VAL + MT_FEE);
     tor_assert(bal == exp);
   } MAP_FOREACH_END;
 
   MAP_FOREACH(digestmap_, rel_ctx, const char*, digest, context_t*, ctx){
     mt_rpay_import(ctx->state);
     int bal = mt_rpay_mac_balance() + mt_rpay_chn_balance();
-    int exp = *(int*)digestmap_get(exp_balance, digest) - MT_FEE * mt_rpay_chn_number();
+    int exp = *(int*)digestmap_get(exp_balance, digest);
+    exp -= MT_FEE * mt_rpay_chn_number();
+    exp += mt_rpay_chn_number() * (MT_REL_CHN_VAL + MT_FEE);
     tor_assert(bal == exp);
   } MAP_FOREACH_END;
 
   MAP_FOREACH(digestmap_, int_ctx, const char*, digest, context_t*, ctx){
     mt_ipay_import(ctx->state);
     int bal =  mt_ipay_mac_balance() + mt_ipay_chn_balance();
-    int exp = *(int*)digestmap_get(exp_balance, digest) - MT_FEE * mt_ipay_chn_number();
-    printf("bal %d\n", bal);
+    int exp = *(int*)digestmap_get(exp_balance, digest);
+    exp -= MT_FEE * (mt_ipay_cli_chn_number() + mt_ipay_rel_chn_number());
+    exp += mt_ipay_cli_chn_number() * MT_FEE;
+    exp += mt_ipay_rel_chn_number() * (MT_INT_CHN_VAL + MT_FEE);
+    printf("exp %d bal %d\n", exp, bal);
     tor_assert(bal == exp);
   } MAP_FOREACH_END;
 

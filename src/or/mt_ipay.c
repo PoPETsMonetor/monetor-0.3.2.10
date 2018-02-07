@@ -79,7 +79,8 @@ typedef struct {
   byte addr[MT_SZ_ADDR];
   int mac_balance;
   int chn_balance;
-  int chn_number;
+  int cli_chn_number;
+  int rel_chn_number;
 
   mt_desc_t ledger;
   int fee;
@@ -104,7 +105,6 @@ typedef struct {
 
 
 // functions to initialize new protocols
-static int init_mac_any_trans(void);
 static int init_chn_int_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]);
 
 // functions to handle incoming recv messages
@@ -165,9 +165,10 @@ int mt_ipay_init(void){
 
   // setup system parameters
   intermediary.fee = MT_FEE;
-  intermediary.mac_balance = MT_INT_CHN_VAL * 10000;
+  intermediary.mac_balance = 0;
   intermediary.chn_balance = 0;
-  intermediary.chn_number = 0;
+  intermediary.cli_chn_number = 0;
+  intermediary.rel_chn_number = 0;
 
   // initialize channel containers
   intermediary.chns_setup = digestmap_new();
@@ -307,10 +308,17 @@ int mt_ipay_chn_balance(void){
 }
 
 /**
- * Return the number of channels currently open
+ * Return the number of client channels currently open
  */
-int mt_ipay_chn_number(void){
-  return intermediary.chn_number;
+int mt_ipay_cli_chn_number(void){
+  return intermediary.cli_chn_number;
+}
+
+/**
+ * Return the number of intermediary channels currently open
+ */
+int mt_ipay_rel_chn_number(void){
+  return intermediary.rel_chn_number;
 }
 
 /**
@@ -348,33 +356,6 @@ int mt_ipay_import(byte* import){
 
 /***************************** Ledger Calls *****************************/
 
-static int init_mac_any_trans(void){
-
-  byte pid[DIGEST_LEN] = {0};
-
-  // initialize transfer token
-  mac_any_trans_t token;
-  token.val_from = MT_INT_CHN_VAL * 50;
-  token.val_to = token.val_from - intermediary.fee;
-  memcpy(token.from, intermediary.faucet_addr, MT_SZ_ADDR);
-  memcpy(token.to, intermediary.addr, MT_SZ_ADDR);
-
-  // update local data
-  intermediary.mac_balance += token.val_to;
-
-  // send setup message
-  byte* msg;
-  byte* signed_msg;
-  int msg_size = pack_mac_any_trans(&token, &pid, &msg);
-  int signed_msg_size = mt_create_signed_msg(msg, msg_size, &intermediary.faucet_pk,
-					     &intermediary.faucet_sk, &signed_msg);
-  int result = mt_buffer_message(intermediary.msgbuf, &intermediary.ledger, MT_NTYPE_MAC_ANY_TRANS,
-				 signed_msg, signed_msg_size);
-  tor_free(msg);
-  tor_free(signed_msg);
-  return result;
-}
-
 static int init_chn_int_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // initialize setup token
@@ -383,10 +364,12 @@ static int init_chn_int_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   if(chn->edesc.party == MT_PARTY_CLI){
     token.val_from = intermediary.fee;
     token.val_to = 0;
+    intermediary.cli_chn_number ++;
   }
   else{
     token.val_from = MT_INT_CHN_VAL + intermediary.fee;
     token.val_to = MT_INT_CHN_VAL;
+    intermediary.rel_chn_number ++;
   }
 
   chn->balance = token.val_to;
@@ -395,8 +378,7 @@ static int init_chn_int_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   // ignore channel token for now
 
   // update local data;
-  intermediary.chn_number ++;
-  intermediary.mac_balance -= token.val_from;
+  intermediary.mac_balance -= get_options()->MoneTorPublicMint ? 0 : token.val_from;
   intermediary.chn_balance += token.val_to;
 
   // send setup message
@@ -480,7 +462,7 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
   }
 
   // setup new channel at requested address
-  if(intermediary.mac_balance >= intermediary.fee){
+  if((intermediary.mac_balance >= intermediary.fee) || get_options()->MoneTorPublicMint){
     chn = new_channel(&token->addr);
     chn->edesc = *desc;
     chn->callback = (mt_callback_t){.fn = mt_ipay_recv, .dref1 = *desc,
