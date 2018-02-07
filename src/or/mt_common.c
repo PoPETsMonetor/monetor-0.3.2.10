@@ -417,9 +417,9 @@ MOCK_IMPL(void,
     mt_process_received_relaycell, (circuit_t *circ, relay_header_t* rh,
     relay_pheader_t* rph, crypt_path_t *layer_hint, uint8_t* payload)) {
   (void) rh; //need to refactor
-  log_debug(LD_MT, "Received cell for token %s with payload length of %d",
-      mt_token_describe(rph->pcommand), rph->length);
   size_t msg_len = mt_token_get_size_of(rph->pcommand);
+  log_debug(LD_MT, "MoneTor: Received cell for token %s with payload length of %d "
+      " total message size expected: %ld", mt_token_describe(rph->pcommand), rph->length, msg_len);
   if(ledger_mode(get_options()) || intermediary_mode(get_options()) ||
       server_mode(get_options())) {
     /**
@@ -480,8 +480,16 @@ MOCK_IMPL(void,
       else {
         /** No need to buffer */
         tor_assert(rph->length == msg_len);
-        mt_cintermediary_process_received_msg(circ, rph->pcommand, payload,
+        if (ledger_mode(get_options())) {
+          mt_cledger_process_received_msg(circ, rph->pcommand, payload, rph->length);
+        }
+        else if (intermediary_mode(get_options())) {
+          mt_cintermediary_process_received_msg(circ, rph->pcommand, payload,
             rph->length);
+        }
+        else {
+          mt_crelay_process_received_msg(circ, rph->pcommand, payload, rph->length);
+        }
       }
     }
     else if (CIRCUIT_IS_ORIGIN(circ)) {

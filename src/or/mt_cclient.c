@@ -921,7 +921,7 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
   }
   // Now we have layer_start as well as the right intermediary
   /* Sends intermediary's fingerprint, as well as desc2 and msg */
-  log_info(LD_MT, "MoneTor: Now send intermediary's fingerprint as well as desc2 and msg");
+  log_info(LD_MT, "MoneTor: Now send intermediary's fingerprint as well as desc2 and msg of size %d", size);
   int_id_t int_id;
   memcpy(int_id.identity, intermediary->identity->identity, DIGEST_LEN);
   byte *msg_int_id;
@@ -932,7 +932,7 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
   memcpy(msg_with_desc+size_int_id, desc2, sizeof(mt_desc_t)); // XXX not safe over network ~ byte ordering
   memcpy(msg_with_desc+sizeof(mt_desc_t)+size_int_id, msg, size);
 
-  int ret = mt_cclient_send_message(desc1, RELAY_COMMAND_MT, type, msg_with_desc, size+sizeof(mt_desc_t));
+  int ret = mt_cclient_send_message(desc1, RELAY_COMMAND_MT, type, msg_with_desc, size+size_int_id+sizeof(mt_desc_t));
   tor_free(msg_with_desc);
   return ret;
 }
@@ -949,10 +949,10 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
   if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY) {
     intermediary_t *intermediary = mt_cclient_get_intermediary_from_ocirc(circ);
     desc = &intermediary->desc;
-    log_info(LD_MT, "Processed a complete msg sent by our intermediary %s - calling mt_ipay_recv",
+    log_info(LD_MT, "MoneTor: Processed a complete msg sent by our intermediary %s - calling mt_ipay_recv",
         extend_info_describe(intermediary->ei));
     if (mt_cpay_recv(desc, pcommand, msg, msg_len) < 0) {
-      log_info(LD_MT, "Payment module returned -1 for mt_ntype_t %hhx", pcommand);
+      log_info(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %s", mt_token_describe(pcommand));
       // XXX Do we mark this circuit for close and complain about
       // intermediary?
       // XXX Do we notify all general circuit that the payment will not complete?
@@ -962,9 +962,9 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
   }
   else if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_LEDGER) {
     desc = &ledger->desc;
-    log_info(LD_MT, "Processed a msg send by the ledger ");
+    log_info(LD_MT, "MoneTor: Processed a msg send by the ledger ");
     if (mt_cpay_recv(desc, pcommand, msg, msg_len) < 0) {
-      log_info(LD_MT, "Payment module returned -1 for mt_ntype_t %hhx", pcommand);
+      log_info(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %s", mt_token_describe(pcommand));
     }
   }
   else if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
@@ -982,17 +982,17 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
     tor_assert(ppath);
     /* get the right desc */
     desc = &ppath->desc;
-    log_info(LD_MT, "Processed a msg sent by relay linked to desc %s - calling mt_cpay_recv",
+    log_info(LD_MT, "MoneTor: Processed a msg sent by relay linked to desc %s - calling mt_cpay_recv",
         mt_desc_describe(desc));
     if (mt_cpay_recv(desc, pcommand, msg, msg_len) < 0) {
       /* De we retry or close? Let's assume easiest things -> we close*/
-      log_warn(LD_MT, "Payment module returned -1 for mt_ntype_t %d", pcommand);
+      log_warn(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %s", mt_token_describe(pcommand));
       ppath->p_marked_for_close = 1; //XXX probably need to do more than just marking this ppath
     }
     /*tor_free(msg);*/ // should be freed by mt_common
   }
   else {
-    log_warn(LD_MT, "intermediary circuit not implemented yet");
+    log_warn(LD_MT, "MoneTor: Unsupported purpose in mt_cclient_process_received_msg");
   }
 }
 

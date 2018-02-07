@@ -176,9 +176,6 @@ mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
   /** XXX Did Should notify the payment system when the intermediary is 
    * ready? */
   log_info(LD_MT, "MoneTor: Yay! An intermediary circuit opened");
-  byte id[DIGEST_LEN];
-  mt_desc2digest(&ocirc->desc, &id);
-  digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(ocirc));
   /** XXX notify payment module that the intermediary circuit is open */
   mt_rpay_set_status(&ocirc->desc, 1);
 }
@@ -195,13 +192,16 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
   else {
     log_info(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
   }
-  mt_desc2digest(circ->desci, &id);
-  /** remove or intermediary map duplication */
-  if (digestmap_get(desc2circ, (char*) id)) {
-    digestmap_remove(desc2circ, (char*) id);
-  }
-  else {
-    log_info(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
+
+  if (circ->desci) {
+    mt_desc2digest(circ->desci, &id);
+    /** remove or intermediary map duplication */
+    if (digestmap_get(desc2circ, (char*) id)) {
+      digestmap_remove(desc2circ, (char*) id);
+    }
+    else {
+      log_info(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
+    }
   }
 }
 
@@ -311,13 +311,19 @@ mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   mt_desc2digest(desc, &id);
   circuit_t *circ = digestmap_get(desc2circ, (char*) id);
   crypt_path_t *layer_start = NULL;
-  tor_assert(circ);
+  
+  if (!circ) {
+    log_warn(LD_MT, "MoneTor: circ linked to mt_desc_t %s is not in our map, in mt_crelay_send_message",
+        mt_desc_describe(desc));
+    return -2;
+  }
+
   if (circ->marked_for_close) {
-    log_info(LD_MT, "MoneTor: Tried to send a message over a circuit markerd for close");
+    log_warn(LD_MT, "MoneTor: Tried to send a message over a circuit markerd for close");
     return -2;
   }
   if (circ->state != CIRCUIT_STATE_OPEN) {
-    log_info(LD_MT, "MoneTor: the circuit has a problem."
+    log_info(LD_MT, "MoneTor: the circuit is not open yet."
       " circ state: %s", circuit_state_to_string(circ->state));
     //XXX Todo maybe do something smarter if the circ is still not
     //open
@@ -352,18 +358,16 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
   // should be a ledger circuit or a circuit to an interemdiary
     desc = &TO_ORIGIN_CIRCUIT(circ)->desc;
     if (mt_rpay_recv(desc, pcommand, msg, msg_len) < 0) {
-      log_info(LD_MT, "MoneTor: Payment module returnerd -1");
+      log_warn(LD_MT, "MoneTor: Payment module returned -1 for %s",
+          mt_token_describe(pcommand));
       // XXX What do we do? aboard every circuit linked to this
       if (circ->purpose == CIRCUIT_PURPOSE_R_LEDGER) {
       }
       else if(circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY) {
       }
     }
-
   }
   else {
-    
-
     orcirc = TO_OR_CIRCUIT(circ);
     //circ should a or_circuit_t of a normal circuit with
     //a normal client over one endpoint
@@ -379,11 +383,13 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
        * to it */
       const node_t *ninter = node_get_by_id(int_id.identity);
       if (!ninter) {
-        log_info(LD_MT, "MoneTor: received identity %s but there is no such node"
+        log_warn(LD_MT, "MoneTor: received identity %s but there is no such node"
             " in my consensus", int_id.identity);
         //XXX alert payment that something was not ok
         return;
       }
+
+      log_info(LD_MT, "MoneTor: received intermediary identity %s", node_describe(ninter));
 
       /** Now, try to find a circuit to ninter of launch one */
       origin_circuit_t *oricirc = NULL;
@@ -405,7 +411,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         }
       } SMARTLIST_FOREACH_END(circtmp);
 
-      log_info(LD_MT, "We don't have any current circuit towards %s that intermediary"
+      log_info(LD_MT, "MoneTor: We don't have any current circuit towards %s that intermediary"
           " .. Building one. ", node_describe(ninter));
       /** We didn't find a circ connected/connecting to ninter */
       mt_desc_t *desci = tor_malloc_zero(sizeof(mt_desc_t));
@@ -414,7 +420,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         extend_info_t *ei = NULL;
         ei = extend_info_from_node(ninter, 0);
         if (!ei) {
-          log_info(LD_MT, "MoneTor: We did not successfully produced an extend"
+          log_warn(LD_MT, "MoneTor: We did not successfully produced an extend"
               " info from node %s", node_describe(ninter));
           //XXX alert payment something went wrong
           return;
@@ -424,7 +430,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         flags |= CIRCLAUNCH_NEED_UPTIME;
         oricirc = circuit_launch_by_extend_info(purpose, ei, flags);
         if (!oricirc) {
-          log_info(LD_MT, "MoneTor: Not successfully launch a circuit :/ abording");
+          log_warn(LD_MT, "MoneTor: Not successfully launch a circuit :/ abording");
           //XXX alert payment module
           return;
         }
@@ -441,12 +447,14 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       /** adding to digestmap desci => oricirc */
       byte id[DIGEST_LEN];
       mt_desc2digest(desci, &id);
-      digestmap_set(desc2circ, (char*) id, oricirc);
+      if (!digestmap_get(desc2circ, (char*) id)) {
+        digestmap_set(desc2circ, (char*) id, oricirc);
+      }
 
       if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
          msg+sizeof(int_id_t)+sizeof(mt_desc_t),
          msg_len-sizeof(int_id_t)-sizeof(mt_desc_t)) < 0) {
-        log_info(LD_MT, "MoneTor: Payment module returnerd -1"
+        log_warn(LD_MT, "MoneTor: Payment module returnerd -1"
             " we should stop prioritizing this circuit");
         circ->mt_priority = 0;
         log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");
