@@ -64,12 +64,6 @@ typedef struct {
 
   // structure to run message buffering functionality
   mt_msgbuf_t* msgbuf;
-
-  // faucet address (free money)
-  byte faucet_pk[MT_SZ_PK];
-  byte faucet_sk[MT_SZ_SK];
-  byte faucet_addr[MT_SZ_ADDR];
-
 } mt_lpay_t;
 
 static mt_lpay_t ledger;
@@ -114,23 +108,15 @@ int mt_lpay_init(void){
 
   byte* pp_temp;
   byte* aut_pk_temp;
-  byte* faucet_pk_temp;
-  byte* faucet_sk_temp;
 
   tor_assert(mt_hex2bytes(MT_PP_HEX, &pp_temp) == MT_SZ_PP);
   tor_assert(mt_hex2bytes(MT_AUT_PK_HEX, &aut_pk_temp) == MT_SZ_PK);
-  tor_assert(mt_hex2bytes(MT_FAUCET_PK_HEX, &faucet_pk_temp) == MT_SZ_PK);
-  tor_assert(mt_hex2bytes(MT_FAUCET_SK_HEX, &faucet_sk_temp) == MT_SZ_SK);
 
   memcpy(ledger.pp, pp_temp, MT_SZ_PP);
   memcpy(ledger.aut_pk, aut_pk_temp, MT_SZ_PK);
-  memcpy(ledger.faucet_pk, faucet_pk_temp, MT_SZ_PK);
-  memcpy(ledger.faucet_sk, faucet_sk_temp, MT_SZ_SK);
 
   free(pp_temp);
   free(aut_pk_temp);
-  free(faucet_pk_temp);
-  free(faucet_sk_temp);
 
   ledger.fee = MT_FEE;
   ledger.tax = MT_TAX;
@@ -139,7 +125,6 @@ int mt_lpay_init(void){
 
   mt_pk2addr(&ledger.aut_pk, &ledger.aut_addr);
   mt_pk2addr(&ledger.pk, &ledger.led_addr);
-  mt_pk2addr(&ledger.faucet_pk, &ledger.faucet_addr);
 
   // save values to publically available information
   public.fee = ledger.fee;
@@ -151,10 +136,6 @@ int mt_lpay_init(void){
   // add authority as first node on the tree
   digestmap_set(ledger.mac_accounts, (char*)ledger.aut_addr, calloc(1, sizeof(mac_led_data_t)));
 
-  // add faucet account and give it a lot of money
-  mac_led_data_t* faucet_data = tor_malloc(sizeof(mac_led_data_t));
-  faucet_data->balance = MT_FAUCET_VAL;
-  digestmap_set(ledger.mac_accounts, (char*)ledger.faucet_addr, faucet_data);
   return MT_SUCCESS;
 }
 

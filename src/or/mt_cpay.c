@@ -122,13 +122,6 @@ typedef struct {
 
   // structure to run message buffering functionality
   mt_msgbuf_t* msgbuf;
-
-  // module-level callback (not associated with particular channel)
-  byte faucet_pk[MT_SZ_PK];
-  byte faucet_sk[MT_SZ_SK];
-  byte faucet_addr[MT_SZ_ADDR];
-  mt_callback_t mod_callback;
-
 } mt_cpay_t;
 
 // functions to initialize new protocols
@@ -188,25 +181,13 @@ int mt_cpay_init(void){
 
   // load in hardcoded values
   byte* pp_temp;
-  byte* faucet_pk_temp;
-  byte* faucet_sk_temp;
-
   tor_assert(mt_hex2bytes(MT_PP_HEX, &pp_temp) == MT_SZ_PP);
-  tor_assert(mt_hex2bytes(MT_FAUCET_PK_HEX, &faucet_pk_temp) == MT_SZ_PK);
-  tor_assert(mt_hex2bytes(MT_FAUCET_SK_HEX, &faucet_sk_temp) == MT_SZ_SK);
-
   memcpy(client.pp, pp_temp, MT_SZ_PP);
-  memcpy(client.faucet_pk, faucet_pk_temp, MT_SZ_PK);
-  memcpy(client.faucet_sk, faucet_sk_temp, MT_SZ_SK);
-
   free(pp_temp);
-  free(faucet_pk_temp);
-  free(faucet_sk_temp);
 
   // setup crypto keys
   mt_crypt_keygen(&client.pp, &client.pk, &client.sk);
   mt_pk2addr(&client.pk, &client.addr);
-  mt_pk2addr(&client.faucet_pk, &client.faucet_addr);
 
   // set ledger
   client.ledger.id[0] = 0;
