@@ -47,12 +47,12 @@ run_cintermediary_build_circuit_event(time_t now) {
     const node_t *node;
     node = node_find_ledger();
     if (!node) {
-      log_info(LD_MT, "MoneTor: Hey, we do not have a ledger in our consensus?");
+      log_warn(LD_MT, "MoneTor: Hey, we do not have a ledger in our consensus?");
       return;  /** For whatever reason our consensus does not have a ledger */
     }
     ei = extend_info_from_node(node, 0);
     if (!ei) {
-      log_info(LD_MT, "MoneTor: extend_info_from_node failed?");
+      log_warn(LD_MT, "MoneTor: extend_info_from_node failed?");
       goto err;
     }
     ledger_init(&ledger, node, ei, now);

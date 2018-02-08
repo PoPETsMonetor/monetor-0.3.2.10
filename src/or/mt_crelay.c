@@ -249,12 +249,12 @@ run_crelay_build_circuit_event(time_t now) {
     const node_t *node;
     node = node_find_ledger();
     if (!node) {
-      log_info(LD_MT, "MoneTor: Hey, we do not have a ledger in our consensus?");
+      log_warn(LD_MT, "MoneTor: Hey, we do not have a ledger in our consensus?");
       return;  /** For whatever reason our consensus does not have a ledger */
     }
     ei = extend_info_from_node(node, 0);
     if (!ei) {
-      log_info(LD_MT, "MoneTor: extend_info_from_node failed?");
+      log_warn(LD_MT, "MoneTor: extend_info_from_node failed?");
       goto err;
     }
     ledger_init(&ledger, node, ei, now);
@@ -280,7 +280,7 @@ run_crelay_build_circuit_event(time_t now) {
     }
   }
   if (ledger->circuit_retries >= NBR_LEDGER_CIRCUITS*LEDGER_MAX_RETRIES) {
-    log_info(LD_MT, "MoneTor: It looks like we reach maximum cicuit launch"
+    log_warn(LD_MT, "MoneTor: It looks like we reach maximum cicuit launch"
         " towards the ledger. What is going on?");
   }
   return;
@@ -356,7 +356,16 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
   if (CIRCUIT_IS_ORIGIN(circ)) {
   //XXX Todo
   // should be a ledger circuit or a circuit to an interemdiary
-    desc = &TO_ORIGIN_CIRCUIT(circ)->desc;
+    if (circ->purpose == CIRCUIT_PURPOSE_R_LEDGER) {
+      desc = &ledger->desc;
+    }
+    else if (circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY) {
+      desc = TO_ORIGIN_CIRCUIT(circ)->desci;
+    }
+    else {
+      log_warn(LD_MT, "MoneTor: no purpose matching in mt_crelay_process_received_msg");
+      return;
+    }
     if (mt_rpay_recv(desc, pcommand, msg, msg_len) < 0) {
       log_warn(LD_MT, "MoneTor: Payment module returned -1 for %s",
           mt_token_describe(pcommand));
