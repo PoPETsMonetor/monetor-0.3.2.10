@@ -590,7 +590,7 @@ command_process_relay_cell(cell_t *cell, channel_t *chan)
            "(%s) failed. Closing.",
            direction==CELL_DIRECTION_OUT?"forward":"backward");
     if (get_options()->EnablePayment) {
-      circuit_mark_payment_channel_for_close(circ, 0, -reason);
+      circuit_mark_payment_channel_for_close(circ, 1, -reason);
     }
     else {
       circuit_mark_for_close(circ, -reason);

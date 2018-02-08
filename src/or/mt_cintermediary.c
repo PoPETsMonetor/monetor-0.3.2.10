@@ -268,7 +268,7 @@ mt_cintermediary_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
     tor_assert(ledger);
     desc = &ledger->desc;
     if (mt_ipay_recv(desc, pcommand, msg, msg_len) < 0) {
-      log_warn(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %hhx", pcommand);
+      log_warn(LD_MT, "MoneTor: Payment module returned -1 for %s", mt_token_describe(pcommand));
       circ->mt_priority = 0;
       log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");
     }
@@ -277,7 +277,7 @@ mt_cintermediary_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
     orcirc = TO_OR_CIRCUIT(circ);
     desc = &orcirc->desc;
     if (mt_ipay_recv(desc, pcommand, msg, msg_len) < 0) {
-      log_warn(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %hhx", pcommand);
+      log_warn(LD_MT, "MoneTor: Payment module returned -1 for %s", mt_token_describe(pcommand));
       circ->mt_priority = 0;
       log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");
     }

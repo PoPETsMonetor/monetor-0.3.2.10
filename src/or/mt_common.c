@@ -610,7 +610,7 @@ int mt_process_received_directpaymentcell(circuit_t *circ, cell_t *cell) {
   or_circuit_t *orcirc = NULL;
   origin_circuit_t *oricirc = NULL;
   size_t msg_len = mt_token_get_size_of(rph.pcommand);
-
+  log_info(LD_MT, "MoneTor: Received direct payment %s", mt_token_describe(rph.pcommand));
   if (server_mode(get_options())) {
     orcirc = TO_OR_CIRCUIT(circ);
     if (!orcirc->circuit_received_first_payment_cell) {
@@ -846,8 +846,9 @@ int mt_common_send_direct_cell_payment(circuit_t *circ, mt_ntype_t type,
     direct_pheader_pack(cell.payload, &rph);
     memcpy(cell.payload+RELAY_PHEADER_SIZE, msg+i*CELL_PPAYLOAD_SIZE, rph.length);
     remaining_payload -= rph.length;
-    log_info(LD_MT, "Adding cell payment %hhx to queue", rph.pcommand);
+    log_info(LD_MT, "MoneTor: Adding cell payment %s to queue", mt_token_describe(rph.pcommand));
     if (direction == CELL_DIRECTION_OUT) {
+      circuit_log_path(LOG_INFO, LD_MT, TO_ORIGIN_CIRCUIT(circ));
       cell_queue_append_packed_copy(NULL, &circ->n_chan_cells, 0, &cell,
           circ->n_chan->wide_circ_ids, 0);
     }

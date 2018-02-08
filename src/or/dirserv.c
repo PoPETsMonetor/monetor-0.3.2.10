@@ -2257,7 +2257,7 @@ set_routerstatus_from_routerinfo(routerstatus_t *rs,
 
   rs->is_authority =
     router_digest_is_trusted_dir(ri->cache_info.identity_digest);
-  rs->is_ledger = 
+  rs->is_ledger = node->is_ledger = 
     dirserv_thinks_router_is_ledger(ri);
   /* Already set by compute_performance_thresholds. */
   rs->is_exit = node->is_exit;
