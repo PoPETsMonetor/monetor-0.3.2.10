@@ -95,12 +95,6 @@ typedef struct {
 
   // structure to run message buffering functionality
   mt_msgbuf_t* msgbuf;
-
-  // module-level callback (not associated with particular channel)
-  byte faucet_pk[MT_SZ_PK];
-  byte faucet_sk[MT_SZ_SK];
-  byte faucet_addr[MT_SZ_ADDR];
-  mt_callback_t mod_callback;
 } mt_ipay_t;
 
 
@@ -138,25 +132,13 @@ int mt_ipay_init(void){
 
   // load in hardcoded values
   byte* pp_temp;
-  byte* faucet_pk_temp;
-  byte* faucet_sk_temp;
-
   tor_assert(mt_hex2bytes(MT_PP_HEX, &pp_temp) == MT_SZ_PP);
-  tor_assert(mt_hex2bytes(MT_FAUCET_PK_HEX, &faucet_pk_temp) == MT_SZ_PK);
-  tor_assert(mt_hex2bytes(MT_FAUCET_SK_HEX, &faucet_sk_temp) == MT_SZ_SK);
-
   memcpy(intermediary.pp, pp_temp, MT_SZ_PP);
-  memcpy(intermediary.faucet_pk, faucet_pk_temp, MT_SZ_PK);
-  memcpy(intermediary.faucet_sk, faucet_sk_temp, MT_SZ_SK);
-
   free(pp_temp);
-  free(faucet_pk_temp);
-  free(faucet_sk_temp);
 
   // setup crypto keys
   mt_crypt_keygen(&intermediary.pp, &intermediary.pk, &intermediary.sk);
   mt_pk2addr(&intermediary.pk, &intermediary.addr);
-  mt_pk2addr(&intermediary.faucet_pk, &intermediary.faucet_addr);
 
   // set ledger
   intermediary.ledger.id[0] = 0;

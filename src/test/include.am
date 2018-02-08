@@ -137,7 +137,6 @@ src_test_test_SOURCES = \
 	src/test/test_mt_crypto.c \
 	src/test/test_mt_lpay.c \
 	src/test/test_mt_paymulti.c \
-	src/test/test_mt_paysimple.c \
 	src/test/test_mt_tokens.c \
 	src/test/test_nodelist.c \
 	src/test/test_oom.c \

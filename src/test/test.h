@@ -224,7 +224,6 @@ extern struct testcase_t mt_common_tests[];
 extern struct testcase_t mt_crypto_tests[];
 extern struct testcase_t mt_lpay_tests[];
 extern struct testcase_t mt_paymulti_tests[];
-extern struct testcase_t mt_paysimple_tests[];
 extern struct testcase_t mt_tokens_tests[];
 extern struct testcase_t nodelist_tests[];
 extern struct testcase_t oom_tests[];
