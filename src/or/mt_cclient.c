@@ -866,13 +866,13 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
       if (BUG(!found))
         return -2;
     }
-    log_debug(LD_MT, "MoneTor: Sending message type %s with payload size of %d bytes", mt_token_describe(type));
+    log_debug(LD_MT, "MoneTor: Sending message type %s with payload size of %d bytes",
         mt_token_describe(type), size);
     return relay_send_pcommand_from_edge(circ, command, (uint8_t) type,
         layer_start, (const char*) msg, size);
   }
   else if (command == CELL_PAYMENT) {
-    log_debug(LD_MT, "MoneTor: calling direct_cell_payment for %s",
+    log_debug(LD_MT, "MoneTor: calling direct_cell_payment for %s and payload size %d", mt_token_describe(type), size);
     return mt_common_send_direct_cell_payment(circ, type, msg, size, CELL_DIRECTION_OUT) ;
   }
   else {
