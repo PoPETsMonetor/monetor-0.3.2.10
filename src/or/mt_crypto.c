@@ -50,7 +50,7 @@
 #define MT_DELAY_BSIG_BLIND 0
 #define MT_DELAY_BSIG_UNBLIND 0
 #define MT_DELAY_BSIG_VERIFY 0
-#define MT_DELAY_ZKP_PROVE 1000000
+#define MT_DELAY_ZKP_PROVE 0
 #define MT_DELAY_ZKP_VERIFY 0
 
 //--------------------------------------------------------------------------//
@@ -317,18 +317,40 @@ int mt_bsig_verify(byte* msg, int msg_size, byte (*pk)[MT_SZ_PK], byte (*unblind
  * scheme. Only the bare minimum computations are done so that proofs are not
  * accidently rejected or confused with other proofs in the simulation.
  */
-int mt_zkp_prove(byte (*pp)[MT_SZ_PP], byte* inputs, int input_size, byte (*zkp_out)[MT_SZ_ZKP]){
-  // override output with pp xor'd with some constant string
+int mt_zkp_prove(mt_zkp_type_t type, byte (*pp)[MT_SZ_PP],
+		 byte* public_inputs, int public_size,
+		 byte* hidden_inputs, int hidden_size,
+		 byte (*zkp_out)[MT_SZ_ZKP]){
 
-  byte digest[MT_SZ_HASH];
-  if(mt_crypt_hash(inputs, input_size, &digest) != MT_SUCCESS)
+  // fake zkp are divided into 4 more or less equal sized chunks (depending on rounding)
+  //    - truncated hash of type
+  //    - truncated hash of pp
+  //    - truncated hash of hidden inputs
+  //    - truncated hash of public inputs
+
+  memset(*zkp_out, '\0', MT_SZ_ZKP);
+
+  byte digest1[MT_SZ_HASH];
+  byte digest2[MT_SZ_HASH];
+  byte digest3[MT_SZ_HASH];
+  byte digest4[MT_SZ_HASH];
+
+  int errors = 0;
+  errors += mt_crypt_hash((byte*)&type, sizeof(mt_zkp_type_t), &digest1);
+  errors += mt_crypt_hash(*pp, MT_SZ_PP, &digest2);
+  errors += mt_crypt_hash(public_inputs, public_size, &digest3);
+  errors += mt_crypt_hash(hidden_inputs, hidden_size, &digest4);
+
+  if(errors != MT_SUCCESS * 4)
     return MT_ERROR;
 
-  memcpy(*zkp_out, *pp, MT_SZ_HASH / 2);
-  memcpy((*zkp_out) + MT_SZ_HASH / 2, digest, MT_SZ_HASH / 2);
+  int section_size = MT_SZ_ZKP / 4;
+  int copy_size = section_size < MT_SZ_HASH ? section_size : MT_SZ_HASH;
 
-  if(mt_crypt_rand(MT_SZ_ZKP - MT_SZ_HASH, (*zkp_out) + MT_SZ_HASH) !=  MT_SUCCESS)
-    return MT_ERROR;
+  memcpy(*zkp_out, digest1, copy_size);
+  memcpy(*zkp_out + copy_size, digest2, copy_size);
+  memcpy(*zkp_out + copy_size * 2, digest3, copy_size);
+  memcpy(*zkp_out + copy_size * 3, digest4, copy_size);
 
   micro_sleep(MT_DELAY_ZKP_PROVE);
   return MT_SUCCESS;
@@ -339,11 +361,14 @@ int mt_zkp_prove(byte (*pp)[MT_SZ_PP], byte* inputs, int input_size, byte (*zkp_
  * version, we do a simple sanity check to make sure that the proof was at least
  * likely to be generated on purpose in some other part of the simulation.
  */
-int mt_zkp_verify(byte (*pp)[MT_SZ_PP], byte (*proof)[MT_SZ_ZKP]){
-  // override output with pp xor'd with some constant string
-  if(memcmp(proof, pp, MT_SZ_HASH / 2) != 0)
-    return MT_ERROR;
+int mt_zkp_verify(mt_zkp_type_t type, byte (*pp)[MT_SZ_PP],
+		  byte* public_inputs, int public_size,
+		  byte (*zkp)[MT_SZ_ZKP]){
+
+  byte zkp_test[MT_SZ_ZKP];
+  mt_zkp_prove(type, pp, public_inputs, public_size, NULL, 0, &zkp_test);
+  int result = memcmp(zkp, zkp_test, MT_SZ_ZKP / 4 * 3) == 0 ? MT_SUCCESS : MT_ERROR;
 
   micro_sleep(MT_DELAY_ZKP_VERIFY);
-  return MT_SUCCESS;
+  return result;
 }

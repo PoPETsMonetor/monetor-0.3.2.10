@@ -144,6 +144,13 @@ int mt_hc_verify(byte (*tail)[MT_SZ_HASH], byte (*preimage)[MT_SZ_HASH], int k){
   return MT_SUCCESS;
 }
 
+/* /\** */
+/*  * Accepts channel secrets and generates outputs for a new wallet */
+/*  *\/ */
+/* chn_end_secret_t mt_commit_wallet(byte (*pp)[MT_SZ_PP], chn_end_secret_t secret, int epsilon){ */
+
+/* } */
+
 int mt_desc_comp(mt_desc_t* desc1, mt_desc_t* desc2){
   if(desc1->party != desc2->party)
     return (desc1->party > desc2->party) ? 1 : -1;

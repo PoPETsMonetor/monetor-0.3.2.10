@@ -31,12 +31,12 @@ int mt_rpay_recv_multidesc(mt_desc_t* cdesc, mt_desc_t* idesc, mt_ntype_t type, 
 /**
  * Return the balance of available money to spend as macropayments
  */
-int mt_rpay_mac_balance(void);
+int mt_rpay_mac_bal(void);
 
 /**
  * Return the balance of money locked up in channels
  */
-int mt_rpay_chn_balance(void);
+int mt_rpay_chn_bal(void);
 
 /**
  * Return the number of channels currently open

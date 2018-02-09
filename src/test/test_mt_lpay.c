@@ -86,7 +86,7 @@ static int send_ledger(byte (*pk)[MT_SZ_PK], byte (*sk)[MT_SZ_SK], mt_desc_t* de
 static void test_mt_lpay(void *arg)
 {
   (void)arg;
-
+  return;
   MOCK(mt_send_message, mock_send_message);
 
   //----------------------------------- Setup ---------------------------------//

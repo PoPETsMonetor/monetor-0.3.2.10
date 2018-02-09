@@ -93,7 +93,7 @@ static digestmap_t* int_ctx;           // digest(int_desc) -> context_t*
 
 static smartlist_t* event_queue;
 static digestmap_t* connections;        // digest(cli_desc) -> (digest(rel_desc) -> digest(int_desc))
-static digestmap_t* exp_balance;
+static digestmap_t* exp_bal;
 
 static digestmap_t* statuses;
 
@@ -617,15 +617,15 @@ static int do_main_loop_once(void){
 
   // update expected balances for pay
   if(event->type == CALL_PAY && memcmp(dst_digest, int_digest, DIGEST_LEN) != 0){
-    *(int*)digestmap_get(exp_balance, (char*)src_digest) -= MT_NAN_VAL + MT_NAN_TAX;
-    *(int*)digestmap_get(exp_balance, (char*)dst_digest) += MT_NAN_VAL;
-    *(int*)digestmap_get(exp_balance, (char*)int_digest) += MT_NAN_TAX;
+    *(int*)digestmap_get(exp_bal, (char*)src_digest) -= MT_NAN_VAL + MT_NAN_TAX;
+    *(int*)digestmap_get(exp_bal, (char*)dst_digest) += MT_NAN_VAL;
+    *(int*)digestmap_get(exp_bal, (char*)int_digest) += MT_NAN_TAX;
   }
 
   // update expected balances for direct pay
   if(event->type == CALL_PAY && memcmp(dst_digest, int_digest, DIGEST_LEN) == 0){
-    *(int*)digestmap_get(exp_balance, (char*)src_digest) -= MT_NAN_VAL + MT_NAN_TAX;
-    *(int*)digestmap_get(exp_balance, (char*)int_digest) += MT_NAN_VAL + MT_NAN_TAX;
+    *(int*)digestmap_get(exp_bal, (char*)src_digest) -= MT_NAN_VAL + MT_NAN_TAX;
+    *(int*)digestmap_get(exp_bal, (char*)int_digest) += MT_NAN_VAL + MT_NAN_TAX;
   }
 
   switch(event->type){
@@ -791,7 +791,7 @@ static void test_mt_paymulti(void *arg){
   int_ctx = digestmap_new();
 
   event_queue = smartlist_new();
-  exp_balance = digestmap_new();
+  exp_bal = digestmap_new();
   connections = digestmap_new();
   statuses = digestmap_new();
 
@@ -883,7 +883,7 @@ static void test_mt_paymulti(void *arg){
 
     int* balance = tor_malloc(sizeof(int));
     *balance = 0;
-    digestmap_set(exp_balance, (char*)digest, balance);
+    digestmap_set(exp_bal, (char*)digest, balance);
   }
 
   // initialize relays
@@ -911,7 +911,7 @@ static void test_mt_paymulti(void *arg){
 
     int* balance = tor_malloc(sizeof(int));
     *balance = 0;
-    digestmap_set(exp_balance, (char*)digest, balance);
+    digestmap_set(exp_bal, (char*)digest, balance);
   }
 
   // initialize intermediaries
@@ -939,7 +939,7 @@ static void test_mt_paymulti(void *arg){
 
     int* balance = tor_malloc(sizeof(int));
     *balance = 0;
-    digestmap_set(exp_balance, (char*)digest, balance);
+    digestmap_set(exp_bal, (char*)digest, balance);
   }
 
   // set client statuses to offline to begin testing
@@ -985,29 +985,29 @@ static void test_mt_paymulti(void *arg){
 
   MAP_FOREACH(digestmap_, cli_ctx, const char*, digest, context_t*, ctx){
     mt_cpay_import(ctx->state);
-    int bal = mt_cpay_mac_balance() + mt_cpay_chn_balance();
-    int exp = *(int*)digestmap_get(exp_balance, digest);
+    int bal = mt_cpay_mac_bal() + mt_cpay_chn_bal();
+    int exp = *(int*)digestmap_get(exp_bal, digest);
     exp -= MT_FEE * mt_cpay_chn_number();
-    exp += mt_cpay_chn_number() * (MT_CLI_CHN_VAL + MT_FEE);
+    exp += mt_cpay_chn_number() * (MT_CHN_VAL_CLI + MT_FEE);
     tor_assert(bal == exp);
   } MAP_FOREACH_END;
 
   MAP_FOREACH(digestmap_, rel_ctx, const char*, digest, context_t*, ctx){
     mt_rpay_import(ctx->state);
-    int bal = mt_rpay_mac_balance() + mt_rpay_chn_balance();
-    int exp = *(int*)digestmap_get(exp_balance, digest);
+    int bal = mt_rpay_mac_bal() + mt_rpay_chn_bal();
+    int exp = *(int*)digestmap_get(exp_bal, digest);
     exp -= MT_FEE * mt_rpay_chn_number();
-    exp += mt_rpay_chn_number() * (MT_REL_CHN_VAL + MT_FEE);
+    exp += mt_rpay_chn_number() * (MT_CHN_VAL_REL + MT_FEE);
     tor_assert(bal == exp);
   } MAP_FOREACH_END;
 
   MAP_FOREACH(digestmap_, int_ctx, const char*, digest, context_t*, ctx){
     mt_ipay_import(ctx->state);
-    int bal =  mt_ipay_mac_balance() + mt_ipay_chn_balance();
-    int exp = *(int*)digestmap_get(exp_balance, digest);
+    int bal =  mt_ipay_mac_bal() + mt_ipay_chn_bal();
+    int exp = *(int*)digestmap_get(exp_bal, digest);
     exp -= MT_FEE * (mt_ipay_cli_chn_number() + mt_ipay_rel_chn_number());
     exp += mt_ipay_cli_chn_number() * MT_FEE;
-    exp += mt_ipay_rel_chn_number() * (MT_INT_CHN_VAL + MT_FEE);
+    exp += mt_ipay_rel_chn_number() * (MT_CHN_VAL_INT + MT_FEE);
     printf("exp %d bal %d\n", exp, bal);
     tor_assert(bal == exp);
   } MAP_FOREACH_END;

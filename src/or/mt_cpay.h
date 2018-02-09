@@ -39,12 +39,12 @@ int mt_cpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size);
 /**
  * Return the balance of available money to spend as macropayments
  */
-int mt_cpay_mac_balance(void);
+int mt_cpay_mac_bal(void);
 
 /**
  * Return the balance of money locked up in channels
  */
-int mt_cpay_chn_balance(void);
+int mt_cpay_chn_bal(void);
 
 /**
  * Return the number of channels currently open

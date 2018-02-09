@@ -60,12 +60,8 @@ typedef struct {
  * Hold information necessary to maintain a single payment channel
  */
 typedef struct {
-  byte addr[MT_SZ_ADDR];
-  int balance;
-
   mt_desc_t edesc;
-  chn_int_public_t chn_public;
-
+  chn_int_data_t data;
   mt_callback_t callback;
 } mt_channel_t;
 
@@ -77,8 +73,8 @@ typedef struct {
   byte pk[MT_SZ_PK];
   byte sk[MT_SZ_SK];
   byte addr[MT_SZ_ADDR];
-  int mac_balance;
-  int chn_balance;
+  int mac_bal;
+  int chn_bal;
   int cli_chn_number;
   int rel_chn_number;
 
@@ -147,8 +143,8 @@ int mt_ipay_init(void){
 
   // setup system parameters
   intermediary.fee = MT_FEE;
-  intermediary.mac_balance = 0;
-  intermediary.chn_balance = 0;
+  intermediary.mac_bal = 0;
+  intermediary.chn_bal = 0;
   intermediary.cli_chn_number = 0;
   intermediary.rel_chn_number = 0;
 
@@ -278,15 +274,15 @@ int mt_ipay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 /**
  * Return the balance of available money to spend as macropayments
  */
-int mt_ipay_mac_balance(void){
-  return intermediary.mac_balance;
+int mt_ipay_mac_bal(void){
+  return intermediary.mac_bal;
 }
 
 /**
  * Return the balance of money locked up in channels
  */
-int mt_ipay_chn_balance(void){
-  return intermediary.chn_balance;
+int mt_ipay_chn_bal(void){
+  return intermediary.chn_bal;
 }
 
 /**
@@ -344,24 +340,23 @@ static int init_chn_int_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   chn_int_setup_t token;
 
   if(chn->edesc.party == MT_PARTY_CLI){
-    token.val_from = intermediary.fee;
-    token.val_to = 0;
+    chn->data.public.int_bal = 0;
     intermediary.cli_chn_number ++;
   }
   else{
-    token.val_from = MT_INT_CHN_VAL + intermediary.fee;
-    token.val_to = MT_INT_CHN_VAL;
+    chn->data.public.int_bal = MT_CHN_VAL_INT;
     intermediary.rel_chn_number ++;
   }
 
-  chn->balance = token.val_to;
+  token.val_to = chn->data.public.int_bal;
+  token.val_from = token.val_to + intermediary.fee;
   memcpy(token.from, intermediary.addr, MT_SZ_ADDR);
-  memcpy(token.chn, chn->addr, MT_SZ_ADDR);
-  // ignore channel token for now
+  memcpy(token.chn, chn->data.public.addr, MT_SZ_ADDR);
+  memcpy(&token.chn_public, &chn->data.public, sizeof(chn_int_public_t));
 
   // update local data;
-  intermediary.mac_balance -= get_options()->MoneTorPublicMint ? 0 : token.val_from;
-  intermediary.chn_balance += token.val_to;
+  intermediary.mac_bal -= get_options()->MoneTorPublicMint ? 0 : token.val_from;
+  intermediary.chn_bal += token.val_to;
 
   // send setup message
   byte* msg;
@@ -415,27 +410,24 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
 /****************************** Channel Establish ***********************/
 
 static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
-  // verify token validity
 
   // setup chn
   mt_channel_t* chn;
   byte digest[DIGEST_LEN];
   mt_desc2digest(desc, &digest);
 
-  byte ipid[DIGEST_LEN];
-  mt_crypt_rand(DIGEST_LEN, ipid);
-
   // if existing channel is setup with this address then start establish protocol
   if((chn = digestmap_remove(intermediary.chns_setup, (char*)digest))){
+
     digestmap_set(intermediary.chns_transition, (char*)pid, chn);
     chn->callback.fn = NULL;
 
     chn_int_estab2_t reply;
 
-    // fill out token
-    reply.balance = chn->balance;
+    // fill out reply token
+    reply.verified = MT_CODE_VERIFIED;
 
+    // send reply token
     byte* msg;
     int msg_size = pack_chn_int_estab2(&reply, pid, &msg);
     int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_CHN_INT_ESTAB2, msg, msg_size);
@@ -444,9 +436,20 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
   }
 
   // setup new channel at requested address
-  if((intermediary.mac_balance >= intermediary.fee) || get_options()->MoneTorPublicMint){
+  if((intermediary.mac_bal >= intermediary.fee) || get_options()->MoneTorPublicMint){
+
+    byte public[sizeof(int)];
+    memcpy(public, &token->end_bal, sizeof(int));
+
+    if(mt_zkp_verify(MT_ZKP_TYPE_1, &intermediary.pp, public, sizeof(int), &token->zkp) != MT_SUCCESS)
+      return MT_ERROR;
+
+    byte ipid[DIGEST_LEN];
+    mt_crypt_rand(DIGEST_LEN, ipid);
+
     chn = new_channel(&token->addr);
     chn->edesc = *desc;
+    chn->data.public.end_bal = token->end_bal;
     chn->callback = (mt_callback_t){.fn = mt_ipay_recv, .dref1 = *desc,
 				    .arg2 = MT_NTYPE_CHN_END_ESTAB1};
     chn->callback.arg4 = pack_chn_end_estab1(token, pid, &chn->callback.arg3);
@@ -608,7 +611,7 @@ static int handle_nan_cli_dpay1(mt_desc_t* desc, nan_cli_dpay1_t* token, byte (*
     return MT_ERROR;
   }
 
-  intermediary.chn_balance += token->nan_public.val_from;
+  intermediary.chn_bal += token->nan_public.val_from;
   end_state->num_payments ++;
 
   nan_int_dpay2_t reply;
@@ -645,7 +648,7 @@ static int handle_nan_end_close1(mt_desc_t* desc, nan_end_close1_t* token, byte 
 
   // if channel was NOT a direct payment then update balance
   if(end_state->num_payments == 0){
-    intermediary.chn_balance += token->total_val;
+    intermediary.chn_bal += token->total_val;
   }
 
   byte* msg;
@@ -703,8 +706,16 @@ static int handle_nan_end_close7(mt_desc_t* desc, nan_end_close7_t* token, byte 
 /*************************** Helper Functions ***************************/
 
 static mt_channel_t* new_channel(byte (*chn_addr)[MT_SZ_ADDR]){
-  // initialize new channel
-  mt_channel_t* chn = tor_calloc(1, sizeof(mt_channel_t));
-  memcpy(chn->addr, *chn_addr, MT_SZ_ADDR);
+
+  mt_channel_t* chn = tor_malloc(sizeof(mt_channel_t));
+
+  // initialize channel wallet info
+  memcpy(chn->data.wallet.csk, intermediary.sk, MT_SZ_SK);
+
+  // initialize channel public info
+  chn->data.public.end_bal = 0;
+  chn->data.public.int_bal = 0;
+  memcpy(chn->data.public.cpk, intermediary.pk, MT_SZ_PK);
+  memcpy(chn->data.public.addr, *chn_addr, MT_SZ_ADDR);
   return chn;
 }

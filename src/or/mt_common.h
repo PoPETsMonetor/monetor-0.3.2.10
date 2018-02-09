@@ -105,8 +105,6 @@ int mt_hc_create(int size, byte (*head)[MT_SZ_HASH], byte (*hc_out)[][MT_SZ_HASH
  */
 int mt_hc_verify(byte (*tail)[MT_SZ_HASH], byte (*preimage)[MT_SZ_HASH], int k);
 
-int mt_commit_wallet(byte (*pp)[MT_SZ_PP], byte (*pk)[MT_SZ_PK], chn_end_secret_t* chn, int epislon);
-
 /**
  * Compare two descriptors and return 0 if they are equal or some other number
  * (canonically sortable) if they are not

@@ -1,3 +1,5 @@
+// TODO: load in hard coded ledger keys and use them to verify receipts
+
 /**
  * \file mt_cpay.c
  *
@@ -100,8 +102,8 @@ typedef struct {
   byte pk[MT_SZ_PK];
   byte sk[MT_SZ_SK];
   byte addr[MT_SZ_ADDR];
-  int mac_balance;
-  int chn_balance;
+  int mac_bal;
+  int chn_bal;
   int chn_number;
 
   mt_desc_t ledger;
@@ -164,7 +166,8 @@ static int dpay_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
 static mt_channel_t* new_channel(void);
 static int compare_chn_end_data(const void** a, const void** b);
 static mt_channel_t* smartlist_idesc_remove(smartlist_t* list, mt_desc_t* desc);
-static workqueue_reply_t wcom_task(void* thread, void* arg);
+static workqueue_reply_t wcom_task_estab(void* thread, void* arg);
+static workqueue_reply_t wcom_task_pay(void* thread, void* arg);
 static void wallet_reply(void* arg);
 static int pay_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
 static int close_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
@@ -197,8 +200,8 @@ int mt_cpay_init(void){
   // setup system parameters
   client.fee = MT_FEE;
   client.tax = MT_WINDOW;
-  client.mac_balance = 0;
-  client.chn_balance = 0;
+  client.mac_bal = 0;
+  client.chn_bal = 0;
   client.chn_number = 0;
 
   // initialize channel containers
@@ -293,7 +296,7 @@ static int pay_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
   }
 
   // set up channel if possible; callback pay_helper
-  if((client.mac_balance >= MT_CLI_CHN_VAL + client.fee) || get_options()->MoneTorPublicMint){
+  if((client.mac_bal >= MT_CHN_VAL_CLI + client.fee) || get_options()->MoneTorPublicMint){
     log_info(LD_MT, "MoneTor: Trying to set up the channel ~ Callback pay_helper");
     chn = new_channel();
     digestmap_set(client.chns_transition, (char*)pid, chn);
@@ -365,7 +368,7 @@ static int dpay_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
   }
 
   // setup channel if possible; callback dpay_helper
-  if((client.mac_balance >= MT_CLI_CHN_VAL + client.fee) || get_options()->MoneTorPublicMint){
+  if((client.mac_bal >= MT_CHN_VAL_CLI + client.fee) || get_options()->MoneTorPublicMint){
     chn = new_channel();
     digestmap_set(client.chns_transition, (char*)pid, chn);
     chn->idesc = *idesc;
@@ -539,15 +542,15 @@ int mt_cpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 /**
  * Return the balance of available money to spend as macropayments
  */
-int mt_cpay_mac_balance(void){
-  return client.mac_balance;
+int mt_cpay_mac_bal(void){
+  return client.mac_bal;
 }
 
 /**
  * Return the balance of money locked up in channels
  */
-int mt_cpay_chn_balance(void){
-  return client.chn_balance;
+int mt_cpay_chn_bal(void){
+  return client.chn_bal;
 }
 
 /**
@@ -594,27 +597,24 @@ int mt_cpay_import(byte* import){
 static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // initialize setup token
-
   chn_end_setup_t token;
-  token.val_from = MT_CLI_CHN_VAL + client.fee;
-  token.val_to = MT_CLI_CHN_VAL;
+  token.val_to = chn->data.public.end_bal;
+  token.val_from = token.val_to + client.fee;
   memcpy(token.from, client.addr, MT_SZ_ADDR);
-  memcpy(token.chn, chn->data.addr, MT_SZ_ADDR);
-
-  // skip public for now
+  memcpy(token.chn, chn->data.public.addr, MT_SZ_ADDR);
+  memcpy(&token.chn_public, &chn->data.public, sizeof(chn_end_public_t));
 
   // update local data
   client.chn_number ++;
-  client.mac_balance -= 0;//get_options()->MoneTorPublicMint ? 0 : token.val_from;
-  client.chn_balance += token.val_to;
-  chn->data.balance = token.val_to;
+  client.mac_bal -= 0;//get_options()->MoneTorPublicMint ? 0 : token.val_from;
+  client.chn_bal += token.val_to;
 
   // send setup message
   byte* msg;
   byte* signed_msg;
   int msg_size = pack_chn_end_setup(&token, pid, &msg);
   int signed_msg_size = mt_create_signed_msg(msg, msg_size,
-					     &chn->data.pk, &chn->data.sk, &signed_msg);
+					     &chn->data.public.cpk, &chn->data.wallet.csk, &signed_msg);
   int result = mt_buffer_message(client.msgbuf, &client.ledger, MT_NTYPE_CHN_END_SETUP,
 				 signed_msg, signed_msg_size);
   tor_free(msg);
@@ -659,7 +659,7 @@ static int init_chn_end_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   args->chn = chn;
   memcpy(args->pid, *pid, DIGEST_LEN);
 
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, wcom_task, (work_task)help_chn_end_estab1, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, wcom_task_estab, (work_task)help_chn_end_estab1, args))
     return MT_ERROR;
   return MT_SUCCESS;
 }
@@ -673,8 +673,9 @@ static int help_chn_end_estab1(void* args){
   tor_free(args);
 
   chn_end_estab1_t token;
-  memcpy(token.addr, chn->data.addr, MT_SZ_ADDR);
-  // TODO finish making token;
+  token.end_bal = chn->data.wallet.end_bal;
+  memcpy(token.addr, chn->data.public.addr, MT_SZ_ADDR);
+  memcpy(token.zkp, chn->data.wallet.zkp, MT_SZ_ZKP);
 
   // send message
   byte* msg;
@@ -694,7 +695,9 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
     return MT_ERROR;
   }
 
-  // check validity incoming message
+  // validate token
+  if(token->verified != MT_CODE_VERIFIED)
+    return MT_ERROR;
 
   chn_end_estab3_t reply;
 
@@ -724,7 +727,8 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
   args->chn = chn;
   memcpy(args->pid, *pid, DIGEST_LEN);
 
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, wcom_task, (work_task)help_chn_int_estab4, args))
+  // new wallet zkp
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, wcom_task_pay, (work_task)help_chn_int_estab4, args))
     return MT_ERROR;
   return MT_SUCCESS;
 }
@@ -756,18 +760,18 @@ static int init_nan_cli_setup1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   // create hash chain
   byte hc_head[MT_SZ_HASH];
   mt_crypt_rand(MT_SZ_HASH, hc_head);
-  mt_hc_create(MT_NAN_LEN, &hc_head, &chn->data.nan_secret.hc);
+  mt_hc_create(MT_NAN_LEN, &hc_head, &chn->data.nan_wallet.hc);
 
   // make token
   nan_cli_setup1_t token;
   token.nan_public.val_from = MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100;
   token.nan_public.val_to = MT_NAN_VAL;
   token.nan_public.num_payments = MT_NAN_LEN;
-  memcpy(token.nan_public.hash_tail, chn->data.nan_secret.hc[0], MT_SZ_HASH);
+  memcpy(token.nan_public.hash_tail, chn->data.nan_wallet.hc[0], MT_SZ_HASH);
 
   // update channel data
   memcpy(&chn->data.nan_public, &token.nan_public, sizeof(nan_any_public_t));
-  memcpy(chn->data.nan_state.last_hash, chn->data.nan_secret.hc[0], MT_SZ_HASH);
+  memcpy(chn->data.nan_state.last_hash, chn->data.nan_wallet.hc[0], MT_SZ_HASH);
   chn->data.nan_state.num_payments = 0;
 
   // send message
@@ -895,8 +899,8 @@ static int init_nan_cli_pay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   // TODO finish making setup;
 
   // update channel data
-  client.chn_balance -= chn->data.nan_public.val_from;
-  chn->data.balance -= chn->data.nan_public.val_from;
+  client.chn_bal -= chn->data.nan_public.val_from;
+  chn->data.wallet.end_bal -= chn->data.nan_public.val_from;
   chn->data.nan_state.num_payments ++;
 
   // send message
@@ -976,8 +980,8 @@ static int init_nan_cli_dpay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   // TODO finish making setup;
 
   // update balances
-  client.chn_balance -= chn->data.nan_public.val_from;
-  chn->data.balance -= chn->data.nan_public.val_from;
+  client.chn_bal -= chn->data.nan_public.val_from;
+  chn->data.wallet.end_bal -= chn->data.nan_public.val_from;
   chn->data.nan_state.num_payments ++;
 
   // send message
@@ -1153,7 +1157,8 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
   args->chn = chn;
   memcpy(args->pid, *pid, DIGEST_LEN);
 
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, wcom_task, (work_task)help_nan_int_close8, args))
+  // new wallet zkp
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, wcom_task_pay, (work_task)help_nan_int_close8, args))
     return MT_ERROR;
   return MT_SUCCESS;
 }
@@ -1166,7 +1171,7 @@ static int help_nan_int_close8(void* args){
   digestmap_remove(client.chns_transition, (char*)pid);
 
   // if sufficient funds left then move channel to establish state, otherwise move to spent
-  if(chn->data.balance >= MT_NAN_LEN * (MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100))
+  if(chn->data.wallet.end_bal >= MT_NAN_LEN * (MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100))
     smartlist_add(client.chns_estab, chn);
   else
     smartlist_add(client.chns_spent, chn);
@@ -1180,36 +1185,80 @@ static int help_nan_int_close8(void* args){
 
 static mt_channel_t* new_channel(void){
 
-  // initialize new channel
-  mt_channel_t* chn = tor_calloc(1, sizeof(mt_channel_t));
-  memcpy(chn->data.pk, client.pk, MT_SZ_PK);
-  memcpy(chn->data.sk, client.sk, MT_SZ_SK);
-  mt_crypt_rand(MT_SZ_ADDR, chn->data.addr);
+  mt_channel_t* chn = tor_malloc(sizeof(mt_channel_t));
 
-  // TODO finish initializing channel
+  // initialize channel wallet info
+  chn->data.wallet.end_bal = MT_CHN_VAL_CLI;
+  chn->data.wallet.int_bal = 0;
+  memcpy(chn->data.wallet.csk, client.sk, MT_SZ_SK);
+  mt_crypt_keygen(&client.pp, &chn->data.wallet.wpk, &chn->data.wallet.wsk);
+  mt_crypt_rand(MT_SZ_HASH, chn->data.wallet.rand);
+  byte msg[MT_SZ_PK + sizeof(int)];
+  memcpy(msg, chn->data.wallet.wpk, MT_SZ_PK);
+  memcpy(msg + MT_SZ_PK, &chn->data.wallet.end_bal, sizeof(int));
+  mt_com_commit(msg, MT_SZ_PK + sizeof(int), &chn->data.wallet.rand, &chn->data.wallet.commitment);
+  memset(chn->data.wallet.zkp, '\0', MT_SZ_ZKP);
+  memset(&chn->data.wallet.revoke, '\0', sizeof(chn->data.wallet.revoke));
 
+  // initialize channel public info
+  chn->data.public.end_bal = chn->data.wallet.end_bal;
+  chn->data.public.int_bal = 0;
+  memcpy(chn->data.public.cpk, client.pk, MT_SZ_PK);
+  mt_crypt_rand(MT_SZ_ADDR, chn->data.public.addr);
+  memcpy(chn->data.public.commitment, chn->data.wallet.commitment, MT_SZ_COM);
+
+  // initialize unused sections to 0s
+  memset(&chn->data.nan_public, '\0', sizeof(chn->data.nan_public));
+  memset(&chn->data.nan_wallet, '\0', sizeof(chn->data.nan_wallet));
+  memset(&chn->data.nan_state, '\0', sizeof(chn->data.nan_state));
+  memset(&chn->data.refund, '\0', sizeof(chn->data.refund));
   return chn;
 }
 
 static int compare_chn_end_data(const void** a, const void** b){
 
-  if(((mt_channel_t*)(*a))->data.balance > ((mt_channel_t*)(*b))->data.balance)
+  if(((mt_channel_t*)(*a))->data.wallet.end_bal > ((mt_channel_t*)(*b))->data.wallet.end_bal)
     return -1;
 
-  if(((mt_channel_t*)(*a))->data.balance < ((mt_channel_t*)(*b))->data.balance)
+  if(((mt_channel_t*)(*a))->data.wallet.end_bal < ((mt_channel_t*)(*b))->data.wallet.end_bal)
     return 1;
 
   return MT_SUCCESS;
 }
 
-static workqueue_reply_t wcom_task(void* thread, void* args){
+static workqueue_reply_t wcom_task_estab(void* thread, void* args){
+  (void)thread;
+
+  // extract parameters
+  mt_channel_t* chn = ((mt_wcom_args_t*)args)->chn;
+
+  // prove knowledge of the following values
+  byte hidden[MT_SZ_PK + MT_SZ_SK + MT_SZ_HASH];
+  memcpy(hidden, chn->data.wallet.wpk, MT_SZ_PK);
+  memcpy(hidden + MT_SZ_PK, chn->data.wallet.wsk, MT_SZ_SK);
+  memcpy(hidden + MT_SZ_PK + MT_SZ_SK, chn->data.wallet.rand, MT_SZ_HASH);
+
+  byte public[sizeof(int)];
+  memcpy(public, &chn->data.wallet.end_bal, sizeof(int));
+
+  // record zkp
+  mt_zkp_prove(MT_ZKP_TYPE_1, &client.pp,
+	       public, sizeof(int),
+	       hidden, MT_SZ_PK + MT_SZ_SK + MT_SZ_HASH,
+	       &chn->data.wallet.zkp);
+
+  return WQ_RPL_REPLY;
+}
+
+static workqueue_reply_t wcom_task_pay(void* thread, void* args){
   (void)thread;
 
   // extract parameters
   mt_channel_t* chn = ((mt_wcom_args_t*)args)->chn;
   (void)chn;
+  // commit wallet
+  //mt_commit_wallet(&client.pp, &chn->wallet, MT_NAN_VAL * MT_NAN_LEN);
 
-  // call mt_commit_wallet here
   return WQ_RPL_REPLY;
 }
 

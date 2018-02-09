@@ -1,4 +1,3 @@
-
 /* Copyright (c) 2001 Matej Pfajfar.
  * Copyright (c) 2001-2004, Roger Dingledine.
  * Copyright (c) 2004-2006, Roger Dingledine, Nick Mathewson.
@@ -5737,9 +5736,9 @@ typedef enum {
 #define MT_FAUCET_VAL 2147483647
 #define MT_NAN_VAL 100
 #define MT_NAN_LEN 1000
-#define MT_CLI_CHN_VAL 105 * 1000
-#define MT_REL_CHN_VAL 0
-#define MT_INT_CHN_VAL 200 * 1000
+#define MT_CHN_VAL_CLI 105 * 1000
+#define MT_CHN_VAL_REL 0
+#define MT_CHN_VAL_INT 200 * 1000
 
 //-------------------- Cryptographic String Sizes (bytes) -------------------//
 
@@ -5810,11 +5809,11 @@ typedef enum {
   MT_LTYPE_CHN_END_REVOKE,      // end user revocation of a wallet/nano channel
 
   MT_LTYPE_CHN_INT_STATE,       // intermediary micropayment state
-  MT_LTYPE_CHN_END_SECRET,      // end user micropayment secrets
-  MT_LTYPE_MIC_END_WALLET,      // end user wallet
+  MT_LTYPE_CHN_END_WALLET,      // end user micropayment secrets
+  MT_LTYPE_CHN_INT_WALLET,      // int micropayment secrets
   MT_LTYPE_NAN_INT_STATE,       // end user nanopayment state
   MT_LTYPE_NAN_END_STATE,       // intermediary nanopayment state
-  MT_LTYPE_NAN_END_SECRET,      // end user nanopayment secrets
+  MT_LTYPE_NAN_END_WALLET,      // end user nanopayment secrets
 
   MT_LTYPE_CHN_END_PUBLIC,      // end user micropayment channel token
   MT_LTYPE_CHN_INT_PUBLIC,      // intermediary micropayment channel token
@@ -5822,7 +5821,9 @@ typedef enum {
   MT_LTYPE_CHN_END_REFUND,      // end user nanopayment refund token
 
   MT_LTYPE_CHN_END_DATA,        // info to maintain channel for end user
+  MT_LTYPE_CHN_INT_DATA,        // info to maintain channel for intermediary
 
+  MT_LTYPE_ANY_LED_RECEIPT,     // receipt for a ledger operation
 } mt_ltype_t;
 
 /**
@@ -5927,6 +5928,13 @@ typedef struct {
 } chn_int_state_t;
 
 typedef struct {
+  int val_from;
+  int val_to;
+  int num_payments;
+  byte hash_tail[MT_SZ_HASH];
+} nan_any_public_t;
+
+typedef struct {
   int num_payments;
   byte last_hash[MT_SZ_HASH];
 } nan_end_state_t;
@@ -5937,50 +5945,46 @@ typedef struct {
 } nan_int_state_t;
 
 typedef struct {
-  int balance;
-  byte wpk[MT_SZ_PK];
-  byte wsk[MT_SZ_SK];
-  byte rand[MT_SZ_HASH];
-  chn_end_revoke_t revoke;
-} mic_end_wallet_t;
-
-typedef struct {
-  int mic_balance;
-  byte commitment[MT_SZ_COM];
-  byte esc_pk[MT_SZ_PK];
-  byte wpk[MT_SZ_PK];
-  byte wsk[MT_SZ_SK];
-  byte rand[MT_SZ_HASH];
-} chn_end_secret_t;
-
-typedef struct {
   byte wpk[MT_SZ_PK];
   byte wsk[MT_SZ_SK];
   byte hc[MT_NAN_LEN][MT_SZ_HASH];
-} nan_end_secret_t;
+} nan_end_wallet_t;
 
 typedef struct {
-  int balance;
-  byte esc_pk[MT_SZ_PK];
+  int end_bal;
+  int int_bal;
+  byte csk[MT_SZ_SK];
+  byte wpk[MT_SZ_PK];
+  byte wsk[MT_SZ_SK];
+  byte rand[MT_SZ_HASH];
+  byte commitment[MT_SZ_COM];
+  byte zkp[MT_SZ_ZKP];
+  chn_end_revoke_t revoke;
+} chn_end_wallet_t;
+
+typedef struct {
+  int end_bal;
+  int int_bal;
+  byte cpk[MT_SZ_PK];
+  byte addr[MT_SZ_ADDR];
   byte commitment[MT_SZ_COM];
 } chn_end_public_t;
 
 typedef struct {
-  int balance;
-  byte pk[MT_SZ_PK];
-} chn_int_public_t;
+  byte csk[MT_SZ_SK];
+} chn_int_wallet_t;
 
 typedef struct {
-  int val_from;
-  int val_to;
-  int num_payments;
-  byte hash_tail[MT_SZ_HASH];
-} nan_any_public_t;
+  int end_bal;
+  int int_bal;
+  byte cpk[MT_SZ_PK];
+  byte addr[MT_SZ_PK];
+} chn_int_public_t;
 
 typedef struct {
   mt_code_t refund_code;
   byte wpk[MT_SZ_PK];
-  int balance;
+  int end_bal;
 
   // blank except for conditional refund
   byte conditional[MT_SZ_PK];
@@ -5994,27 +5998,27 @@ typedef struct {
 } chn_end_refund_t;
 
 typedef struct {
-  byte pk[MT_SZ_PK];
-  byte sk[MT_SZ_SK];
-  int balance;
-} mac_end_data_t;
-
-typedef struct {
-  byte pk[MT_SZ_PK];
-  byte sk[MT_SZ_SK];
-  byte addr[MT_SZ_ADDR];
-  int balance;
-  int int_balance;
-
-  mic_end_wallet_t chn_wallet;
-  chn_end_secret_t chn_secret;
-  chn_end_public_t chn_public;
+  chn_end_public_t public;
+  chn_end_wallet_t wallet;
 
   nan_any_public_t nan_public;
+  nan_end_wallet_t nan_wallet;
   nan_end_state_t nan_state;
-  nan_end_secret_t nan_secret;
+
   chn_end_refund_t refund;
 } chn_end_data_t;
+
+typedef struct {
+  chn_int_public_t public;
+  chn_int_wallet_t wallet;
+} chn_int_data_t;
+
+typedef struct {
+  mt_ntype_t type;
+  int val;
+  byte addr[MT_SZ_ADDR];
+  byte sig[MT_SZ_SIG];
+} any_led_receipt_t;
 
 //----------------------------- Network Tokens --------------------------//
 
@@ -6048,13 +6052,11 @@ typedef struct {
   byte from[MT_SZ_ADDR];
   byte chn[MT_SZ_ADDR];
   chn_int_public_t chn_public;
-
-  byte pk[MT_SZ_PK];
-  byte sig[MT_SZ_SIG];
 } chn_int_setup_t;
 
 typedef struct {
   mt_code_t success;
+  any_led_receipt_t receipt;
 } any_led_confirm_t;
 
 typedef struct {
@@ -6108,7 +6110,7 @@ typedef struct {
 } chn_int_cashout_t;
 
 typedef struct {
-  int balance;
+  int bal;
 } mac_led_data_t;
 
 typedef struct {
@@ -6117,8 +6119,8 @@ typedef struct {
   byte end_addr[MT_SZ_ADDR];
   byte int_addr[MT_SZ_ADDR];
 
-  int end_balance;
-  int int_balance;
+  int end_bal;
+  int int_bal;
 
   chn_end_public_t end_public;
   chn_int_public_t int_public;
@@ -6138,13 +6140,14 @@ typedef struct {
 } chn_led_query_t;
 
 typedef struct {
+  int end_bal;
   byte addr[MT_SZ_ADDR];
   byte zkp[MT_SZ_ZKP];
 } chn_end_estab1_t;
 
 typedef struct {
-  int balance;
   mt_code_t verified;
+  any_led_receipt_t receipt;
 } chn_int_estab2_t;
 
 typedef struct {

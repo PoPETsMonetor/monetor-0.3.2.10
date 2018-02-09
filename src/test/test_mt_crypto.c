@@ -157,19 +157,21 @@ static void test_mt_crypto(void *arg)
   byte proof_2[MT_SZ_ZKP];
   byte proof_3[MT_SZ_ZKP];
 
-  mt_zkp_prove(&pp, msg_1, msg_1_size, &proof_1);
-  mt_zkp_prove(&pp, msg_2, msg_2_size, &proof_2);
+  mt_zkp_prove(MT_ZKP_TYPE_1, &pp, msg_2, msg_2_size, msg_1, msg_1_size, &proof_1);
+  mt_zkp_prove(MT_ZKP_TYPE_1, &pp, msg_1, msg_1_size, msg_2, msg_2_size, &proof_2);
   mt_crypt_rand(MT_SZ_ZKP, proof_3);
 
   // check that correct proofs are correct
-  tt_assert(mt_zkp_verify(&pp, &proof_1) == MT_SUCCESS);
-  tt_assert(mt_zkp_verify(&pp, &proof_2) == MT_SUCCESS);
+  tt_assert(mt_zkp_verify(MT_ZKP_TYPE_1, &pp, msg_2, msg_2_size, &proof_1) == MT_SUCCESS);
+  tt_assert(mt_zkp_verify(MT_ZKP_TYPE_1, &pp, msg_1, msg_1_size, &proof_2) == MT_SUCCESS);
 
   // check that correct proofs are not identical
   tt_assert(memcmp(proof_1, proof_2, MT_SZ_ZKP) != 0);
 
   // check that incorrect proofs are incorrect
-  tt_assert(mt_zkp_verify(&pp, &proof_3) == MT_ERROR);
+  tt_assert(mt_zkp_verify(MT_ZKP_TYPE_1, &pp, msg_2, msg_2_size, &proof_3) == MT_ERROR);
+  tt_assert(mt_zkp_verify(MT_ZKP_TYPE_2, &pp, msg_2, msg_2_size, &proof_1) == MT_ERROR);
+  tt_assert(mt_zkp_verify(MT_ZKP_TYPE_1, &pp, msg_1, msg_1_size, &proof_1) == MT_ERROR);
 
  done:;
 }
