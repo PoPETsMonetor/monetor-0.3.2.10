@@ -5,6 +5,7 @@
 #include "mt_common.h"
 #include "mt_crelay.h"
 #include "mt_rpay.h"
+#include "mt_ipay.h"
 #include "router.h"
 #include "nodelist.h"
 #include "circuitbuild.h"
@@ -17,6 +18,7 @@ static uint64_t count[2] = {0, 0};
 static digestmap_t  *desc2circ = NULL;
 static ledger_t *ledger = NULL;
 static smartlist_t *ledgercircs = NULL;
+static int intermediary_role_initiated = 0;
 
 static void run_crelay_housekeeping_event(time_t now);
 static void run_crelay_build_circuit_event(time_t now);
@@ -209,6 +211,18 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
 
 static void
 run_crelay_housekeeping_event(time_t now) {
+  
+  /** Checks whether we might be an intermediary
+   *  we need the guard flag, though */
+  if (!intermediary_role_initiated) {
+    const node_t *me = node_get_by_id((const char*)router_get_my_id_digest());
+    if (me && me->is_possible_guard) {
+      log_info(LD_MT, "MoneTor: This relay can be used as a guard."
+          " We initiate the ipay module");
+      intermediary_role_initiated = 1;
+      mt_ipay_init();
+    }
+  }
   /** On the todo-list: check for the payment window 
    * system.
    * Logic: Every second, we check if every payment windows
@@ -219,8 +233,7 @@ run_crelay_housekeeping_event(time_t now) {
   DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
     if (CIRCUIT_IS_ORCIRC(circ) && circ->mt_priority && circ->payment_window < 0) {
       tor_assert_nonfatal(circ->payment_window > 0);
-      log_info(LD_MT, "MoneTor: this circuit has negative window, this should not happen!");
-
+      log_warn(LD_MT, "MoneTor: this circuit has negative window, this should not happen!");
     }
   } DIGESTMAP_FOREACH_END;
 }
@@ -377,10 +390,20 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
     }
   }
   else {
+    /** It is not an origin circ */
     orcirc = TO_OR_CIRCUIT(circ);
-    //circ should a or_circuit_t of a normal circuit with
-    //a normal client over one endpoint
-    if (pcommand == MT_NTYPE_NAN_CLI_ESTAB1) {
+    /** Guard relay are their own intermediary */
+    if (mt_token_is_for_intermediary(pcommand)) {
+      desc = &orcirc->desc;
+      if (mt_ipay_recv(desc, pcommand, msg, msg_len) < 0) {
+        log_warn(LD_MT, "MoneTor: Payment module returned -1 for command %s",
+            mt_token_describe(pcommand));
+      }
+    }
+    else if (pcommand == MT_NTYPE_NAN_CLI_ESTAB1) {
+      //circ should a or_circuit_t of a normal circuit with
+      //a normal client over one endpoint
+      /** We just receive information to contact an intermediary */
       /** First, we unpack the identity of the intermediary we have to connect to.
        * If we already have a circuit towards that intermediary, that's nice. If not,
        * launch a new circuit and notify the payment module as soon it opens */
@@ -468,14 +491,16 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         circ->mt_priority = 0;
         log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");
       }
-      return;
     }
-    desc = &orcirc->desc;
-    if (mt_rpay_recv(desc, pcommand, msg, msg_len) < 0) {
-      log_info(LD_MT, "MoneTor: Payment module returnerd -1"
-          " we should stop prioritizing this circuit");
-      circ->mt_priority = 0;
-      log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");
+    else {
+      desc = &orcirc->desc;
+      if (mt_rpay_recv(desc, pcommand, msg, msg_len) < 0) {
+        log_info(LD_MT, "MoneTor: Payment module returnerd -1"
+            " for %s we should stop prioritizing this circuit",
+            mt_token_describe(pcommand));
+        circ->mt_priority = 0;
+        log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");
+      }
     }
   }
 }

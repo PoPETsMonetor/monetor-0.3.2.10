@@ -149,5 +149,5 @@ int unpack_nan_int_close8(byte* str, int size, nan_int_close8_t* tkn_out, byte(*
 
 size_t mt_token_get_size_of(mt_ntype_t type);
 const char* mt_token_describe(mt_ntype_t type);
-
+int mt_token_is_for_intermediary(mt_ntype_t token);
 #endif

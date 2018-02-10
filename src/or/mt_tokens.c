@@ -860,3 +860,28 @@ const char * mt_token_describe(mt_ntype_t token) {
       return "";
   }
 }
+/**
+ * All mt_ntype_t an intermediary can receive
+ */
+int mt_token_is_for_intermediary(mt_ntype_t token) {
+  switch (token) {
+    case MT_NTYPE_CHN_END_ESTAB1:
+    case MT_NTYPE_CHN_END_ESTAB3:
+    case MT_NTYPE_MIC_CLI_PAY3:
+    case MT_NTYPE_MIC_REL_PAY6:
+    case MT_NTYPE_NAN_CLI_SETUP1:
+    case MT_NTYPE_NAN_CLI_SETUP3:
+    case MT_NTYPE_NAN_CLI_SETUP5:
+    case MT_NTYPE_NAN_CLI_DESTAB1:
+    case MT_NTYPE_NAN_CLI_DPAY1:
+    case MT_NTYPE_NAN_REL_ESTAB2:
+    case MT_NTYPE_NAN_REL_ESTAB4:
+    case MT_NTYPE_NAN_END_CLOSE1:
+    case MT_NTYPE_NAN_END_CLOSE3:
+    case MT_NTYPE_NAN_END_CLOSE5:
+    case MT_NTYPE_NAN_END_CLOSE7:
+      return 1;
+    default:
+      return 0;
+  }
+}
