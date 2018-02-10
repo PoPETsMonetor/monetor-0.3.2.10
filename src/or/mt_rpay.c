@@ -96,7 +96,9 @@ typedef struct {
   int chn_bal;
   int chn_number;
 
-  mt_desc_t ledger;
+  mt_desc_t led_desc;
+  byte led_pk[MT_SZ_PK];
+
   int fee;
 
   // channel states are encoded by which of these containers they are held
@@ -158,18 +160,25 @@ int mt_rpay_init(void){
 
   // load in hardcoded values
   byte* pp_temp;
+  byte* led_pk_temp;
+
   tor_assert(mt_hex2bytes(MT_PP_HEX, &pp_temp) == MT_SZ_PP);
+  tor_assert(mt_hex2bytes(MT_LED_PK_HEX, &led_pk_temp) == MT_SZ_PK);
+
   memcpy(relay.pp, pp_temp, MT_SZ_PP);
-  free(pp_temp);
+  memcpy(relay.led_pk, led_pk_temp, MT_SZ_PK);
+
+  tor_free(pp_temp);
+  tor_free(led_pk_temp);
 
   // setup crypto keys
   mt_crypt_keygen(&relay.pp, &relay.pk, &relay.sk);
   mt_pk2addr(&relay.pk, &relay.addr);
 
   // set ledger
-  relay.ledger.id[0] = 0;
-  relay.ledger.id[1] = 0;
-  relay.ledger.party = MT_PARTY_LED;
+  relay.led_desc.id[0] = 0;
+  relay.led_desc.id[1] = 0;
+  relay.led_desc.party = MT_PARTY_LED;
 
   // setup system parameters
   relay.fee = MT_FEE;
@@ -382,7 +391,7 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   int signed_msg_size = mt_create_signed_msg(msg, msg_size,
 					     &chn->data.public.cpk, &chn->data.wallet.csk, &signed_msg);
 
-  int result = mt_buffer_message(relay.msgbuf, &relay.ledger, MT_NTYPE_CHN_END_SETUP,
+  int result = mt_buffer_message(relay.msgbuf, &relay.led_desc, MT_NTYPE_CHN_END_SETUP,
 				  signed_msg, signed_msg_size);
   tor_free(msg);
   tor_free(signed_msg);
@@ -391,7 +400,7 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
 static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byte (*pid)[DIGEST_LEN]){
 
-  if(mt_desc_comp(desc, &relay.ledger) != 0)
+  if(mt_desc_comp(desc, &relay.led_desc) != 0)
     return MT_ERROR;
 
   // if this is confirmation of mac_any_trans call then ignore and return success
@@ -446,6 +455,7 @@ static int help_chn_end_estab1(void* args){
 
   chn_end_estab1_t token;
   token.end_bal = chn->data.wallet.end_bal;
+  token.int_bal = chn->data.wallet.int_bal;
   memcpy(token.addr, chn->data.public.addr, MT_SZ_ADDR);
   memcpy(token.zkp, chn->data.wallet.zkp, MT_SZ_ZKP);
 
@@ -468,6 +478,10 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
 
   // validate token
   if(token->verified != MT_CODE_VERIFIED)
+    return MT_ERROR;
+
+  // verify receipt to make sure the intermediary deposited claimed funds
+  if(mt_receipt_verify(&relay.led_pk, &token->receipt) != MT_SUCCESS)
     return MT_ERROR;
 
   chn_end_estab3_t reply;

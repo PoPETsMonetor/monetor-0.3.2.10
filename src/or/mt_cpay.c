@@ -106,7 +106,9 @@ typedef struct {
   int chn_bal;
   int chn_number;
 
-  mt_desc_t ledger;
+  mt_desc_t led_desc;
+  byte led_pk[MT_SZ_PK];
+
   int fee;
   int tax;
 
@@ -184,18 +186,25 @@ int mt_cpay_init(void){
 
   // load in hardcoded values
   byte* pp_temp;
+  byte* led_pk_temp;
+
   tor_assert(mt_hex2bytes(MT_PP_HEX, &pp_temp) == MT_SZ_PP);
+  tor_assert(mt_hex2bytes(MT_LED_PK_HEX, &led_pk_temp) == MT_SZ_PK);
+
   memcpy(client.pp, pp_temp, MT_SZ_PP);
-  free(pp_temp);
+  memcpy(client.led_pk, led_pk_temp, MT_SZ_PK);
+
+  tor_free(pp_temp);
+  tor_free(led_pk_temp);
 
   // setup crypto keys
   mt_crypt_keygen(&client.pp, &client.pk, &client.sk);
   mt_pk2addr(&client.pk, &client.addr);
 
   // set ledger
-  client.ledger.id[0] = 0;
-  client.ledger.id[1] = 0;
-  client.ledger.party = MT_PARTY_LED;
+  client.led_desc.id[0] = 0;
+  client.led_desc.id[1] = 0;
+  client.led_desc.party = MT_PARTY_LED;
 
   // setup system parameters
   client.fee = MT_FEE;
@@ -606,7 +615,7 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // update local data
   client.chn_number ++;
-  client.mac_bal -= 0;//get_options()->MoneTorPublicMint ? 0 : token.val_from;
+  client.mac_bal -= get_options()->MoneTorPublicMint ? 0 : token.val_from;
   client.chn_bal += token.val_to;
 
   // send setup message
@@ -615,7 +624,7 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   int msg_size = pack_chn_end_setup(&token, pid, &msg);
   int signed_msg_size = mt_create_signed_msg(msg, msg_size,
 					     &chn->data.public.cpk, &chn->data.wallet.csk, &signed_msg);
-  int result = mt_buffer_message(client.msgbuf, &client.ledger, MT_NTYPE_CHN_END_SETUP,
+  int result = mt_buffer_message(client.msgbuf, &client.led_desc, MT_NTYPE_CHN_END_SETUP,
 				 signed_msg, signed_msg_size);
   tor_free(msg);
   tor_free(signed_msg);
@@ -624,7 +633,7 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
 static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byte (*pid)[DIGEST_LEN]){
 
-  if(mt_desc_comp(desc, &client.ledger) != 0)
+  if(mt_desc_comp(desc, &client.led_desc) != 0)
     return MT_ERROR;
 
   // if this is confirmation of mac_any_trans call then ignore and return success
@@ -674,6 +683,7 @@ static int help_chn_end_estab1(void* args){
 
   chn_end_estab1_t token;
   token.end_bal = chn->data.wallet.end_bal;
+  token.int_bal = chn->data.wallet.int_bal;
   memcpy(token.addr, chn->data.public.addr, MT_SZ_ADDR);
   memcpy(token.zkp, chn->data.wallet.zkp, MT_SZ_ZKP);
 
@@ -697,6 +707,10 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
 
   // validate token
   if(token->verified != MT_CODE_VERIFIED)
+    return MT_ERROR;
+
+  // verify receipt to make sure the intermediary deposited claimed funds
+  if(mt_receipt_verify(&client.led_pk, &token->receipt) != MT_SUCCESS)
     return MT_ERROR;
 
   chn_end_estab3_t reply;

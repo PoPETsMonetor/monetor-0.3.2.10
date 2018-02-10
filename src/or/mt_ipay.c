@@ -75,10 +75,11 @@ typedef struct {
   byte addr[MT_SZ_ADDR];
   int mac_bal;
   int chn_bal;
-  int cli_chn_number;
-  int rel_chn_number;
+  int chn_number;
 
-  mt_desc_t ledger;
+  mt_desc_t led_desc;
+  byte led_pk[MT_SZ_PK];
+
   int fee;
 
   chn_int_state_t chn_state;
@@ -128,25 +129,31 @@ int mt_ipay_init(void){
 
   // load in hardcoded values
   byte* pp_temp;
+  byte* led_pk_temp;
+
   tor_assert(mt_hex2bytes(MT_PP_HEX, &pp_temp) == MT_SZ_PP);
+  tor_assert(mt_hex2bytes(MT_LED_PK_HEX, &led_pk_temp) == MT_SZ_PK);
+
   memcpy(intermediary.pp, pp_temp, MT_SZ_PP);
-  free(pp_temp);
+  memcpy(intermediary.led_pk, led_pk_temp, MT_SZ_PK);
+
+  tor_free(pp_temp);
+  tor_free(led_pk_temp);
 
   // setup crypto keys
   mt_crypt_keygen(&intermediary.pp, &intermediary.pk, &intermediary.sk);
   mt_pk2addr(&intermediary.pk, &intermediary.addr);
 
   // set ledger
-  intermediary.ledger.id[0] = 0;
-  intermediary.ledger.id[1] = 0;
-  intermediary.ledger.party = MT_PARTY_LED;
+  intermediary.led_desc.id[0] = 0;
+  intermediary.led_desc.id[1] = 0;
+  intermediary.led_desc.party = MT_PARTY_LED;
 
   // setup system parameters
   intermediary.fee = MT_FEE;
   intermediary.mac_bal = 0;
   intermediary.chn_bal = 0;
-  intermediary.cli_chn_number = 0;
-  intermediary.rel_chn_number = 0;
+  intermediary.chn_number = 0;
 
   // initialize channel containers
   intermediary.chns_setup = digestmap_new();
@@ -286,17 +293,10 @@ int mt_ipay_chn_bal(void){
 }
 
 /**
- * Return the number of client channels currently open
+ * Return the number of channels currently open
  */
-int mt_ipay_cli_chn_number(void){
-  return intermediary.cli_chn_number;
-}
-
-/**
- * Return the number of intermediary channels currently open
- */
-int mt_ipay_rel_chn_number(void){
-  return intermediary.rel_chn_number;
+int mt_ipay_chn_number(void){
+  return intermediary.chn_number;
 }
 
 /**
@@ -338,16 +338,6 @@ static int init_chn_int_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // initialize setup token
   chn_int_setup_t token;
-
-  if(chn->edesc.party == MT_PARTY_CLI){
-    chn->data.public.int_bal = 0;
-    intermediary.cli_chn_number ++;
-  }
-  else{
-    chn->data.public.int_bal = MT_CHN_VAL_INT;
-    intermediary.rel_chn_number ++;
-  }
-
   token.val_to = chn->data.public.int_bal;
   token.val_from = token.val_to + intermediary.fee;
   memcpy(token.from, intermediary.addr, MT_SZ_ADDR);
@@ -364,7 +354,7 @@ static int init_chn_int_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   int msg_size = pack_chn_int_setup(&token, pid, &msg);
   int signed_msg_size = mt_create_signed_msg(msg, msg_size,
 					     &intermediary.pk, &intermediary.sk, &signed_msg);
-  int result = mt_buffer_message(intermediary.msgbuf, &intermediary.ledger, MT_NTYPE_CHN_INT_SETUP,
+  int result = mt_buffer_message(intermediary.msgbuf, &intermediary.led_desc, MT_NTYPE_CHN_INT_SETUP,
 				 signed_msg, signed_msg_size);
   tor_free(msg);
   tor_free(signed_msg);
@@ -373,7 +363,7 @@ static int init_chn_int_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
 static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byte (*pid)[DIGEST_LEN]){
 
-  if(mt_desc_comp(desc, &intermediary.ledger) != 0)
+  if(mt_desc_comp(desc, &intermediary.led_desc) != 0)
     return MT_ERROR;
 
   // if this is confirmation of a module-level ledger call then return the module callback
@@ -391,6 +381,9 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
 
   if(token->success != MT_CODE_SUCCESS)
     return MT_ERROR;
+
+  intermediary.chn_number++;
+  memcpy(&chn->data.wallet.receipt, &token->receipt, sizeof(any_led_receipt_t));
 
   // move channel to chns_setup
   byte digest[DIGEST_LEN];
@@ -426,6 +419,7 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
 
     // fill out reply token
     reply.verified = MT_CODE_VERIFIED;
+    memcpy(&reply.receipt, &chn->data.wallet.receipt, sizeof(any_led_receipt_t));
 
     // send reply token
     byte* msg;
@@ -450,6 +444,7 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
     chn = new_channel(&token->addr);
     chn->edesc = *desc;
     chn->data.public.end_bal = token->end_bal;
+    chn->data.public.int_bal = token->int_bal;
     chn->callback = (mt_callback_t){.fn = mt_ipay_recv, .dref1 = *desc,
 				    .arg2 = MT_NTYPE_CHN_END_ESTAB1};
     chn->callback.arg4 = pack_chn_end_estab1(token, pid, &chn->callback.arg3);
@@ -489,25 +484,19 @@ static int handle_chn_end_estab3(mt_desc_t* desc, chn_end_estab3_t* token, byte 
 /******************************** Nano Setup ****************************/
 
 static int handle_nan_cli_setup1(mt_desc_t* desc, nan_cli_setup1_t* token, byte (*pid)[DIGEST_LEN]){
-  printf("here\n");
   byte digest[DIGEST_LEN];
   mt_nanpub2digest(&token->nan_public, &digest);
-  printf("here\n");
 
   nan_end_state_t* end_state = tor_calloc(1, sizeof(nan_end_state_t));
   digestmap_set(intermediary.nan_state.map, (char*)digest, end_state);
-  printf("here\n");
 
   nan_int_setup2_t reply;
 
   // fill out token
 
   byte* msg;
-  printf("here\n");
   int msg_size = pack_nan_int_setup2(&reply, pid, &msg);
-  printf("here\n");
   int result = mt_buffer_message(intermediary.msgbuf, desc, MT_NTYPE_NAN_INT_SETUP2, msg, msg_size);
-  printf("here\n");
   tor_free(msg);
   return result;
 }

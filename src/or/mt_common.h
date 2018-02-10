@@ -111,6 +111,18 @@ int mt_hc_verify(byte (*tail)[MT_SZ_HASH], byte (*preimage)[MT_SZ_HASH], int k);
  */
 int mt_desc_comp(mt_desc_t* desc1, mt_desc_t* desc2);
 
+/**
+ * Create a signed receipt of a ledger transaction
+ */
+int mt_receipt_write(mt_ntype_t type, int val, byte (*addr)[MT_SZ_ADDR],
+		  byte (*sk)[MT_SZ_SK], any_led_receipt_t* rec);
+
+/**
+ * Verify the receipt of a ledger transaction
+ */
+int mt_receipt_verify(byte (*pk)[MT_SZ_PK], any_led_receipt_t* rec);
+
+
 /** Canibalize a general circuit => extends it to
  *  the intermediary point described by ei
  *

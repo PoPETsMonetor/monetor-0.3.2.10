@@ -161,6 +161,46 @@ int mt_desc_comp(mt_desc_t* desc1, mt_desc_t* desc2){
   return 0;
 }
 
+/**
+ * Create a signed receipt of a ledger transaction
+ */
+int mt_receipt_write(mt_ntype_t type, int val, byte (*addr)[MT_SZ_ADDR],
+		  byte (*sk)[MT_SZ_SK], any_led_receipt_t* rec){
+
+  // copy in key values
+  rec->type = type;
+  rec->val = val;
+  memcpy(rec->addr, *addr, MT_SZ_ADDR);
+
+  // construct the packed string
+  int str_size = sizeof(mt_ntype_t) + sizeof(int) + MT_SZ_ADDR;
+  byte str[str_size];
+
+  memcpy(str, &rec->type, sizeof(mt_ntype_t));
+  memcpy(str + sizeof(mt_ntype_t), &rec->val, sizeof(int));
+  memcpy(str + sizeof(mt_ntype_t) + sizeof(int), rec->addr, MT_SZ_ADDR);
+
+  return mt_sig_sign(str, str_size, sk, &rec->sig);
+}
+
+/**
+ * Verify the receipt of a ledger transaction
+ */
+int mt_receipt_verify(byte (*pk)[MT_SZ_PK], any_led_receipt_t* rec){
+
+  // construct the packed string
+  int str_size = sizeof(mt_ntype_t) + sizeof(int) + MT_SZ_ADDR;
+  byte str[str_size];
+
+  memcpy(str, &rec->type, sizeof(mt_ntype_t));
+  memcpy(str + sizeof(mt_ntype_t), &rec->val, sizeof(int));
+  memcpy(str + sizeof(mt_ntype_t) + sizeof(int), rec->addr, MT_SZ_ADDR);
+
+  return mt_sig_verify(str, str_size, pk, &rec->sig);
+}
+
+
+
 void increment(long unsigned *id) {
   id[0]++;
   if(id[0]==0) {

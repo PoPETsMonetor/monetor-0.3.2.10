@@ -5918,6 +5918,13 @@ typedef struct {
 } int_id_t;
 
 typedef struct {
+  mt_ntype_t type;
+  int val;
+  byte addr[MT_SZ_ADDR];
+  byte sig[MT_SZ_SIG];
+} any_led_receipt_t;
+
+typedef struct {
   byte rev[MT_SZ_PK];
   byte sig[MT_SZ_SIG];
 } chn_end_revoke_t;
@@ -5972,6 +5979,7 @@ typedef struct {
 
 typedef struct {
   byte csk[MT_SZ_SK];
+  any_led_receipt_t receipt;
 } chn_int_wallet_t;
 
 typedef struct {
@@ -6012,13 +6020,6 @@ typedef struct {
   chn_int_public_t public;
   chn_int_wallet_t wallet;
 } chn_int_data_t;
-
-typedef struct {
-  mt_ntype_t type;
-  int val;
-  byte addr[MT_SZ_ADDR];
-  byte sig[MT_SZ_SIG];
-} any_led_receipt_t;
 
 //----------------------------- Network Tokens --------------------------//
 
@@ -6141,6 +6142,7 @@ typedef struct {
 
 typedef struct {
   int end_bal;
+  int int_bal;
   byte addr[MT_SZ_ADDR];
   byte zkp[MT_SZ_ZKP];
 } chn_end_estab1_t;
