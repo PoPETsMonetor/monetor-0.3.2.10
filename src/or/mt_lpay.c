@@ -281,8 +281,13 @@ int handle_mac_aut_mint(mac_aut_mint_t* token, byte (*addr)[MT_SZ_ADDR], any_led
   mac_led_data_t* data = digestmap_get(ledger.mac_accounts, (char*)ledger.aut_addr);
   data->bal += token->value;
 
-  tor_assert(mt_receipt_write(MT_NTYPE_MAC_AUT_MINT, token->value, addr, &ledger.sk, rec)
-	     == MT_SUCCESS);
+  // write the transaction receipt
+  rec->type = MT_NTYPE_MAC_AUT_MINT;
+  rec->val = token->value;
+  memcpy(rec->from, *addr, MT_SZ_ADDR);
+  memcpy(rec->to, *addr, MT_SZ_ADDR);
+  tor_assert(mt_receipt_sign(rec, &ledger.sk) == MT_SUCCESS);
+
   return MT_SUCCESS;
 }
 
@@ -314,8 +319,13 @@ int handle_mac_any_trans(mac_any_trans_t* token, byte (*addr)[MT_SZ_ADDR], any_l
   if(transfer(bal_from, bal_to, token->val_from, token->val_to, ledger.fee) != MT_SUCCESS)
     return MT_ERROR;
 
-  tor_assert(mt_receipt_write(MT_NTYPE_MAC_ANY_TRANS, token->val_to, &token->to, &ledger.sk, rec)
-	     == MT_SUCCESS);
+  // write the transaction receipt
+  rec->type = MT_NTYPE_MAC_ANY_TRANS;
+  rec->val = token->val_to;
+  memcpy(rec->from, *addr, MT_SZ_ADDR);
+  memcpy(rec->to, token->to, MT_SZ_ADDR);
+  tor_assert(mt_receipt_sign(rec, &ledger.sk) == MT_SUCCESS);
+
   return MT_SUCCESS;
 }
 
@@ -379,8 +389,13 @@ int handle_chn_end_setup(chn_end_setup_t* token, byte (*addr)[MT_SZ_ADDR], any_l
   data_chn->end_public = token->chn_public;
   data_chn->state = MT_LSTATE_INIT;
 
-  tor_assert(mt_receipt_write(MT_NTYPE_CHN_END_SETUP, token->val_to, &token->chn, &ledger.sk, rec)
-	     == MT_SUCCESS);
+  // write the transaction receipt
+  rec->type = MT_NTYPE_CHN_END_SETUP;
+  rec->val = token->val_to;
+  memcpy(rec->from, *addr, MT_SZ_ADDR);
+  memcpy(rec->to, token->chn, MT_SZ_ADDR);
+  tor_assert(mt_receipt_sign(rec, &ledger.sk) == MT_SUCCESS);
+
   return MT_SUCCESS;
 }
 
@@ -445,8 +460,12 @@ int handle_chn_int_setup(chn_int_setup_t* token, byte (*addr)[MT_SZ_ADDR], any_l
   data_chn->int_public = token->chn_public;
   data_chn->state = MT_LSTATE_OPEN;
 
-  tor_assert(mt_receipt_write(MT_NTYPE_CHN_INT_SETUP, token->val_to, &token->chn, &ledger.sk, rec)
-	     == MT_SUCCESS);
+  // write the transaction receipt
+  rec->type = MT_NTYPE_CHN_INT_SETUP;
+  rec->val = token->val_to;
+  memcpy(rec->from, *addr, MT_SZ_ADDR);
+  memcpy(rec->to, token->chn, MT_SZ_ADDR);
+  tor_assert(mt_receipt_sign(rec, &ledger.sk) == MT_SUCCESS);
 
   return MT_SUCCESS;
 }
@@ -476,8 +495,13 @@ int handle_chn_int_reqclose(chn_int_reqclose_t* token, byte (*addr)[MT_SZ_ADDR],
   data_chn->close_epoch = ledger.epoch + ledger.window;
   data_chn->state = MT_LSTATE_INT_REQCLOSED;
 
-  tor_assert(mt_receipt_write(MT_NTYPE_CHN_INT_REQCLOSE, 0, &token->chn, &ledger.sk, rec)
-	     == MT_SUCCESS);
+  // write the transaction receipt
+  rec->type = MT_NTYPE_CHN_INT_REQCLOSE;
+  rec->val = 0;
+  memcpy(rec->from, *addr, MT_SZ_ADDR);
+  memcpy(rec->to, token->chn, MT_SZ_ADDR);
+  tor_assert(mt_receipt_sign(rec, &ledger.sk) == MT_SUCCESS);
+
   return MT_SUCCESS;
 }
 
@@ -506,8 +530,13 @@ int handle_chn_end_close(chn_end_close_t* token, byte (*addr)[MT_SZ_ADDR], any_l
   data_chn->close_epoch = ledger.epoch + ledger.window;
   data_chn->state = MT_LSTATE_END_CLOSED;
 
-  tor_assert(mt_receipt_write(MT_NTYPE_CHN_END_CLOSE, 0, &token->chn, &ledger.sk, rec)
-	     == MT_SUCCESS);
+  // write the transaction receipt
+  rec->type = MT_NTYPE_CHN_END_CLOSE;
+  rec->val = 0;
+  memcpy(rec->from, *addr, MT_SZ_ADDR);
+  memcpy(rec->to, token->chn, MT_SZ_ADDR);
+  tor_assert(mt_receipt_sign(rec, &ledger.sk) == MT_SUCCESS);
+
   return MT_SUCCESS;
 }
 
@@ -535,8 +564,13 @@ int handle_chn_int_close(chn_int_close_t* token, byte (*addr)[MT_SZ_ADDR], any_l
   data_chn->int_close_token = *token;
   data_chn->state = MT_LSTATE_INT_CLOSED;
 
-  tor_assert(mt_receipt_write(MT_NTYPE_CHN_INT_CLOSE, 0, &token->chn, &ledger.sk, rec)
-	     == MT_SUCCESS);
+  // write the transaction receipt
+  rec->type = MT_NTYPE_CHN_INT_CLOSE;
+  rec->val = 0;
+  memcpy(rec->from, *addr, MT_SZ_ADDR);
+  memcpy(rec->to, token->chn, MT_SZ_ADDR);
+  tor_assert(mt_receipt_sign(rec, &ledger.sk) == MT_SUCCESS);
+
   return MT_SUCCESS;
 }
 
@@ -569,9 +603,14 @@ int handle_chn_end_cashout(chn_end_cashout_t* token, byte (*addr)[MT_SZ_ADDR], a
   // check that the transfer goes through
   int result = transfer(bal_from, bal_to, token->val_from, token->val_to, ledger.fee);
 
-  tor_assert(mt_receipt_write(MT_NTYPE_CHN_END_CASHOUT, 0, &token->chn, &ledger.sk, rec)
-	     == MT_SUCCESS);
-  return result;
+  // write the transaction receipt
+  rec->type = MT_NTYPE_CHN_END_CASHOUT;
+  rec->val = 0;
+  memcpy(rec->from, *addr, MT_SZ_ADDR);
+  memcpy(rec->to, token->chn, MT_SZ_ADDR);
+  tor_assert(mt_receipt_sign(rec, &ledger.sk) == MT_SUCCESS);
+
+  return MT_SUCCESS;
 }
 
 /**
@@ -603,9 +642,14 @@ int handle_chn_int_cashout(chn_int_cashout_t* token, byte (*addr)[MT_SZ_ADDR], a
   int aut_charge = ledger.fee + (token->val_to * ledger.tax) / 100;
   int result = transfer(bal_from, bal_to, token->val_from, token->val_to, aut_charge);
 
-  tor_assert(mt_receipt_write(MT_NTYPE_CHN_INT_CASHOUT, 0, &token->chn, &ledger.sk, rec)
-	     == MT_SUCCESS);
-  return result;
+  // write the transaction receipt
+  rec->type = MT_NTYPE_CHN_INT_CASHOUT;
+  rec->val = 0;
+  memcpy(rec->from, *addr, MT_SZ_ADDR);
+  memcpy(rec->to, token->chn, MT_SZ_ADDR);
+  tor_assert(mt_receipt_sign(rec, &ledger.sk) == MT_SUCCESS);
+
+  return MT_SUCCESS;
 }
 
 //------------------------------- Helper Functions --------------------------------------//

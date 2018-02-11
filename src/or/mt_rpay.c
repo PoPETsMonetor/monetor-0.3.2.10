@@ -35,6 +35,7 @@
  */
 
 #pragma GCC diagnostic ignored "-Wswitch-enum"
+#pragma GCC diagnostic ignored "-Wstack-protector"
 
 #include<pthread.h>
 
@@ -79,9 +80,18 @@ typedef struct {
  * proof generation
  */
 typedef struct {
+  // cpu worker arguments
+  mt_zkp_type_t type;
+  byte* hidden_inputs;
+  int hidden_size;
+  byte* public_inputs;
+  int public_size;
+  byte (*zkp_out)[MT_SZ_ZKP];
+
+  // callback arguments
   mt_channel_t* chn;
   byte pid[DIGEST_LEN];
-} mt_wcom_args_t;
+} mt_zkp_args_t;
 
 /**
  * Single instance of a relay payment object
@@ -143,8 +153,8 @@ static int help_nan_int_close8(void *args);
 
 // miscallaneous helper functions
 static mt_channel_t* new_channel(void);
-static workqueue_reply_t wcom_task_estab(void* thread, void* arg);
-static workqueue_reply_t wcom_task_pay(void* thread, void* arg);
+static workqueue_reply_t zkp_task(void* thread, void* arg);
+static workqueue_reply_t zkp_task2(void* thread, void* arg);
 static void digestmap_smartlist_add(digestmap_t* map, char* key, void* val);
 static void* digestmap_smartlist_pop_last(digestmap_t* map, char* key);
 
@@ -436,27 +446,53 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
 
 static int init_chn_end_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
-  mt_wcom_args_t* args = tor_malloc(sizeof(mt_wcom_args_t));
+  // prove knowledge of the following values
+  int hidden_size = MT_SZ_PK + MT_SZ_SK + MT_SZ_HASH;
+  byte* hidden_inputs = tor_malloc(hidden_size);
+  memcpy(hidden_inputs, chn->data.wallet.wpk, MT_SZ_PK);
+  memcpy(hidden_inputs + MT_SZ_PK, chn->data.wallet.wsk, MT_SZ_SK);
+  memcpy(hidden_inputs + MT_SZ_PK + MT_SZ_SK, chn->data.wallet.rand, MT_SZ_HASH);
+
+  int public_size = sizeof(int) + MT_SZ_COM;
+  byte* public_inputs = tor_malloc(public_size);
+  memcpy(public_inputs, &chn->data.wallet.end_bal, sizeof(int));
+  memcpy(public_inputs + sizeof(int), chn->data.wallet.wcom, MT_SZ_COM);
+
+
+  mt_zkp_args_t* args = tor_malloc(sizeof(mt_zkp_args_t));
+  args->hidden_inputs = hidden_inputs;
+  args->hidden_size = hidden_size;
+  args->public_inputs = public_inputs;
+  args->public_size = public_size;
+  args->type = MT_ZKP_TYPE_1;
+  args->zkp_out = &chn->data.wallet.zkp;
+
   args->chn = chn;
   memcpy(args->pid, *pid, DIGEST_LEN);
 
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, wcom_task_estab, (work_task)help_chn_end_estab1, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, zkp_task, (work_task)help_chn_end_estab1, args))
     return MT_ERROR;
   return MT_SUCCESS;
-
 }
 
 static int help_chn_end_estab1(void* args){
 
-  mt_channel_t* chn = ((mt_wcom_args_t*)args)->chn;
+  // extract parameters
+  mt_zkp_args_t* zkp_args = (mt_zkp_args_t*)args;
+  mt_channel_t* chn = zkp_args->chn;
   byte pid[DIGEST_LEN];
-  memcpy(pid, ((mt_wcom_args_t*)args)->pid, DIGEST_LEN);
+  memcpy(pid, zkp_args->pid, DIGEST_LEN);
+
+  tor_free(zkp_args->hidden_inputs);
+  tor_free(zkp_args->public_inputs);
   tor_free(args);
 
+  // create reply token
   chn_end_estab1_t token;
   token.end_bal = chn->data.wallet.end_bal;
   token.int_bal = chn->data.wallet.int_bal;
   memcpy(token.addr, chn->data.public.addr, MT_SZ_ADDR);
+  memcpy(token.wcom, chn->data.public.wcom, MT_SZ_COM);
   memcpy(token.zkp, chn->data.wallet.zkp, MT_SZ_ZKP);
 
   // send message
@@ -480,14 +516,35 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
   if(token->verified != MT_CODE_VERIFIED)
     return MT_ERROR;
 
-  // verify receipt to make sure the intermediary deposited claimed funds
-  if(mt_receipt_verify(&relay.led_pk, &token->receipt) != MT_SUCCESS)
-    return MT_ERROR;
+  byte int_addr[MT_SZ_ADDR];
+  mt_pk2addr(&token->int_pk, &int_addr);
 
+  // verify receipt to make sure the intermediary deposited claimed funds
+  if(mt_receipt_verify(&token->receipt, &relay.led_pk) != MT_SUCCESS ||
+     token->receipt.val != chn->data.public.int_bal ||
+     memcmp(token->receipt.from, int_addr, MT_SZ_ADDR) != 0 ||
+     memcmp(token->receipt.to, chn->data.public.addr, MT_SZ_ADDR) != 0){
+    return MT_ERROR;
+  }
+
+  memcpy(chn->data.wallet.int_pk, token->int_pk, MT_SZ_PK);
+
+  // create and fill reply token
   chn_end_estab3_t reply;
 
-  // fill reply with correct values;
+  int content_size = MT_SZ_PK + sizeof(int);
+  byte content[content_size];
+  memcpy(content, chn->data.wallet.wpk, MT_SZ_PK);
+  memcpy(content + MT_SZ_PK, &chn->data.wallet.end_bal, sizeof(int));
 
+  if(mt_bsig_blind(content, content_size, &chn->data.wallet.int_pk,
+  		   &chn->data.wallet.blinded, &chn->data.wallet.unblinder) != MT_SUCCESS){
+    return MT_ERROR;
+  }
+
+  memcpy(reply.wcom_blinded, chn->data.wallet.blinded, MT_SZ_BL);
+
+  // send reply message
   byte* msg;
   int msg_size = pack_chn_end_estab3(&reply, pid, &msg);
   int result = mt_buffer_message(relay.msgbuf, desc, MT_NTYPE_CHN_END_ESTAB3, msg, msg_size);
@@ -506,13 +563,17 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
   }
 
   // check validity of incoming message;
+  if(mt_sig_verify(chn->data.wallet.blinded, MT_SZ_BL, &chn->data.wallet.int_pk, &token->sig)
+     != MT_SUCCESS){
+    return MT_ERROR;
+  }
 
   // prepare nanopayment channel token now
-  mt_wcom_args_t* args = tor_malloc(sizeof(mt_wcom_args_t));
+  mt_zkp_args_t* args = tor_malloc(sizeof(mt_zkp_args_t));
   args->chn = chn;
   memcpy(args->pid, *pid, DIGEST_LEN);
 
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, wcom_task_pay, (work_task)help_chn_int_estab4, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, zkp_task2, (work_task)help_chn_int_estab4, args))
     return MT_ERROR;
   return MT_SUCCESS;
 }
@@ -520,9 +581,9 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
 static int help_chn_int_estab4(void* args){
 
   // extract parameters
-  mt_channel_t* chn = ((mt_wcom_args_t*)args)->chn;
+  mt_channel_t* chn = ((mt_zkp_args_t*)args)->chn;
   byte pid[DIGEST_LEN];
-  memcpy(pid, ((mt_wcom_args_t*)args)->pid, DIGEST_LEN);
+  memcpy(pid, ((mt_zkp_args_t*)args)->pid, DIGEST_LEN);
   tor_free(args);
 
   byte digest[DIGEST_LEN];
@@ -821,19 +882,19 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
   // check validity of incoming message;
 
 
-  mt_wcom_args_t* args = tor_malloc(sizeof(mt_wcom_args_t));
+  mt_zkp_args_t* args = tor_malloc(sizeof(mt_zkp_args_t));
   args->chn = chn;
   memcpy(args->pid, *pid, DIGEST_LEN);
 
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, wcom_task_pay, (work_task)help_nan_int_close8, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, zkp_task2, (work_task)help_nan_int_close8, args))
     return MT_ERROR;
   return MT_SUCCESS;
 }
 
 static int help_nan_int_close8(void *args){
-  mt_channel_t* chn = ((mt_wcom_args_t*)args)->chn;
+  mt_channel_t* chn = ((mt_zkp_args_t*)args)->chn;
   byte pid[DIGEST_LEN];
-  memcpy(pid, ((mt_wcom_args_t*)args)->pid, DIGEST_LEN);
+  memcpy(pid, ((mt_zkp_args_t*)args)->pid, DIGEST_LEN);
   tor_free(args);
 
   byte digest[DIGEST_LEN];
@@ -854,7 +915,7 @@ static int help_nan_int_close8(void *args){
 
 static mt_channel_t* new_channel(void){
 
-  mt_channel_t* chn = tor_malloc(sizeof(mt_channel_t));
+  mt_channel_t* chn = tor_calloc(1, sizeof(mt_channel_t));
 
   // initialize channel wallet info
   chn->data.wallet.end_bal = MT_CHN_VAL_REL;
@@ -862,25 +923,20 @@ static mt_channel_t* new_channel(void){
   memcpy(chn->data.wallet.csk, relay.sk, MT_SZ_SK);
   mt_crypt_keygen(&relay.pp, &chn->data.wallet.wpk, &chn->data.wallet.wsk);
   mt_crypt_rand(MT_SZ_HASH, chn->data.wallet.rand);
-  byte msg[MT_SZ_PK + sizeof(int)];
-  memcpy(msg, chn->data.wallet.wpk, MT_SZ_PK);
-  memcpy(msg + MT_SZ_PK, &chn->data.wallet.end_bal, sizeof(int));
-  mt_com_commit(msg, MT_SZ_PK + sizeof(int), &chn->data.wallet.rand, &chn->data.wallet.commitment);
-  memset(chn->data.wallet.zkp, '\0', MT_SZ_ZKP);
-  memset(&chn->data.wallet.revoke, '\0', sizeof(chn->data.wallet.revoke));
 
   // initialize channel public info
   chn->data.public.end_bal = chn->data.wallet.end_bal;
   chn->data.public.int_bal = MT_CHN_VAL_INT;
   memcpy(chn->data.public.cpk, relay.pk, MT_SZ_PK);
   mt_crypt_rand(MT_SZ_ADDR, chn->data.public.addr);
-  memcpy(chn->data.public.commitment, chn->data.wallet.commitment, MT_SZ_COM);
 
-  // initialize unused sections to 0s
-  memset(&chn->data.nan_public, '\0', sizeof(chn->data.nan_public));
-  memset(&chn->data.nan_wallet, '\0', sizeof(chn->data.nan_wallet));
-  memset(&chn->data.nan_state, '\0', sizeof(chn->data.nan_state));
-  memset(&chn->data.refund, '\0', sizeof(chn->data.refund));
+  // create wallet commitment
+  byte msg[MT_SZ_PK + sizeof(int)];
+  memcpy(msg, chn->data.wallet.wpk, MT_SZ_PK);
+  memcpy(msg + MT_SZ_PK, &chn->data.wallet.end_bal, sizeof(int));
+  mt_com_commit(msg, MT_SZ_PK + sizeof(int), &chn->data.wallet.rand, &chn->data.wallet.wcom);
+  memcpy(chn->data.public.wcom, chn->data.wallet.wcom, MT_SZ_COM);
+
   return chn;
 }
 /**
@@ -905,35 +961,26 @@ static void* digestmap_smartlist_pop_last(digestmap_t* map, char* key){
   return smartlist_pop_last(list);
 }
 
-static workqueue_reply_t wcom_task_estab(void* thread, void* args){
+static workqueue_reply_t zkp_task(void* thread, void* args){
   (void)thread;
 
-  // extract parameters
-  mt_channel_t* chn = ((mt_wcom_args_t*)args)->chn;
-
-  // prove knowledge of the following values
-  byte hidden[MT_SZ_PK + MT_SZ_SK + MT_SZ_HASH];
-  memcpy(hidden, chn->data.wallet.wpk, MT_SZ_PK);
-  memcpy(hidden + MT_SZ_PK, chn->data.wallet.wsk, MT_SZ_SK);
-  memcpy(hidden + MT_SZ_PK + MT_SZ_SK, chn->data.wallet.rand, MT_SZ_HASH);
-
-  byte public[sizeof(int)];
-  memcpy(public, &chn->data.wallet.end_bal, sizeof(int));
+  mt_zkp_args_t* zkp_args = (mt_zkp_args_t*)args;
+  mt_channel_t* chn = zkp_args->chn;
 
   // record zkp
-  mt_zkp_prove(MT_ZKP_TYPE_1, &relay.pp,
-	       public, sizeof(int),
-	       hidden, MT_SZ_PK + MT_SZ_SK + MT_SZ_HASH,
+  mt_zkp_prove(zkp_args->type, &relay.pp,
+	       zkp_args->public_inputs, zkp_args->public_size,
+	       zkp_args->hidden_inputs, zkp_args->hidden_size,
 	       &chn->data.wallet.zkp);
 
   return WQ_RPL_REPLY;
 }
 
-static workqueue_reply_t wcom_task_pay(void* thread, void* args){
+static workqueue_reply_t zkp_task2(void* thread, void* args){
   (void)thread;
 
   // extract parameters
-  mt_channel_t* chn = ((mt_wcom_args_t*)args)->chn;
+  mt_channel_t* chn = ((mt_zkp_args_t*)args)->chn;
   (void)chn;
 
   // call mt_commit_wallet here

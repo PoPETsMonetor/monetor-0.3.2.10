@@ -11,6 +11,8 @@
  * information.
  */
 
+#pragma GCC diagnostic ignored "-Wswitch-enum"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

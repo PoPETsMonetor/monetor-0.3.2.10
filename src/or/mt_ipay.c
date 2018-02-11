@@ -419,6 +419,7 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
 
     // fill out reply token
     reply.verified = MT_CODE_VERIFIED;
+    memcpy(reply.int_pk, intermediary.pk, MT_SZ_PK);
     memcpy(&reply.receipt, &chn->data.wallet.receipt, sizeof(any_led_receipt_t));
 
     // send reply token
@@ -432,10 +433,12 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
   // setup new channel at requested address
   if((intermediary.mac_bal >= intermediary.fee) || get_options()->MoneTorPublicMint){
 
-    byte public[sizeof(int)];
+    int public_size = sizeof(int) + MT_SZ_COM;
+    byte public[public_size];
     memcpy(public, &token->end_bal, sizeof(int));
+    memcpy(public + sizeof(int), token->wcom, MT_SZ_COM);
 
-    if(mt_zkp_verify(MT_ZKP_TYPE_1, &intermediary.pp, public, sizeof(int), &token->zkp) != MT_SUCCESS)
+    if(mt_zkp_verify(MT_ZKP_TYPE_1, &intermediary.pp, public, public_size, &token->zkp) != MT_SUCCESS)
       return MT_ERROR;
 
     byte ipid[DIGEST_LEN];
@@ -457,7 +460,6 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
 }
 
 static int handle_chn_end_estab3(mt_desc_t* desc, chn_end_estab3_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
 
   mt_channel_t* chn = digestmap_get(intermediary.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -470,9 +472,11 @@ static int handle_chn_end_estab3(mt_desc_t* desc, chn_end_estab3_t* token, byte 
   digestmap_remove(intermediary.chns_transition, (char*)*pid);
   digestmap_set(intermediary.chns_estab, (char*)digest, chn);
 
-  chn_int_estab4_t reply;
-
   // fill out token
+  chn_int_estab4_t reply;
+  reply.success = MT_CODE_SUCCESS;
+  if(mt_sig_sign(token->wcom_blinded, MT_SZ_BL, &intermediary.sk, &reply.sig) != MT_SUCCESS)
+    return MT_ERROR;
 
   byte* msg;
   int msg_size = pack_chn_int_estab4(&reply, pid, &msg);
