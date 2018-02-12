@@ -388,10 +388,21 @@ run_cclient_housekeeping_event(time_t now) {
         /** pay :-) */
         intermediary_t* intermediary = get_intermediary_by_role(ppath_tmp->position);
         log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d", ppath_tmp->window);
-        if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
-          log_warn(LD_MT, "MoneTor: mt_cpay_pay failed");
-          ppath_tmp->p_marked_for_close = 1;
-          ppath_tmp->last_mt_cpay_succeeded = 0;
+        ppath_tmp->payment_is_processing = 1;
+        if (hop == 1) {
+          /** We must do a direct payment, using same descriptor */
+          if (mt_cpay_pay(&ppath_tmp->desc, &ppath_tmp->desc) < 0) {
+            log_warn(LD_MT, "MoneTor: direct payment mt_cpay_pay failed");
+            ppath_tmp->p_marked_for_close = 1;
+            ppath_tmp->last_mt_cpay_succeeded = 0;
+          }
+        }
+        else {
+          if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
+            log_warn(LD_MT, "MoneTor: mt_cpay_pay failed");
+            ppath_tmp->p_marked_for_close = 1;
+            ppath_tmp->last_mt_cpay_succeeded = 0;
+          }
         }
       }
       else if (!ppath_tmp->last_mt_cpay_succeeded) {
@@ -568,15 +579,36 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
 
 void mt_cclient_update_payment_window(circuit_t *circ) {
 
-  if (get_options()->EnablePayment && circ->mt_priority &&
-      CIRCUIT_IS_ORIGIN(circ)) {
+  if (get_options()->EnablePayment && CIRCUIT_IS_ORIGIN(circ)) {
     pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
-    while(ppath_tmp != NULL) {
+    int hop = 1;
+    while(ppath_tmp) {
       if(ppath_tmp->first_payment_succeeded) {
-        if (--ppath_tmp->window  < 10) {
-          log_warn(LD_MT, "MoneTor: payment window critically low");
+        if (--ppath_tmp->window  < LIMIT_PAYMENT_WINDOW 
+            && !ppath_tmp->payment_is_processing &&
+            !ppath_tmp->p_marked_for_close) {
+        /** pay :-) */
+          intermediary_t* intermediary = get_intermediary_by_role(ppath_tmp->position);
+          log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d", ppath_tmp->window);
+          ppath_tmp->payment_is_processing = 1;
+          if (hop == 1) {
+            /** We must do a direct payment, using same descriptor */
+            if (mt_cpay_pay(&ppath_tmp->desc, &ppath_tmp->desc) < 0) {
+              log_warn(LD_MT, "MoneTor: direct payment mt_cpay_pay failed");
+              ppath_tmp->p_marked_for_close = 1;
+              ppath_tmp->last_mt_cpay_succeeded = 0;
+            }
+          }
+          else {
+            if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
+              log_warn(LD_MT, "MoneTor: mt_cpay_pay failed");
+              ppath_tmp->p_marked_for_close = 1;
+              ppath_tmp->last_mt_cpay_succeeded = 0;
+            }
+          }
         }
       }
+      hop++;
       ppath_tmp = ppath_tmp->next;
     }
   }
@@ -621,7 +653,7 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
         }
         ppath_tmp->last_mt_cpay_succeeded = 1;
         ppath_tmp->payment_is_processing = 0;
-        log_info(LD_MT, "MoneTor: payement succeeded for hop %d :)", hop);
+        log_info(LD_MT, "MoneTor: payment succeeded for hop %d :)", hop);
         break;
       }
       ppath_tmp = ppath_tmp->next;
@@ -843,7 +875,7 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
     return -2;
   } 
   if(circ->marked_for_close) {
-    log_warn(LD_MT, "MoneTor: This is circuit is about to be freed");
+    log_warn(LD_MT, "MoneTor: This circuit is about to be freed");
     return -2;
   }
   if (circ->state != CIRCUIT_STATE_OPEN) {
