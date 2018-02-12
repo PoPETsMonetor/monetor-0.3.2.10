@@ -1776,9 +1776,11 @@ circuit_find_to_cannibalize(uint8_t purpose, extend_info_t *info,
             if (tor_memeq(hop->extend_info->identity_digest,
                           info->identity_digest, DIGEST_LEN))
               goto next;
-            if (ri1 &&
-                (ri2 = node_get_by_id(hop->extend_info->identity_digest))
-                && nodes_in_same_family(ri1, ri2))
+            ri2 = node_get_by_id(hop->extend_info->identity_digest);
+            if (ri1 && ri2 && nodes_in_same_family(ri1, ri2))
+              goto next;
+            /** we don't want interemdiary in our paths, never. */
+            if (ri2 && ri2->is_intermediary)
               goto next;
             hop=hop->next;
           } while (hop!=circ->cpath);
@@ -2080,6 +2082,9 @@ circuit_about_to_free(circuit_t *circ)
   }
   else if (circ->purpose == CIRCUIT_PURPOSE_I_LEDGER) {
     mt_cintermediary_ledger_circ_has_closed(circ);
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_R_LEDGER) {
+    mt_crelay_ledger_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
   }
   /* Notify payment controller when a general circuit has closed */
   else if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL) {

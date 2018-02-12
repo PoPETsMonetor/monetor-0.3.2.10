@@ -299,8 +299,27 @@ void monetor_run_scheduled_events(time_t now) {
  */
 
 const char* mt_desc_describe(mt_desc_t* desc) {
-  (void) desc;
-  return "";
+  char *partychar = NULL;
+  switch (desc->party) {
+    case MT_PARTY_CLI: tor_asprintf(&partychar, "%s", "MT_PARTY_CLI");
+                       break;
+    case MT_PARTY_REL: tor_asprintf(&partychar, "%s", "MT_PARTY_REL");
+                       break;
+    case MT_PARTY_INT: tor_asprintf(&partychar, "%s", "MT_PARTY_INT");
+                       break;
+    case MT_PARTY_LED: tor_asprintf(&partychar, "%s", "MT_PARTY_LED");
+                       break;
+    case MT_PARTY_END: tor_asprintf(&partychar, "%s", "MT_PARTY_END");
+                       break;
+    case MT_PARTY_IDK: tor_asprintf(&partychar, "%s", "MT_PARTY_IDK");
+                       break;
+    case MT_PARTY_AUT: tor_asprintf(&partychar, "%s", "MT_PARTY_AUT");
+                       break;
+    default: tor_asprintf(&partychar, "%s", "");
+  }
+  char *ret = NULL;
+  tor_asprintf(&ret, "id 0: %lu, 1: %lu, party: %s", desc->id[0], desc->id[1], partychar);
+  return ret;
 }
 
 /**

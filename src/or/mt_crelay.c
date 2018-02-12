@@ -68,6 +68,10 @@ mt_crelay_ledger_circ_has_opened(origin_circuit_t *ocirc) {
   byte id[DIGEST_LEN];
   mt_desc2digest(&ledger->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(ocirc));
+  mt_rpay_set_status(&ledger->desc, 1);
+  if (intermediary_role_initiated) {
+    mt_ipay_set_status(&ledger->desc, 1);
+  }
 }
 
 void mt_crelay_ledger_circ_has_closed(origin_circuit_t *circ) {
@@ -87,10 +91,14 @@ void mt_crelay_ledger_circ_has_closed(origin_circuit_t *circ) {
   if (digestmap_get(desc2circ, (char*) id)) {
     digestmap_remove(desc2circ, (char*) id);
     log_info(LD_MT, "MoneTor: ledger circ has closed. Removed %s from our internal structure",
-        mt_desc_describe(&circ->desc));
+        mt_desc_describe(&ledger->desc));
   }
   else {
     log_info(LD_MT, "MoneTor: in mt_crelay_ledger_circ_has_closed, Looks like our desc wasn't in our map? %s", mt_desc_describe(&circ->desc));
+  }
+  mt_rpay_set_status(&ledger->desc, 0);
+  if (intermediary_role_initiated) {
+    mt_ipay_set_status(&ledger->desc, 0);
   }
 }
 
@@ -326,8 +334,8 @@ mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   crypt_path_t *layer_start = NULL;
   
   if (!circ) {
-    log_warn(LD_MT, "MoneTor: circ linked to mt_desc_t %s is not in our map, in mt_crelay_send_message",
-        mt_desc_describe(desc));
+    log_warn(LD_MT, "MoneTor: circ linked to mt_desc_t %s is not in our map, in mt_crelay_send_message"
+        " for command %s", mt_desc_describe(desc), mt_token_describe(type));
     return -2;
   }
 
