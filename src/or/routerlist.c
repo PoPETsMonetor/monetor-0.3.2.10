@@ -2837,8 +2837,12 @@ router_choose_random_node(smartlist_t *excludedsmartlist,
       smartlist_add(excludednodes, node);
     }
     /** Also adding the ledger to exclude node */
-    else if (node->is_ledger && !need_ledger) {
+    if (node->is_ledger && !need_ledger) {
       log_info(LD_MT, "MoneTor: Adding ledger to excludenodes");
+      smartlist_add(excludednodes, node);
+    }
+    if (node->is_intermediary && !need_intermediary) {
+      log_info(LD_MT, "MoneTor: Adding intermediary node to excludednodes if not explicitly needed");
       smartlist_add(excludednodes, node);
     }
   } SMARTLIST_FOREACH_END(node);

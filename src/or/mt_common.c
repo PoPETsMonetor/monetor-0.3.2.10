@@ -161,6 +161,42 @@ int mt_desc_comp(mt_desc_t* desc1, mt_desc_t* desc2){
   return 0;
 }
 
+/**
+ * Create a signed receipt of a ledger transaction
+ */
+int mt_receipt_sign(any_led_receipt_t* rec, byte (*sk)[MT_SZ_SK]){
+
+  // construct the packed string
+  int str_size = sizeof(mt_ntype_t) + sizeof(int) + MT_SZ_ADDR + MT_SZ_ADDR;
+  byte str[str_size];
+
+  memcpy(str, &rec->type, sizeof(mt_ntype_t));
+  memcpy(str + sizeof(mt_ntype_t), &rec->val, sizeof(int));
+  memcpy(str + sizeof(mt_ntype_t) + sizeof(int), rec->from, MT_SZ_ADDR);
+  memcpy(str + sizeof(mt_ntype_t) + sizeof(int) + MT_SZ_ADDR, rec->to, MT_SZ_ADDR);
+
+  return mt_sig_sign(str, str_size, sk, &rec->sig);
+}
+
+/**
+ * Verify the receipt of a ledger transaction
+ */
+int mt_receipt_verify(any_led_receipt_t* rec, byte (*pk)[MT_SZ_PK]){
+
+  // construct the packed string
+  int str_size = sizeof(mt_ntype_t) + sizeof(int) + MT_SZ_ADDR + MT_SZ_ADDR;
+  byte str[str_size];
+
+  memcpy(str, &rec->type, sizeof(mt_ntype_t));
+  memcpy(str + sizeof(mt_ntype_t), &rec->val, sizeof(int));
+  memcpy(str + sizeof(mt_ntype_t) + sizeof(int), rec->from, MT_SZ_ADDR);
+  memcpy(str + sizeof(mt_ntype_t) + sizeof(int) + MT_SZ_ADDR, rec->to, MT_SZ_ADDR);
+
+  return mt_sig_verify(str, str_size, pk, &rec->sig);
+}
+
+
+
 void increment(long unsigned *id) {
   id[0]++;
   if(id[0]==0) {
@@ -746,7 +782,7 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
         return mt_cledger_send_message(desc, type, msg, size);
       }
       else {
-        log_warn(LD_MT, "MoneTor: Cannot handle type %hhx from a ledger", (uint8_t)type);
+        log_warn(LD_MT, "MoneTor: Cannot handle type %s from a ledger", mt_token_describe(type));
       }
       break;
     /* Sending from intermediary */
@@ -771,8 +807,12 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
       if (intermediary_mode(get_options())) {
         return mt_cintermediary_send_message(desc, type, msg, size);
       }
+      else if(server_mode(get_options())){
+        command = RELAY_COMMAND_MT;
+        return mt_crelay_send_message(desc, command, type, msg, size);
+      }
       else {
-        log_warn(LD_MT, "MoneTor: Cannot handle type %hhx from an intermediary", (uint8_t)type);
+        log_warn(LD_MT, "MoneTor: Cannot handle type %s from anything else than an intermediary or a guard", mt_token_describe(type));
       }
       break;
       /* Sending from any of them */
@@ -783,7 +823,7 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
           return mt_crelay_send_message(desc, command, type, msg, size);
         }
         else {
-          log_warn(LD_MT, "MoneTor: Cannot handle type %hhx from an intermediary", (uint8_t)type);
+          log_warn(LD_MT, "MoneTor: Cannot handle type %s from anything else than a relay", mt_token_describe(type));
         }
         break;
     case MT_NTYPE_MAC_ANY_TRANS:
@@ -809,8 +849,8 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
       log_warn(LD_MT, "MoneTor - Unrecognized type %s", mt_token_describe(type));
       return -1;
   }
-  log_info(LD_MT, "MoneTor: We should not reach this.. we return -1");
-  return -1;
+  log_info(LD_MT, "MoneTor: We should not reach this.. we return -2");
+  return -2;
 }
 
 /**

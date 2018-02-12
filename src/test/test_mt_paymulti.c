@@ -162,6 +162,14 @@ static int mock_send_message(mt_desc_t *desc, mt_ntype_t type, byte* msg, int si
   // add event to queue
   smartlist_add(event_queue, send);
 
+  // increment intermediary expected balance if necessary
+  if(send->msg_type == MT_NTYPE_CHN_END_ESTAB1 && send->src.party == MT_PARTY_REL){
+    byte int_digest[DIGEST_LEN];
+    mt_desc2digest(&send->desc1, &int_digest);
+    int* bal = digestmap_get(exp_bal, (char*)int_digest);
+    *bal += MT_CHN_VAL_INT;
+  }
+
   // track number of payment vs non-payment messages
   if(type == MT_NTYPE_NAN_CLI_PAY1 || type == MT_NTYPE_NAN_REL_PAY2 ||
      type == MT_NTYPE_NAN_CLI_DPAY1 || type == MT_NTYPE_NAN_INT_DPAY2)
@@ -1005,9 +1013,6 @@ static void test_mt_paymulti(void *arg){
     mt_ipay_import(ctx->state);
     int bal =  mt_ipay_mac_bal() + mt_ipay_chn_bal();
     int exp = *(int*)digestmap_get(exp_bal, digest);
-    exp -= MT_FEE * (mt_ipay_cli_chn_number() + mt_ipay_rel_chn_number());
-    exp += mt_ipay_cli_chn_number() * MT_FEE;
-    exp += mt_ipay_rel_chn_number() * (MT_CHN_VAL_INT + MT_FEE);
     printf("exp %d bal %d\n", exp, bal);
     tor_assert(bal == exp);
   } MAP_FOREACH_END;

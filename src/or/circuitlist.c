@@ -1728,7 +1728,7 @@ circuit_can_be_cannibalized_for_v3_rp(const origin_circuit_t *circ)
  * To "cannibalize" a circuit means to extend it an extra hop, and use it
  * for some other purpose than we had originally intended.  We do this when
  * we want to perform some low-bandwidth task at a specific relay, and we
- * would like the circuit to complete as soon as possible.  (If we were going
+ * woulad like the circuit to complete as soon as possible.  (If we were going
  * to use a lot of bandwidth, we wouldn't want a circuit with an extra hop.
  * If we didn't care about circuit completion latency, we would just build
  * a new circuit.)
