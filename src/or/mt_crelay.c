@@ -179,7 +179,7 @@ mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
    * ready? */
   log_info(LD_MT, "MoneTor: Yay! An intermediary circuit opened");
   /** XXX notify payment module that the intermediary circuit is open */
-  mt_rpay_set_status(&ocirc->desc, 1);
+  mt_rpay_set_status(ocirc->desci, 1);
 }
 
 
@@ -448,12 +448,12 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         }
       } SMARTLIST_FOREACH_END(circtmp);
 
-      log_info(LD_MT, "MoneTor: We don't have any current circuit towards %s that intermediary"
-          " .. Building one. ", node_describe(ninter));
       /** We didn't find a circ connected/connecting to ninter */
       mt_desc_t *desci = tor_malloc_zero(sizeof(mt_desc_t));
       memcpy(desci, msg+sizeof(int_id_t), sizeof(mt_desc_t));
       if (!oricirc) {
+        log_info(LD_MT, "MoneTor: We don't have any current circuit towards %s that intermediary"
+            " .. Building one. ", node_describe(ninter));
         extend_info_t *ei = NULL;
         ei = extend_info_from_node(ninter, 0);
         if (!ei) {
@@ -491,7 +491,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
          msg+sizeof(int_id_t)+sizeof(mt_desc_t),
          msg_len-sizeof(int_id_t)-sizeof(mt_desc_t)) < 0) {
-        log_warn(LD_MT, "MoneTor: Payment module returnerd -1"
+        log_warn(LD_MT, "MoneTor: Payment module returned -1"
             " we should stop prioritizing this circuit");
         circ->mt_priority = 0;
         log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");

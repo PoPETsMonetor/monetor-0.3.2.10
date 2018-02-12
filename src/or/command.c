@@ -395,7 +395,7 @@ command_process_dpayment_cell(cell_t *cell, channel_t *chan)
   circuit_t *circ;
 
   circ = circuit_get_by_circid_channel(cell->circ_id, chan);
-  log_info(LD_MT, "Processing a direct payment cell");
+  log_info(LD_MT, "MoneTor: Processing a direct payment cell");
 
   if (!circ) {
     log_info(LD_OR,
@@ -414,11 +414,11 @@ command_process_dpayment_cell(cell_t *cell, channel_t *chan)
    * or a non-origin circuit (guard relay) */
   if (mt_process_received_directpaymentcell(circ, cell) < 0) {
     if (CIRCUIT_IS_ORIGIN(circ)) {
-      log_info(LD_MT, "Failed to process received direct payment cell"
+      log_warn(LD_MT, "MoneTor: Failed to process received direct payment cell"
           " on origin circuit => should we rotate guard?");
     }
     else {
-      log_info(LD_MT, "Failed to process received direct payment cell"
+      log_warn(LD_MT, "MoneTor: failed to process received direct payment cell"
           " mark this circuit for close and let's cry on the ledger");
       circuit_mark_payment_channel_for_close(circ, 0, END_CIRC_REASON_TORPROTOCOL);
       /* not implemented - Cry on the ledger */

@@ -380,6 +380,7 @@ run_cclient_housekeeping_event(time_t now) {
     }
     /** Verify if we have enough remaining window */
     pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
+    int hop = 1;
     while (ppath_tmp != NULL) {
       if (ppath_tmp->window < LIMIT_PAYMENT_WINDOW &&
           !ppath_tmp->payment_is_processing &&
@@ -394,9 +395,10 @@ run_cclient_housekeeping_event(time_t now) {
         }
       }
       else if (!ppath_tmp->last_mt_cpay_succeeded) {
-        log_warn(LD_MT, "MoneTor: Last payment did not succeeded yet.");
+        log_warn(LD_MT, "MoneTor: Last payment did not succeeded yet for hop %d.", hop);
       }
       ppath_tmp = ppath_tmp->next;
+      hop++;
     }
   } DIGESTMAP_FOREACH_END;
 }
@@ -607,10 +609,11 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
   if (signal == MT_SIGNAL_PAYMENT_SUCCESS) {
     /** Which one? */
     pay_path_t *ppath_tmp = oricirc->ppath;
+    int hop = 1;
     while (ppath_tmp) {
       if (mt_desc_eq(&ppath_tmp->desc, desc)) {
         if (!ppath_tmp->first_payment_succeeded) {
-          log_info(LD_MT, "MoneTor: Yay! First payment succeded");
+          log_info(LD_MT, "MoneTor: Yay! First payment succeeded for hop %d", hop);
           ppath_tmp->first_payment_succeeded = 1;
           ppath_tmp->window = 3000;
         }
@@ -619,10 +622,11 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
         }
         ppath_tmp->last_mt_cpay_succeeded = 1;
         ppath_tmp->payment_is_processing = 0;
-        log_info(LD_MT, "MoneTor: payement succeeded :)");
+        log_info(LD_MT, "MoneTor: payement succeeded for hop %d :)", hop);
         break;
       }
       ppath_tmp = ppath_tmp->next;
+      hop++;
     }
   }
   else if (signal == MT_SIGNAL_PAYMENT_FAILURE) {
