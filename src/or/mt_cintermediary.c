@@ -114,6 +114,7 @@ void mt_cintermediary_ledger_circ_has_opened(origin_circuit_t *circ) {
   byte id[DIGEST_LEN];
   mt_desc2digest(&ledger->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
+  mt_ipay_set_status(&ledger->desc, 1);
 }
 
 void mt_cintermediary_ledger_circ_has_closed(circuit_t *circ) {
@@ -141,6 +142,7 @@ void mt_cintermediary_ledger_circ_has_closed(circuit_t *circ) {
     log_info(LD_MT,
         "MoneTor: in mt_cintermediary_ledger_circ_has_closed, desc %s not found in our map", mt_desc_describe(&TO_ORIGIN_CIRCUIT(circ)->desc));
   }
+  mt_ipay_set_status(&ledger->desc, 0);
 }
 
 void mt_cintermediary_orcirc_has_closed(or_circuit_t *circ) {

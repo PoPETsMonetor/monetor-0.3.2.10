@@ -563,6 +563,7 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
   else {
     log_warn(LD_MT, "MoneTor: in ledger_circ_has_closed, looks like we didn't have this desc in our map %s", mt_desc_describe(&circ->desc));
   }
+  mt_cpay_set_status(&ledger->desc, 0);
 }
 
 
@@ -755,6 +756,7 @@ mt_cclient_ledger_circ_has_opened(origin_circuit_t *circ) {
   byte id[DIGEST_LEN];
   mt_desc2digest(&ledger->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
+  mt_cpay_set_status(&ledger->desc, 1);
 }
 
 /**
