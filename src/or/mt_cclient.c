@@ -560,6 +560,9 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
     log_warn(LD_MT, "MoneTor: Looks like we did not extend a circuit successfully"
         " towards the ledger %lld", (long long) now);
     ledger->circuit_retries++;
+    smartlist_remove(ledgercircs, circ);
+    /** the ledger is only added when the circuit is opened */
+    return;
   }
   smartlist_remove(ledgercircs, circ);
   byte id[DIGEST_LEN];
@@ -570,7 +573,7 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
       mt_desc_describe(&ledger->desc));
   }
   else {
-    log_warn(LD_MT, "MoneTor: in ledger_circ_has_closed, looks like we didn't have this desc in our map %s", mt_desc_describe(&circ->desc));
+    log_warn(LD_MT, "MoneTor: in ledger_circ_has_closed, looks like we didn't have this desc in our map %s", mt_desc_describe(&ledger->desc));
   }
   mt_cpay_set_status(&ledger->desc, 0);
 }
