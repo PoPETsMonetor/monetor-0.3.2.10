@@ -206,6 +206,7 @@ void increment(long unsigned *id) {
 }
 
 uint64_t rand_uint64(void) {
+  srand(getpid());
   uint64_t r = 0;
   for (int i=0; i<64; i += 30) {
     r = r*((uint64_t)RAND_MAX + 1) + rand();

@@ -167,7 +167,7 @@ intermediary_need_cleanup(intermediary_t *intermediary, time_t now) {
   if (intermediary->circuit_retries > INTERMEDIARY_MAX_RETRIES ||
       intermediary->is_reachable == INTERMEDIARY_REACHABLE_NO) {
     
-    log_info(LD_MT, "MoneTor: Looks like we have to cleanup intermediary :/");
+    log_warn(LD_MT, "MoneTor: Looks like we have to cleanup intermediary :/");
     /* Get all general circuit linked to this intermediary and
      * mark the payment as closed */
     // XXX MoneTor todo
@@ -432,7 +432,7 @@ run_cclient_build_circuit_event(time_t now) {
     circ = circuit_get_by_intermediary_ident(intermediary->identity);
     /* If no circ, launch one */
     if (!circ) {
-      log_info(LD_MT, "No circ towards intermediary %s",
+      log_info(LD_MT, "MoneTor: No circ towards intermediary %s",
           extend_info_describe(intermediary->ei));
       int purpose = CIRCUIT_PURPOSE_C_INTERMEDIARY;
       int flags = CIRCLAUNCH_IS_INTERNAL;
@@ -521,8 +521,6 @@ intermediary_t* mt_cclient_get_intermediary_from_ocirc(origin_circuit_t *ocirc) 
     }
   } SMARTLIST_FOREACH_END(intermediary_tmp);
   /* This should be considered as a bug ?*/
-  if (BUG(!intermediary))
-    return NULL;
   return intermediary;
 }
 
@@ -558,7 +556,7 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
   if (digestmap_get(desc2circ, (char*) id)) {
     digestmap_remove(desc2circ, (char*) id);
     log_info(LD_MT, "MoneTor: ledger circ has closed. Removed %s from our internal structure",
-      mt_desc_describe(&circ->desc));
+      mt_desc_describe(&ledger->desc));
   }
   else {
     log_warn(LD_MT, "MoneTor: in ledger_circ_has_closed, looks like we didn't have this desc in our map %s", mt_desc_describe(&circ->desc));
@@ -701,16 +699,12 @@ void mt_cclient_general_circ_has_closed(origin_circuit_t *oricirc) {
 void mt_cclient_intermediary_circ_has_closed(origin_circuit_t *circ) {
   intermediary_t* intermediary = NULL;
   intermediary = mt_cclient_get_intermediary_from_ocirc(circ);
+  if (!intermediary) {
+    log_warn(LD_MT, "MoneTor: mt_cclient_get_intermediary returned NULL");
+    return;
+  }
   time_t now;
-  byte id[DIGEST_LEN];
-  mt_desc2digest(&intermediary->desc, &id);
-  if (digestmap_get(desc2circ, (char*) id)) {
-    digestmap_remove(desc2circ, (char*) id);
-    log_info(LD_MT, "MoneTor: removing desc linked to an interemdiary circuit");
-  }
-  else {
-    log_warn(LD_MT, "MoneTor: in intermediary_circ_has_closed, desc %s not in our map?", mt_desc_describe(&intermediary->desc));
-  }
+  mt_cpay_set_status(&intermediary->desc, 0);
 
   if (TO_CIRCUIT(circ)->state != CIRCUIT_STATE_OPEN) {
     // means that we did not reach the intermediary point for whatever reason
@@ -732,6 +726,17 @@ void mt_cclient_intermediary_circ_has_closed(origin_circuit_t *circ) {
     }
     extend_info_free(intermediary->ei);
     intermediary->ei = ei;
+    return;
+  }
+  byte id[DIGEST_LEN];
+  mt_desc2digest(&intermediary->desc, &id);
+  if (digestmap_get(desc2circ, (char*) id)) {
+    digestmap_remove(desc2circ, (char*) id);
+    log_info(LD_MT, "MoneTor: removing desc %s linked to an interemdiary circuit",
+        mt_desc_describe(&intermediary->desc));
+  }
+  else {
+    log_warn(LD_MT, "MoneTor: in intermediary_circ_has_closed, desc %s not in our map?", mt_desc_describe(&intermediary->desc));
   }
   return;
 cleanup:
@@ -766,12 +771,16 @@ void
 mt_cclient_intermediary_circ_has_opened(origin_circuit_t *circ) {
   log_info(LD_MT, "MoneTor: Yay! intermediary circuit opened");
   intermediary_t* intermediary = mt_cclient_get_intermediary_from_ocirc(circ);
+  if (!intermediary) {
+    log_warn(LD_MT, "MoneTor: mt_cclient_get_intermediary_from_ocirc returned NULL~that should not happen");
+    return;
+  }
   /* reset circuit_retries counter */
   intermediary->circuit_retries = 0;
   byte id[DIGEST_LEN];
   mt_desc2digest(&intermediary->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
-
+  mt_cpay_set_status(&intermediary->desc, 1);
   /*XXX MoneTor - What do we do? notify payment, wait to full establishement of all circuits?*/
 }
 

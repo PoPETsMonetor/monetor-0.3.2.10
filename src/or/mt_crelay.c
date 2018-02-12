@@ -32,6 +32,9 @@ mt_crelay_init(void) {
   count[1] = rand_uint64();
   log_info(LD_MT, "MoneTor: initialization of payment relay code");
   mt_rpay_init();
+  log_info(LD_MT, "MoneTor: initialization of payment intermediary code");
+  intermediary_role_initiated = 1;
+  mt_ipay_init();
 }
 
 void mt_crelay_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
@@ -222,15 +225,15 @@ run_crelay_housekeeping_event(time_t now) {
   
   /** Checks whether we might be an intermediary
    *  we need the guard flag, though */
-  if (!intermediary_role_initiated) {
-    const node_t *me = node_get_by_id((const char*)router_get_my_id_digest());
-    if (me && me->is_possible_guard) {
-      log_info(LD_MT, "MoneTor: This relay can be used as a guard."
-          " We initiate the ipay module");
-      intermediary_role_initiated = 1;
-      mt_ipay_init();
-    }
-  }
+  /*if (!intermediary_role_initiated) {*/
+    /*const node_t *me = node_get_by_id((const char*)router_get_my_id_digest());*/
+    /*if (me && me->is_possible_guard) {*/
+      /*log_info(LD_MT, "MoneTor: This relay can be used as a guard."*/
+          /*" We initiate the ipay module");*/
+      /*intermediary_role_initiated = 1;*/
+      /*mt_ipay_init();*/
+    /*}*/
+  /*}*/
   /** On the todo-list: check for the payment window 
    * system.
    * Logic: Every second, we check if every payment windows
