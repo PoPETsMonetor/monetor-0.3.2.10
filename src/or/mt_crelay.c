@@ -378,6 +378,9 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
   }
   else {
     orcirc = TO_OR_CIRCUIT(circ);
+
+    /**TODO, if it is an intermediary kind of cell, call mt_ipay_recv instead */
+
     //circ should a or_circuit_t of a normal circuit with
     //a normal client over one endpoint
     if (pcommand == MT_NTYPE_NAN_CLI_ESTAB1) {
