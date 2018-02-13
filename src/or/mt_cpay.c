@@ -88,15 +88,6 @@ typedef struct {
  * proof generation
  */
 typedef struct {
-  // cpu worker arguments
-  mt_zkp_type_t type;
-  byte* hidden_inputs;
-  int hidden_size;
-  byte* public_inputs;
-  int public_size;
-  byte (*zkp_out)[MT_SZ_ZKP];
-
-  // callback arguments
   mt_channel_t* chn;
   byte pid[DIGEST_LEN];
 } mt_zkp_args_t;
@@ -176,8 +167,9 @@ static int dpay_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
 static mt_channel_t* new_channel(void);
 static int compare_chn_end_data(const void** a, const void** b);
 static mt_channel_t* smartlist_idesc_remove(smartlist_t* list, mt_desc_t* desc);
-static workqueue_reply_t zkp_task(void* thread, void* arg);
-static workqueue_reply_t zkp_task2(void* thread, void* arg);
+static workqueue_reply_t cpu_task_estab(void* thread, void* arg);
+static workqueue_reply_t cpu_task_nanestab(void* thread, void* arg);
+static workqueue_reply_t cpu_task_nanclose(void* thread, void* arg);
 static int pay_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
 static int close_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
 
@@ -671,31 +663,12 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
 
 static int init_chn_end_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
-  // prove knowledge of the following values
-  int hidden_size = MT_SZ_PK + MT_SZ_SK + MT_SZ_HASH;
-  byte* hidden_inputs = tor_malloc(hidden_size);
-  memcpy(hidden_inputs, chn->data.wallet.wpk, MT_SZ_PK);
-  memcpy(hidden_inputs + MT_SZ_PK, chn->data.wallet.wsk, MT_SZ_SK);
-  memcpy(hidden_inputs + MT_SZ_PK + MT_SZ_SK, chn->data.wallet.rand, MT_SZ_HASH);
-
-  int public_size = sizeof(int) + MT_SZ_COM;
-  byte* public_inputs = tor_malloc(public_size);
-  memcpy(public_inputs, &chn->data.wallet.end_bal, sizeof(int));
-  memcpy(public_inputs + sizeof(int), chn->data.wallet.wcom, MT_SZ_COM);
-
-
+  // create arg list
   mt_zkp_args_t* args = tor_malloc(sizeof(mt_zkp_args_t));
-  args->hidden_inputs = hidden_inputs;
-  args->hidden_size = hidden_size;
-  args->public_inputs = public_inputs;
-  args->public_size = public_size;
-  args->type = MT_ZKP_TYPE_1;
-  args->zkp_out = &chn->data.wallet.zkp;
-
   args->chn = chn;
   memcpy(args->pid, *pid, DIGEST_LEN);
 
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, zkp_task, (work_task)help_chn_end_estab1, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_estab, (work_task)help_chn_end_estab1, args))
     return MT_ERROR;
   return MT_SUCCESS;
 }
@@ -707,9 +680,6 @@ static int help_chn_end_estab1(void* args){
   mt_channel_t* chn = zkp_args->chn;
   byte pid[DIGEST_LEN];
   memcpy(pid, zkp_args->pid, DIGEST_LEN);
-
-  tor_free(zkp_args->hidden_inputs);
-  tor_free(zkp_args->public_inputs);
   tor_free(args);
 
   // create reply token
@@ -800,7 +770,7 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
   memcpy(args->pid, *pid, DIGEST_LEN);
 
   // new wallet zkp
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, zkp_task2, (work_task)help_chn_int_estab4, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanestab, (work_task)help_chn_int_estab4, args))
     return MT_ERROR;
   return MT_SUCCESS;
 }
@@ -1230,7 +1200,7 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
   memcpy(args->pid, *pid, DIGEST_LEN);
 
   // new wallet zkp
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, zkp_task2, (work_task)help_nan_int_close8, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanclose, (work_task)help_nan_int_close8, args))
     return MT_ERROR;
   return MT_SUCCESS;
 }
@@ -1293,27 +1263,64 @@ static int compare_chn_end_data(const void** a, const void** b){
   return MT_SUCCESS;
 }
 
-static workqueue_reply_t zkp_task(void* thread, void* args){
+static workqueue_reply_t cpu_task_estab(void* thread, void* args){
   (void)thread;
 
   mt_zkp_args_t* zkp_args = (mt_zkp_args_t*)args;
   mt_channel_t* chn = zkp_args->chn;
 
+  // prove knowledge of the following values
+  int hidden_size = MT_SZ_PK + MT_SZ_SK + MT_SZ_HASH;
+  byte hidden_inputs[hidden_size];
+  memcpy(hidden_inputs, chn->data.wallet.wpk, MT_SZ_PK);
+  memcpy(hidden_inputs + MT_SZ_PK, chn->data.wallet.wsk, MT_SZ_SK);
+  memcpy(hidden_inputs + MT_SZ_PK + MT_SZ_SK, chn->data.wallet.rand, MT_SZ_HASH);
+
+  int public_size = sizeof(int) + MT_SZ_COM;
+  byte public_inputs[public_size];
+  memcpy(public_inputs, &chn->data.wallet.end_bal, sizeof(int));
+  memcpy(public_inputs + sizeof(int), chn->data.wallet.wcom, MT_SZ_COM);
+
   // record zkp
-  mt_zkp_prove(zkp_args->type, &client.pp,
-	       zkp_args->public_inputs, zkp_args->public_size,
-	       zkp_args->hidden_inputs, zkp_args->hidden_size,
-	       &chn->data.wallet.zkp);
+  mt_zkp_prove(MT_ZKP_TYPE_1, &client.pp, public_inputs, public_size,
+	       hidden_inputs, hidden_size, &chn->data.wallet.zkp);
 
   return WQ_RPL_REPLY;
 }
 
-static workqueue_reply_t zkp_task2(void* thread, void* args){
+static workqueue_reply_t cpu_task_nanestab(void* thread, void* args){
+  (void)thread;
+
+  // extract parameters
+  mt_channel_t* chn = ((mt_zkp_args_t*)args)->chn;
+
+  // encapsulate into wcom function function
+  // ALL OF THE BELOW SHOULD GO INTO WALLET'
+  // keygen new channel params
+  // create commitment
+  // create random var
+  // zkp:
+  //   hidden: wpk', B, r', wsig
+  //   public: wpk, end_pk, epsilon
+  //   write to nan_end_wallet_t
+
+  // call mt_commit_wallet here
+  return WQ_RPL_REPLY;
+}
+
+static workqueue_reply_t cpu_task_nanclose(void* thread, void* args){
   (void)thread;
 
   // extract parameters
   mt_channel_t* chn = ((mt_zkp_args_t*)args)->chn;
   (void)chn;
+
+  // AT SOME POINT WALLET' -> WALLET
+
+  // call commit_wallet once to kill channel
+
+  // call commit_wallet again to create next wallet
+
 
   // call mt_commit_wallet here
   return WQ_RPL_REPLY;
