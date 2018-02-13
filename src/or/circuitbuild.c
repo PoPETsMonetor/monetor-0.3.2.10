@@ -1387,7 +1387,6 @@ pay_path_t*
 circuit_init_ppath(pay_path_t* prev) {
   pay_path_t* ppath = tor_malloc_zero(sizeof(pay_path_t));
   /* its not null => middle or exit relay */
-  ppath->window = 2000; /** 1MB per payment*/
   ppath->inter_ident = tor_malloc_zero(sizeof(intermediary_identity_t));
   if (prev) {
     ppath->prev = prev;

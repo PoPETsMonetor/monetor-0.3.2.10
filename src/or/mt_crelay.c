@@ -166,9 +166,9 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
   }
   if (!digestmap_get(desc2circ, (char*) id)) {
     // then its find
-    log_info(LD_MT, "MoneTor: Our intermerdiary circuit closed but it looks"
+    log_warn(LD_MT, "MoneTor: Our intermerdiary circuit closed but it looks"
         " it has already been removed from our map => all payment channel should"
-        " have closed");
+        " have closed: %s", mt_desc_describe(&ocirc->desc));
     return;
   }
   else { //XXX TODO
@@ -343,14 +343,13 @@ mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   }
 
   if (circ->marked_for_close) {
-    log_warn(LD_MT, "MoneTor: Tried to send a message over a circuit markerd for close");
+    log_warn(LD_MT, "MoneTor: Tried to send a message over a circuit marked for close");
     return -2;
   }
   if (circ->state != CIRCUIT_STATE_OPEN) {
     log_info(LD_MT, "MoneTor: the circuit is not open yet."
-      " circ state: %s", circuit_state_to_string(circ->state));
-    //XXX Todo maybe do something smarter if the circ is still not
-    //open
+      " circ state: %s when sending %s", circuit_state_to_string(circ->state),
+      mt_token_describe(type));
     return -1;
   }
   if (command == RELAY_COMMAND_MT) {
@@ -532,8 +531,8 @@ void mt_crelay_update_payment_window(circuit_t *circ) {
   if (get_options()->EnablePayment &&
       circ->mt_priority) {
     if (--circ->payment_window < 10) {
-       log_info(LD_MT, "Payment window critically low: remains"
-          " %d cells", circ->payment_window);
+       log_warn(LD_MT, "Payment window critically low: remains"
+          " %d cells on relay side (negative value means we prioritize at credit!)", circ->payment_window);
     }
   }
 }
