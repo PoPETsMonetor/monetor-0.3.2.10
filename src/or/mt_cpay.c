@@ -787,7 +787,6 @@ static int help_chn_int_estab4(void* args){
   digestmap_remove(client.chns_transition, (char*)pid);
   smartlist_add(client.chns_estab, chn);
 
-  // check validity of incoming message
   if(chn->callback.fn)
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
   return MT_SUCCESS;
@@ -1269,21 +1268,22 @@ static workqueue_reply_t cpu_task_estab(void* thread, void* args){
   mt_zkp_args_t* zkp_args = (mt_zkp_args_t*)args;
   mt_channel_t* chn = zkp_args->chn;
 
+  // public zkp parameters
+  int public_size = sizeof(int) + MT_SZ_COM;
+  byte public[public_size];
+  memcpy(public, &chn->data.wallet.end_bal, sizeof(int));
+  memcpy(public + sizeof(int), chn->data.wallet.wcom, MT_SZ_COM);
+
   // prove knowledge of the following values
   int hidden_size = MT_SZ_PK + MT_SZ_SK + MT_SZ_HASH;
-  byte hidden_inputs[hidden_size];
-  memcpy(hidden_inputs, chn->data.wallet.wpk, MT_SZ_PK);
-  memcpy(hidden_inputs + MT_SZ_PK, chn->data.wallet.wsk, MT_SZ_SK);
-  memcpy(hidden_inputs + MT_SZ_PK + MT_SZ_SK, chn->data.wallet.rand, MT_SZ_HASH);
-
-  int public_size = sizeof(int) + MT_SZ_COM;
-  byte public_inputs[public_size];
-  memcpy(public_inputs, &chn->data.wallet.end_bal, sizeof(int));
-  memcpy(public_inputs + sizeof(int), chn->data.wallet.wcom, MT_SZ_COM);
+  byte hidden[hidden_size];
+  memcpy(hidden, chn->data.wallet.wpk, MT_SZ_PK);
+  memcpy(hidden + MT_SZ_PK, chn->data.wallet.wsk, MT_SZ_SK);
+  memcpy(hidden + MT_SZ_PK + MT_SZ_SK, chn->data.wallet.rand, MT_SZ_HASH);
 
   // record zkp
-  mt_zkp_prove(MT_ZKP_TYPE_1, &client.pp, public_inputs, public_size,
-	       hidden_inputs, hidden_size, &chn->data.wallet.zkp);
+  mt_zkp_prove(MT_ZKP_TYPE_1, &client.pp, public, public_size,
+	       hidden, hidden_size, &chn->data.wallet.zkp);
 
   return WQ_RPL_REPLY;
 }
@@ -1291,20 +1291,11 @@ static workqueue_reply_t cpu_task_estab(void* thread, void* args){
 static workqueue_reply_t cpu_task_nanestab(void* thread, void* args){
   (void)thread;
 
-  // extract parameters
   mt_channel_t* chn = ((mt_zkp_args_t*)args)->chn;
 
-  // encapsulate into wcom function function
-  // ALL OF THE BELOW SHOULD GO INTO WALLET'
-  // keygen new channel params
-  // create commitment
-  // create random var
-  // zkp:
-  //   hidden: wpk', B, r', wsig
-  //   public: wpk, end_pk, epsilon
-  //   write to nan_end_wallet_t
-
-  // call mt_commit_wallet here
+  if(mt_wallet_create(&client.pp, MT_NAN_VAL, &chn->data.wallet, &chn->data.wallet_new)
+     != MT_SUCCESS)
+    return WQ_RPL_ERROR;
   return WQ_RPL_REPLY;
 }
 

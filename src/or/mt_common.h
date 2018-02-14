@@ -121,6 +121,12 @@ int mt_receipt_sign(any_led_receipt_t* rec, byte (*sk)[MT_SZ_SK]);
  */
 int mt_receipt_verify(any_led_receipt_t* rec, byte (*pk)[MT_SZ_PK]);
 
+/**
+ * Populates the unsigned fields of a new micropayment wallet using a given old
+ * wallet and a desired value change
+ */
+int mt_wallet_create(byte (*pp)[MT_SZ_PP], int value, chn_end_wallet_t* wal_old,
+		     chn_end_wallet_t* wal_new);
 
 /** Canibalize a general circuit => extends it to
  *  the intermediary point described by ei

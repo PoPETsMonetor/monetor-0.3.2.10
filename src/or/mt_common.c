@@ -195,7 +195,54 @@ int mt_receipt_verify(any_led_receipt_t* rec, byte (*pk)[MT_SZ_PK]){
   return mt_sig_verify(str, str_size, pk, &rec->sig);
 }
 
+/**
+ * Populates the unsigned fields of a new micropayment wallet using a given old
+ * wallet and a desired value change
+ */
+int mt_wallet_create(byte (*pp)[MT_SZ_PP], int value, chn_end_wallet_t* wal_old,
+		     chn_end_wallet_t* wal_new){
 
+  int errors = 0;
+
+  // transfer straightforward values first
+  wal_new->end_bal = wal_old->end_bal + value;
+  wal_new->int_bal = wal_old->int_bal - value;
+  memcpy(wal_new->int_pk, wal_old->int_pk, MT_SZ_PK);
+  memcpy(wal_new->csk, wal_old->csk, MT_SZ_SK);
+
+  errors += mt_crypt_keygen(pp, &wal_new->wpk, &wal_new->wsk);
+  errors += mt_crypt_rand(MT_SZ_HASH, wal_new->rand);
+
+  // generate wallet commitment
+  int com_msg_size = MT_SZ_PK + sizeof(int);
+  byte com_msg[com_msg_size];
+  memcpy(com_msg, wal_new->wpk, MT_SZ_PK);
+  memcpy(com_msg + MT_SZ_PK, &wal_new->end_bal, sizeof(int));
+  errors += mt_com_commit(com_msg, com_msg_size, &wal_new->rand, &wal_new->wcom);
+
+  // public zkp parameters
+  int public_size = MT_SZ_PK + sizeof(int) + MT_SZ_PK + MT_SZ_SIG;
+  byte public[public_size];
+  memcpy(public, wal_old->int_pk, MT_SZ_PK);
+  memcpy(public + MT_SZ_PK, &value, sizeof(int));
+  memcpy(public + MT_SZ_PK + sizeof(int), wal_old->wpk, MT_SZ_PK);
+  memcpy(public + MT_SZ_PK + sizeof(int) + MT_SZ_PK, wal_old->sig, MT_SZ_SIG);
+
+  // prove knowledge of the following values
+  int hidden_size = MT_SZ_PK + sizeof(int) + MT_SZ_HASH;
+  byte hidden[hidden_size];
+  memcpy(hidden, wal_new->wpk, MT_SZ_PK);
+  memcpy(hidden + MT_SZ_PK, &wal_new->end_bal, sizeof(int));
+  memcpy(hidden + MT_SZ_PK + sizeof(int), wal_new->rand, MT_SZ_HASH);
+
+  errors += mt_zkp_prove(MT_ZKP_TYPE_2, pp, hidden, hidden_size, public, public_size, &wal_old->zkp);
+
+  if(errors != MT_SUCCESS * 4)
+    return MT_ERROR;
+
+  return MT_SUCCESS;
+
+}
 
 void increment(long unsigned *id) {
   id[0]++;

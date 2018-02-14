@@ -6013,9 +6013,11 @@ typedef struct {
 typedef struct {
   chn_end_public_t public;
   chn_end_wallet_t wallet;
+  chn_end_wallet_t wallet_new;
 
   nan_any_public_t nan_public;
   nan_end_wallet_t nan_wallet;
+  nan_end_wallet_t nan_wallet_new;
   nan_end_state_t nan_state;
 
   chn_end_refund_t refund;
