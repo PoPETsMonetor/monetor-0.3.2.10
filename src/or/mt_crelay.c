@@ -121,12 +121,13 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
    * is open; launch again one circuit toward the intermediary */
   log_info(LD_MT, "MoneTor: Intermediary circ has closed");
   byte id[DIGEST_LEN];
-  mt_desc2digest(&ocirc->desc, &id);
+  mt_desc2digest(ocirc->desci, &id);
   if (TO_CIRCUIT(ocirc)->state != CIRCUIT_STATE_OPEN) {
     /** Someway to indicate that we retry on an extend_info_t */
     tor_assert(ocirc->cpath);
     tor_assert(ocirc->cpath->prev);
     tor_assert(ocirc->cpath->prev->extend_info);
+    /** Special case where it's already in the digestmap */
     if (digestmap_get(desc2circ, (char*) id)) {
       digestmap_remove(desc2circ, (char*) id);
     }
@@ -150,29 +151,31 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
 
       origin_circuit_t *circ = circuit_launch_by_extend_info(purpose, ei, flags);
       if (!circ) {
-        log_info(LD_MT, "MoneTor: Something went wrong when re-creating a circuit, we should abort");
+        log_warn(LD_MT, "MoneTor: Something went wrong when re-creating a circuit, we should abort");
         // XXX Todo alert the payment system to aboard
         return;
       }
       /** retrieve the pointer we change the circuit but we keep the same descriptor*/
       circ->desc = ocirc->desc;
-      return;
     }
     else { /** We reache max retries */
-      log_info(LD_MT, "MoneTor: we reached the maximum allowed retry for intermediary %s"
+      log_warn(LD_MT, "MoneTor: we reached the maximum allowed retry for intermediary %s"
           " .. we abort", extend_info_describe(ocirc->cpath->prev->extend_info));
       // XXX TODO alert the payement system to aboard
     }
+    mt_rpay_set_status(ocirc->desci, 0);
+    return;
   }
   if (!digestmap_get(desc2circ, (char*) id)) {
     // then its find
     log_warn(LD_MT, "MoneTor: Our intermerdiary circuit closed but it looks"
         " it has already been removed from our map => all payment channel should"
-        " have closed: %s", mt_desc_describe(&ocirc->desc));
+        " have closed: %s", mt_desc_describe(ocirc->desci));
     return;
   }
   else { //XXX TODO
     digestmap_remove(desc2circ, (char*) id);
+    mt_rpay_set_status(ocirc->desci, 0);
   /** The circuit was open; so it was intentially closed by our side or someone in the path*/
     log_info(LD_MT, "MoneTor: an intermediary on the relay side has closed. Several possibilities:"
         " The circuit might have expired. The payment channel closed and made us closed this"
@@ -203,7 +206,7 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
     digestmap_remove(desc2circ, (char*) id);
   }
   else {
-    log_info(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
+    log_warn(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
   }
 
   if (circ->desci) {
@@ -213,7 +216,7 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
       digestmap_remove(desc2circ, (char*) id);
     }
     else {
-      log_info(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
+      log_warn(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
     }
   }
 }
@@ -348,8 +351,8 @@ mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   }
   if (circ->state != CIRCUIT_STATE_OPEN) {
     log_info(LD_MT, "MoneTor: the circuit is not open yet."
-      " circ state: %s when sending %s", circuit_state_to_string(circ->state),
-      mt_token_describe(type));
+      " circ state: %s when sending %s for desc %s", circuit_state_to_string(circ->state),
+      mt_token_describe(type), mt_desc_describe(desc));
     return -1;
   }
   if (command == RELAY_COMMAND_MT) {
