@@ -105,8 +105,8 @@ int mt_bsig_verify(byte* msg, int msg_size, byte (*pk)[MT_SZ_PK], byte (*unblind
  * some inputs.
  */
 int mt_zkp_prove(mt_zkp_type_t type, byte (*pp)[MT_SZ_PP],
-		 byte* hidden_inputs, int hidden_size,
 		 byte* public_inputs, int public_size,
+		 byte* hidden_inputs, int hidden_size,
 		 byte (*zkp_out)[MT_SZ_ZKP]);
 
 /**

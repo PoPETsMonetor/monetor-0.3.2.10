@@ -7,6 +7,7 @@
  */
 
 #pragma GCC diagnostic ignored "-Wswitch-enum"
+#pragma GCC diagnostic ignored "-Wstack-protector"
 
 #include <stdlib.h>
 #include <string.h>
@@ -44,6 +45,15 @@ int mt_pk2addr(byte (*pk)[MT_SZ_PK], byte (*addr_out)[MT_SZ_ADDR]){
 }
 
 /**
+ * Convert a byte string into a digest for digestmap_t
+ */
+void mt_bytes2digest(byte* str, int str_size, byte (*digest_out)[DIGEST_LEN]){
+  byte hash[MT_SZ_HASH];
+  mt_crypt_hash(str, str_size, &hash);
+  memcpy(*digest_out, hash, DIGEST_LEN);
+}
+
+/**
  * Converts an mt_desc_t into an address for use in digestmaps. The output is
  * a hash of the mt_desc_t contents truncated to 20 bytes
  */
@@ -69,7 +79,6 @@ void mt_nanpub2digest(nan_any_public_t* token, byte (*digest_out)[DIGEST_LEN]){
   mt_crypt_hash(input, sizeof(int) * 3 + MT_SZ_HASH, &hash);
   memcpy(*digest_out, hash, DIGEST_LEN);
 }
-
 
 /**
  * Converts byte string to a malloc'd hex output (c-string)
@@ -221,21 +230,22 @@ int mt_wallet_create(byte (*pp)[MT_SZ_PP], int value, chn_end_wallet_t* wal_old,
   errors += mt_com_commit(com_msg, com_msg_size, &wal_new->rand, &wal_new->wcom);
 
   // public zkp parameters
-  int public_size = MT_SZ_PK + sizeof(int) + MT_SZ_PK + MT_SZ_SIG;
+  int public_size = MT_SZ_PK + sizeof(int) + MT_SZ_PK + MT_SZ_COM;
   byte public[public_size];
   memcpy(public, wal_old->int_pk, MT_SZ_PK);
   memcpy(public + MT_SZ_PK, &value, sizeof(int));
   memcpy(public + MT_SZ_PK + sizeof(int), wal_old->wpk, MT_SZ_PK);
-  memcpy(public + MT_SZ_PK + sizeof(int) + MT_SZ_PK, wal_old->sig, MT_SZ_SIG);
+  memcpy(public + MT_SZ_PK + sizeof(int) + MT_SZ_PK, wal_new->wcom, MT_SZ_COM);
 
   // prove knowledge of the following values
-  int hidden_size = MT_SZ_PK + sizeof(int) + MT_SZ_HASH;
+  int hidden_size = MT_SZ_PK + sizeof(int) + MT_SZ_HASH + MT_SZ_SIG;
   byte hidden[hidden_size];
   memcpy(hidden, wal_new->wpk, MT_SZ_PK);
   memcpy(hidden + MT_SZ_PK, &wal_new->end_bal, sizeof(int));
   memcpy(hidden + MT_SZ_PK + sizeof(int), wal_new->rand, MT_SZ_HASH);
+  memcpy(hidden + MT_SZ_PK + sizeof(int) + MT_SZ_HASH, wal_old->sig, MT_SZ_SIG);
 
-  errors += mt_zkp_prove(MT_ZKP_TYPE_2, pp, hidden, hidden_size, public, public_size, &wal_old->zkp);
+  errors += mt_zkp_prove(MT_ZKP_TYPE_2, pp, public, public_size, hidden, hidden_size, &wal_new->zkp);
 
   if(errors != MT_SUCCESS * 4)
     return MT_ERROR;

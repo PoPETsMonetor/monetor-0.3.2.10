@@ -796,19 +796,25 @@ static int help_chn_int_estab4(void* args){
 
 static int init_nan_cli_setup1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
-  // TODO: copy over and wpk/npwk/wcom/zkp
-
-  // create hash chain
+  // create hash chain and save it to local state
   byte hc_head[MT_SZ_HASH];
   mt_crypt_rand(MT_SZ_HASH, hc_head);
   mt_hc_create(MT_NAN_LEN, &hc_head, &chn->data.nan_wallet.hc);
 
+  // define nanopayment parameters in local state
+  chn->data.nan_public.val_from = MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100;
+  chn->data.nan_public.val_to = MT_NAN_VAL;
+  chn->data.nan_public.num_payments = MT_NAN_LEN;
+  memcpy(chn->data.nan_public.hash_tail, chn->data.nan_wallet.hc[0], MT_SZ_HASH);
+
   // make token
   nan_cli_setup1_t token;
-  token.nan_public.val_from = MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100;
-  token.nan_public.val_to = MT_NAN_VAL;
-  token.nan_public.num_payments = MT_NAN_LEN;
-  memcpy(token.nan_public.hash_tail, chn->data.nan_wallet.hc[0], MT_SZ_HASH);
+  token.value = -(chn->data.nan_public.val_from);
+  memcpy(token.wpk, chn->data.wallet.wpk, MT_SZ_PK);
+  memcpy(token.nwpk, chn->data.wallet_new.wpk, MT_SZ_PK);
+  memcpy(token.wcom, chn->data.wallet_new.wcom, MT_SZ_COM);
+  memcpy(token.zkp, chn->data.wallet_new.zkp, MT_SZ_ZKP);
+  memcpy(&token.nan_public, &chn->data.nan_public, sizeof(nan_any_public_t));
 
   // update channel data
   memcpy(&chn->data.nan_public, &token.nan_public, sizeof(nan_any_public_t));
@@ -833,8 +839,11 @@ static int handle_nan_int_setup2(mt_desc_t* desc, nan_int_setup2_t* token, byte 
     return MT_ERROR;
   }
 
-  // check validity incoming message
+  // check validity of incoming message
+  if(token->verified != MT_CODE_VERIFIED)
+    return MT_ERROR;
 
+  // create and send reply token
   nan_cli_setup3_t reply;
 
   // fill reply with correct values
@@ -1293,8 +1302,8 @@ static workqueue_reply_t cpu_task_nanestab(void* thread, void* args){
 
   mt_channel_t* chn = ((mt_zkp_args_t*)args)->chn;
 
-  if(mt_wallet_create(&client.pp, MT_NAN_VAL, &chn->data.wallet, &chn->data.wallet_new)
-     != MT_SUCCESS)
+  if(mt_wallet_create(&client.pp, -(MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100),
+		      &chn->data.wallet, &chn->data.wallet_new) != MT_SUCCESS)
     return WQ_RPL_ERROR;
   return WQ_RPL_REPLY;
 }

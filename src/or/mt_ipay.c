@@ -35,6 +35,7 @@
  */
 
 #pragma GCC diagnostic ignored "-Wswitch-enum"
+#pragma GCC diagnostic ignored "-Wstack-protector"
 
 #include "or.h"
 #include "config.h"
@@ -81,6 +82,7 @@ typedef struct {
   byte led_pk[MT_SZ_PK];
 
   int fee;
+  int tax;
 
   chn_int_state_t chn_state;
   nan_int_state_t nan_state;
@@ -151,6 +153,7 @@ int mt_ipay_init(void){
 
   // setup system parameters
   intermediary.fee = MT_FEE;
+  intermediary.tax = MT_TAX;
   intermediary.mac_bal = 0;
   intermediary.chn_bal = 0;
   intermediary.chn_number = 0;
@@ -159,6 +162,7 @@ int mt_ipay_init(void){
   intermediary.chns_setup = digestmap_new();
   intermediary.chns_estab = digestmap_new();
   intermediary.chns_transition = digestmap_new();
+  intermediary.chn_state.map = digestmap_new();
   intermediary.nan_state.map = digestmap_new();
   return MT_SUCCESS;
 }
@@ -488,15 +492,41 @@ static int handle_chn_end_estab3(mt_desc_t* desc, chn_end_estab3_t* token, byte 
 /******************************** Nano Setup ****************************/
 
 static int handle_nan_cli_setup1(mt_desc_t* desc, nan_cli_setup1_t* token, byte (*pid)[DIGEST_LEN]){
-  byte digest[DIGEST_LEN];
-  mt_nanpub2digest(&token->nan_public, &digest);
 
-  nan_end_state_t* end_state = tor_calloc(1, sizeof(nan_end_state_t));
-  digestmap_set(intermediary.nan_state.map, (char*)digest, end_state);
+  // make sure wallet has not been used before
+  byte wpk_digest[DIGEST_LEN];
+  mt_bytes2digest(token->wpk, MT_SZ_PK, &wpk_digest);
 
+  if(digestmap_get(intermediary.chn_state.map, (char*)wpk_digest))
+    return MT_ERROR;
+
+  // only accept consensus values
+  if(token->value != - (MT_NAN_VAL + (MT_NAN_VAL * intermediary.tax) / 100))
+    return MT_ERROR;
+
+  // public zkp parameters
+  int public_size = MT_SZ_PK + sizeof(int) + MT_SZ_PK + MT_SZ_COM;
+  byte public[public_size];
+  memcpy(public, intermediary.pk, MT_SZ_PK);
+  memcpy(public + MT_SZ_PK, &token->value, sizeof(int));
+  memcpy(public + MT_SZ_PK + sizeof(int), token->wpk, MT_SZ_PK);
+  memcpy(public + MT_SZ_PK + sizeof(int) + MT_SZ_PK, token->wcom, MT_SZ_COM);
+
+  if(mt_zkp_verify(MT_ZKP_TYPE_2, &intermediary.pp, public, public_size, &token->zkp) != MT_SUCCESS)
+    return MT_ERROR;
+
+  byte nan_digest[DIGEST_LEN];
+  mt_nanpub2digest(&token->nan_public, &nan_digest);
+
+  // update local intermediary state
+  chn_end_revoke_t* chn_end_state = tor_calloc(1, sizeof(chn_end_revoke_t));
+  digestmap_set(intermediary.chn_state.map, (char*)wpk_digest, chn_end_state);
+  nan_end_state_t* nan_end_state = tor_calloc(1, sizeof(nan_end_state_t));
+  digestmap_set(intermediary.nan_state.map, (char*)nan_digest, nan_end_state);
+
+  // create and send reply token
   nan_int_setup2_t reply;
-
-  // fill out token
+  reply.verified = MT_CODE_VERIFIED;
 
   byte* msg;
   int msg_size = pack_nan_int_setup2(&reply, pid, &msg);

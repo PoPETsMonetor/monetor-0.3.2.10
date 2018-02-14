@@ -5932,7 +5932,7 @@ typedef struct {
 
 typedef struct {
   // public keys -> revocation tokens
-  digestmap_t* state;
+  digestmap_t* map;
 } chn_int_state_t;
 
 typedef struct {
@@ -5953,8 +5953,6 @@ typedef struct {
 } nan_int_state_t;
 
 typedef struct {
-  byte wpk[MT_SZ_PK];
-  byte wsk[MT_SZ_SK];
   byte hc[MT_NAN_LEN][MT_SZ_HASH];
 } nan_end_wallet_t;
 
@@ -6214,6 +6212,7 @@ typedef struct {
 } mic_int_pay8_t;
 
 typedef struct {
+  int value;
   byte wpk[MT_SZ_PK];
   byte nwpk[MT_SZ_PK];
   byte wcom[MT_SZ_COM];
@@ -6226,7 +6225,7 @@ typedef struct {
 } nan_int_setup2_t;
 
 typedef struct {
-  byte nwcom[MT_SZ_COM];
+  byte nwcom_blinded[MT_SZ_BL];
 } nan_cli_setup3_t;
 
 typedef struct {

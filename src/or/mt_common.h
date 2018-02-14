@@ -75,6 +75,11 @@ void mt_desc_free(mt_desc_t *desc);
 int mt_pk2addr(byte (*pk)[MT_SZ_PK], byte (*addr_out)[MT_SZ_ADDR]);
 
 /**
+ * Convert a byte string into a digest for digestmap_t
+ */
+void mt_bytes2digest(byte* str, int str_size, byte (*digest_out)[DIGEST_LEN]);
+
+/**
  * Convert a moneTor descriptor into a digest for digestmap_t
  */
 void mt_desc2digest(mt_desc_t* desc, byte (*digest_out)[DIGEST_LEN]);

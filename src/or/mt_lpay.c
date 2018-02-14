@@ -25,6 +25,7 @@
  */
 
 #pragma GCC diagnostic ignored "-Wswitch-enum"
+#pragma GCC diagnostic ignored "-Wstack-protector"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -610,7 +611,7 @@ int handle_chn_end_cashout(chn_end_cashout_t* token, byte (*addr)[MT_SZ_ADDR], a
   memcpy(rec->to, token->chn, MT_SZ_ADDR);
   tor_assert(mt_receipt_sign(rec, &ledger.sk) == MT_SUCCESS);
 
-  return MT_SUCCESS;
+  return result;
 }
 
 /**
@@ -649,7 +650,7 @@ int handle_chn_int_cashout(chn_int_cashout_t* token, byte (*addr)[MT_SZ_ADDR], a
   memcpy(rec->to, token->chn, MT_SZ_ADDR);
   tor_assert(mt_receipt_sign(rec, &ledger.sk) == MT_SUCCESS);
 
-  return MT_SUCCESS;
+  return result;
 }
 
 //------------------------------- Helper Functions --------------------------------------//
