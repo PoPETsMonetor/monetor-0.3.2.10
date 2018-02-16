@@ -136,6 +136,21 @@ smartlist_t* get_intermediaries(int for_circuit) {
   return NULL;
 }
 
+int mt_cclient_is_intermediary(const char *identity) {
+  SMARTLIST_FOREACH_BEGIN(intermediaries, intermediary_t*, intermediary) {
+    if (tor_memeq(intermediary->identity->identity, identity,
+          DIGEST_LEN))
+      return 1;
+  } SMARTLIST_FOREACH_END(intermediary);
+  return 0;
+}
+
+int mt_cclient_is_ledger(const char *identity) {
+  if (!ledger)
+    return 0;
+  return tor_memeq(ledger->identity.identity, identity, DIGEST_LEN);
+}
+
 void add_intermediary(intermediary_t *inter) {
   /**Used by unit tests*/
   smartlist_add(intermediaries, inter);
@@ -898,6 +913,7 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   if (command == RELAY_COMMAND_MT) {
     crypt_path_t *layer_start; //layer of destination hop
     tor_assert(TO_ORIGIN_CIRCUIT(circ)->cpath);
+    int hop = 4;
     if (circ->purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY ||
         circ->purpose == CIRCUIT_PURPOSE_C_LEDGER) {
       /* We will have 4 relay_crypt */
@@ -908,19 +924,21 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
       layer_start = TO_ORIGIN_CIRCUIT(circ)->cpath;
       pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
       int found = 0;
+      hop = 1;
       do {
         if (mt_desc_eq(desc, &ppath_tmp->desc)) {
           found = 1;
           break;
         }
+        hop++;
         layer_start = layer_start->next;
         ppath_tmp = ppath_tmp->next;
       } while(layer_start != TO_ORIGIN_CIRCUIT(circ)->cpath && ppath_tmp);
       if (BUG(!found))
         return -2;
     }
-    log_debug(LD_MT, "MoneTor: Sending message type %s with payload size of %d bytes",
-        mt_token_describe(type), size);
+    log_debug(LD_MT, "MoneTor: Sending message type %s with payload size of %d bytes to hop %d",
+        mt_token_describe(type), size, hop);
     return relay_send_pcommand_from_edge(circ, command, (uint8_t) type,
         layer_start, (const char*) msg, size);
   }

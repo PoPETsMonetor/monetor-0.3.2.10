@@ -61,6 +61,10 @@ void add_intermediary(intermediary_t *inter);
 /* Get one intermediary usable for position */
 intermediary_t* get_intermediary_by_role(position_t position);
 
+int mt_cclient_is_intermediary(const char *id);
+
+int mt_cclient_is_ledger(const char *id);
+
 /**
  * Picks a random intermediary from our pre-built list
  * of available intermediaries

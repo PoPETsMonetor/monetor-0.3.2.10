@@ -92,6 +92,19 @@ circuit_matches_with_rend_stream(const edge_connection_t *edge_conn,
   return 1;
 }
 
+static int
+circuit_has_intermediary_or_ledger(const origin_circuit_t *circ) {
+  crypt_path_t *cpath_tmp = circ->cpath;
+  const char *id;
+  do {
+    id = cpath_tmp->extend_info->identity_digest;
+    if (mt_cclient_is_intermediary(id) || mt_cclient_is_ledger(id))
+      return 1;
+    cpath_tmp = cpath_tmp->next;
+  } while (cpath_tmp != circ->cpath);
+  return 0;
+}
+
 /** Return 1 if <b>circ</b> could be returned by circuit_get_best().
  * Else return 0.
  */
@@ -204,6 +217,12 @@ circuit_is_acceptable(const origin_circuit_t *origin_circ,
     }
     if (exitnode && !connection_ap_can_use_exit(conn, exitnode)) {
       /* can't exit from this router */
+      return 0;
+    }
+    /** If there is an intermediary in the path or a ledger; don't take this*/
+    /** This shitty bug might happen with preemptive built circuits, when the information
+     * is not yet up to date :/ */
+    if (circuit_has_intermediary_or_ledger(origin_circ)) {
       return 0;
     }
   } else { /* not general: this might be a rend circuit */

@@ -166,6 +166,7 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
     mt_rpay_set_status(ocirc->desci, 0);
     return;
   }
+  mt_rpay_set_status(ocirc->desci, 0);
   if (!digestmap_get(desc2circ, (char*) id)) {
     // then its find
     log_warn(LD_MT, "MoneTor: Our intermerdiary circuit closed but it looks"
@@ -175,7 +176,6 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
   }
   else { //XXX TODO
     digestmap_remove(desc2circ, (char*) id);
-    mt_rpay_set_status(ocirc->desci, 0);
   /** The circuit was open; so it was intentially closed by our side or someone in the path*/
     log_info(LD_MT, "MoneTor: an intermediary on the relay side has closed. Several possibilities:"
         " The circuit might have expired. The payment channel closed and made us closed this"
@@ -210,6 +210,7 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
   }
 
   if (circ->desci) {
+    mt_rpay_set_status(circ->desci, 0);
     mt_desc2digest(circ->desci, &id);
     /** remove or intermediary map duplication */
     if (digestmap_get(desc2circ, (char*) id)) {

@@ -139,6 +139,9 @@ relay_set_digest(crypto_digest_t *digest, cell_t *cell)
 //    integrity[0], integrity[1], integrity[2], integrity[3]);
   relay_header_unpack(&rh, cell->payload);
   memcpy(rh.integrity, integrity, 4);
+  if (rh.command == RELAY_COMMAND_MT) {
+    log_debug(LD_MT, "MoneTor: set digest %u", (uint32_t)*integrity);
+  }
   relay_header_pack(cell->payload, &rh);
 }
 
@@ -170,8 +173,8 @@ relay_digest_matches(crypto_digest_t *digest, cell_t *cell)
   crypto_digest_get_digest(digest, (char*) &calculated_integrity, 4);
 
   if (calculated_integrity != received_integrity) {
-//    log_fn(LOG_INFO,"Recognized=0 but bad digest. Not recognizing.");
-// (%d vs %d).", received_integrity, calculated_integrity);
+    log_fn(LOG_PROTOCOL_WARN, LOG_INFO,
+        "Recognized=0 but bad digest. Not recognizing. (%u vs %u).", received_integrity, calculated_integrity);
     /* restore digest to its old form */
     crypto_digest_assign(digest, backup_digest);
     /* restore the relay header */
@@ -394,7 +397,7 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
       return 0;
     }
     log_fn(LOG_PROTOCOL_WARN, LD_PROTOCOL,
-           "Didn't recognize cell, but circ stops here! Closing circ.");
+           "Didn't recognize cell, but circ stops here! Closing circ. command: %d", cell->command);
     return -END_CIRC_REASON_TORPROTOCOL;
   }
 
@@ -737,7 +740,7 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
       /* Update client timestamp to give priority */
       channel_timestamp_client(circ->n_chan);
     }
-    log_debug(LD_MT, "MoneTor - Packaging cell type %d", relay_pcommand);
+    log_debug(LD_MT, "MoneTor - Packaging cell type %s", mt_token_describe(relay_pcommand));
 
     return circuit_package_relay_cell(&cell, circ, cell_direction,
         layer_start, cpath_layer, 0, filename, lineno);
