@@ -772,6 +772,19 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
             " and one packaging failed ...");
         return -2;
       }
+      /** resest cell memory and rh integrity */
+      memset(&cell, 0, sizeof(cell_t));
+      memset(&rh, 0, sizeof(relay_header_t));
+      rh.command = relay_command;
+      rh.stream_id = 0;
+      cell.command = CELL_RELAY;
+      if (CIRCUIT_IS_ORIGIN(circ)) {
+        cell.circ_id = circ->n_circ_id;
+      }
+      else {
+        cell.circ_id = TO_OR_CIRCUIT(circ)->p_circ_id;
+      }
+      /** payload remaining */
       payload_remains -= rph.length;
     }
     tor_assert(payload_remains == 0);

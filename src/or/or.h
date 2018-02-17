@@ -3186,7 +3186,7 @@ typedef struct circuit_t {
   /**
    * Set to 1 when we prioritize this circuit
    */
-  unsigned int mt_priority : 1;
+  uint32_t mt_priority;
 
   /** Temporary field used during circuits_handle_oom. */
   uint32_t age_tmp;

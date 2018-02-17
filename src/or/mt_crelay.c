@@ -247,7 +247,7 @@ run_crelay_housekeeping_event(time_t now) {
       digestmap_size(desc2circ), (long long) now);
   DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
     if (CIRCUIT_IS_ORCIRC(circ) && circ->mt_priority && circ->payment_window < 0) {
-      tor_assert_nonfatal(circ->payment_window > 0);
+      /*tor_assert_nonfatal(circ->payment_window > 0);*/
       log_warn(LD_MT, "MoneTor: this circuit has negative window, this should not happen!");
     }
   } DIGESTMAP_FOREACH_END;
@@ -535,8 +535,8 @@ void mt_crelay_update_payment_window(circuit_t *circ) {
   if (get_options()->EnablePayment &&
       circ->mt_priority) {
     if (--circ->payment_window < 10) {
-       log_warn(LD_MT, "Payment window critically low: remains"
-          " %d cells on relay side (negative value means we prioritize at credit!)", circ->payment_window);
+       /*log_warn(LD_MT, "Payment window critically low: remains"*/
+          /*" %d cells on relay side (negative value means we prioritize at credit!)", circ->payment_window);*/
     }
   }
 }
@@ -568,15 +568,16 @@ int mt_crelay_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
       log_warn(LD_MT, "MoneTor: PRIORITY ENABLED on circ n_circ_id %u", circ->n_circ_id);
     } 
     else {
-      log_info(LD_MT, "MoneTor: Seems that the circuit has been closed");
+      log_warn(LD_MT, "MoneTor: Seems that the circuit has been closed");
       digestmap_remove(desc2circ, (char*) id);
       return -1;
     }
   }
   else if (signal == MT_SIGNAL_PAYMENT_RECEIVED) {
     if (!circ->marked_for_close) {
+      circ->mt_priority++;
       circ->payment_window += 2000;
-      log_info(LD_MT, "MoneTor: Payment received, increasing the window");
+      log_info(LD_MT, "MoneTor: Payment %u received , increasing the window", circ->mt_priority);
     }
     else {
       log_info(LD_MT, "MoneTor: Seems that the circuit has been closed, it should"
