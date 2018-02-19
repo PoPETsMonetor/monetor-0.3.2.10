@@ -487,6 +487,9 @@ relay_crypt(circuit_t *circ, cell_t *cell, cell_direction_t cell_direction,
         *recognized = 1;
         return 0;
       }
+      if (rh.command == RELAY_COMMAND_MT  && !relay_digest_matches(TO_OR_CIRCUIT(circ)->n_digest, cell)) {
+        log_warn(LD_MT, "MoneTor: WUT? cell recognized but digest does not match");
+      }
     }
   }
   return 0;
@@ -727,7 +730,8 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
   }
   cell.command = CELL_RELAY;
   rh.command = relay_command;
-  rh.stream_id = 0;
+  rh.stream_id = 0;  //useless
+  rh.recognized = 0; //useless
   rph.pcommand = relay_pcommand;
   /* If we have a payment cell with less than RELAY_PPAYLOAD_SIZE
    * then we can package the cell*/
@@ -740,7 +744,8 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
       /* Update client timestamp to give priority */
       channel_timestamp_client(circ->n_chan);
     }
-    log_debug(LD_MT, "MoneTor - Packaging cell type %s", mt_token_describe(relay_pcommand));
+    log_debug(LD_MT,"MoneTor: delivering RELAY cell %s type %s.",
+            cell_direction == CELL_DIRECTION_OUT ? "forward" : "backward",  mt_token_describe(relay_pcommand));
 
     return circuit_package_relay_cell(&cell, circ, cell_direction,
         layer_start, cpath_layer, 0, filename, lineno);
@@ -2066,6 +2071,7 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
                               cell->payload+RELAY_HEADER_SIZE);
       return 0;
     case RELAY_COMMAND_MT:
+      circuit_consider_sending_sendme(circ, layer_hint);
       log_info(LD_MT, "MoneTor: received a RELAY_COMMAND_MT, unpacking and calling"
           " mt_proces_received_relaycell");
       relay_pheader_unpack(&rph, cell->payload+RELAY_HEADER_SIZE);
