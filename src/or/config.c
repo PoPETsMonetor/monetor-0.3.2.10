@@ -212,6 +212,7 @@ DUMMY_TYPECHECK_INSTANCE(or_options_t);
 static config_var_t option_vars_[] = {
 
   V(MoneTorPublicMint,           BOOL,     "0"),
+  V(MoneTorSingleThread,         BOOL,     "0"),
   V(AccountingMax,               MEMUNIT,  "0 bytes"),
   VAR("AccountingRule",          STRING,   AccountingRule_option,  "max"),
   V(AccountingStart,             STRING,   NULL),

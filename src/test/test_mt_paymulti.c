@@ -981,6 +981,9 @@ static void test_mt_paymulti(void *arg){
     tt_assert(do_main_loop_once() == MT_SUCCESS);
   }
 
+  // turn to single thread just for fun
+  options->MoneTorSingleThread = 1;
+
   // do it again
   sim_time = 0;
   set_up_main_loop();
