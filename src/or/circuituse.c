@@ -2808,7 +2808,9 @@ connection_ap_handshake_attach_circuit(entry_connection_t *conn)
       if (!circ->ppath) {
           circ->ppath = circuit_init_ppath(NULL);
           circ->ppath->next = circuit_init_ppath(circ->ppath);
+          circ->ppath->next->position = MIDDLE;
           circ->ppath->next->next = circuit_init_ppath(circ->ppath->next);
+          circ->ppath->next->next->position = EXIT;
           mt_cclient_launch_payment(circ);
       }
     }

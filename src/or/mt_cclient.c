@@ -367,7 +367,7 @@ choose_intermediaries(time_t now, smartlist_t *exclude_list) {
     intermediary->linked_to = EXIT;
   //tor_assert(count_middle+counter_exit <= MAX_INTERMEDIARY_CHOSEN);
   smartlist_add(intermediaries, intermediary);
-  log_info(LD_MT, "MoneTor: added intermediary to list");
+  log_info(LD_MT, "MoneTor: added intermediary to list with role: %d", intermediary->linked_to);
   return;
  err:
   extend_info_free(ei);
