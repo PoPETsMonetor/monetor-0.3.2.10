@@ -236,8 +236,12 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   middle->desc.id[1] = count[1];
   middle->desc.party = MT_PARTY_REL;
   /* Log if intermediary is NULL? Should not happen*/
-  tor_assert_nonfatal(intermediary_g);
-  
+  if (!intermediary_g) {
+    log_warn(LD_MT, "Looks like we do not have an intermediary yet ..");
+    circuit_mark_for_close(TO_CIRCUIT(circ), -1);
+    return;
+  }
+
   if (intermediary_g) {
     memcpy(middle->inter_ident->identity, intermediary_g->identity->identity,
         DIGEST_LEN);
@@ -363,7 +367,7 @@ choose_intermediaries(time_t now, smartlist_t *exclude_list) {
     intermediary->linked_to = EXIT;
   //tor_assert(count_middle+counter_exit <= MAX_INTERMEDIARY_CHOSEN);
   smartlist_add(intermediaries, intermediary);
-  log_info(LD_MT, "MoneTor: added intermediary to list");
+  log_info(LD_MT, "MoneTor: added intermediary to list with role: %d", intermediary->linked_to);
   return;
  err:
   extend_info_free(ei);
@@ -599,7 +603,6 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
 
 
 void mt_cclient_update_payment_window(circuit_t *circ) {
-
   if (get_options()->EnablePayment && CIRCUIT_IS_ORIGIN(circ)) {
     pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
     int hop = 1;
@@ -610,7 +613,8 @@ void mt_cclient_update_payment_window(circuit_t *circ) {
             !ppath_tmp->p_marked_for_close) {
         /** pay :-) */
           intermediary_t* intermediary = get_intermediary_by_role(ppath_tmp->position);
-          log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d", ppath_tmp->window);
+          log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d on hop %d with intermediary %s, desc: %s",
+              ppath_tmp->window, hop, extend_info_describe(intermediary->ei), mt_desc_describe(&intermediary->desc));
           ppath_tmp->payment_is_processing = 1;
           if (hop == 1) {
             /** We must do a direct payment, using same descriptor */
@@ -667,7 +671,7 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
         if (!ppath_tmp->first_payment_succeeded) {
           log_info(LD_MT, "MoneTor: Yay! First payment succeeded for hop %d", hop);
           ppath_tmp->first_payment_succeeded = 1;
-          ppath_tmp->window = 3000;
+          ppath_tmp->window = 1640;
         }
         else {
           ppath_tmp->window += 2000;
@@ -937,8 +941,8 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
       if (BUG(!found))
         return -2;
     }
-    log_debug(LD_MT, "MoneTor: Sending message type %s with payload size of %d bytes to hop %d",
-        mt_token_describe(type), size, hop);
+    log_debug(LD_MT, "MoneTor: Sending message type %s with payload size of %d bytes to hop %d %s",
+        mt_token_describe(type), size, hop, extend_info_describe(layer_start->extend_info));
     return relay_send_pcommand_from_edge(circ, command, (uint8_t) type,
         layer_start, (const char*) msg, size);
   }

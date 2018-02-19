@@ -173,8 +173,8 @@ relay_digest_matches(crypto_digest_t *digest, cell_t *cell)
   crypto_digest_get_digest(digest, (char*) &calculated_integrity, 4);
 
   if (calculated_integrity != received_integrity) {
-    log_fn(LOG_PROTOCOL_WARN, LOG_INFO,
-        "Recognized=0 but bad digest. Not recognizing. (%u vs %u).", received_integrity, calculated_integrity);
+    /*log_fn(LOG_PROTOCOL_WARN, LOG_INFO,*/
+        /*"Recognized=0 but bad digest. Not recognizing. (%u vs %u).", received_integrity, calculated_integrity);*/
     /* restore digest to its old form */
     crypto_digest_assign(digest, backup_digest);
     /* restore the relay header */
@@ -727,7 +727,8 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
   }
   cell.command = CELL_RELAY;
   rh.command = relay_command;
-  rh.stream_id = 0;
+  rh.stream_id = 0;  //useless
+  rh.recognized = 0; //useless
   rph.pcommand = relay_pcommand;
   /* If we have a payment cell with less than RELAY_PPAYLOAD_SIZE
    * then we can package the cell*/
@@ -740,7 +741,8 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
       /* Update client timestamp to give priority */
       channel_timestamp_client(circ->n_chan);
     }
-    log_debug(LD_MT, "MoneTor - Packaging cell type %s", mt_token_describe(relay_pcommand));
+    log_debug(LD_MT,"MoneTor: delivering RELAY cell %s type %s.",
+            cell_direction == CELL_DIRECTION_OUT ? "forward" : "backward",  mt_token_describe(relay_pcommand));
 
     return circuit_package_relay_cell(&cell, circ, cell_direction,
         layer_start, cpath_layer, 0, filename, lineno);
@@ -2079,6 +2081,7 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
                               cell->payload+RELAY_HEADER_SIZE);
       return 0;
     case RELAY_COMMAND_MT:
+      circuit_consider_sending_sendme(circ, layer_hint);
       log_info(LD_MT, "MoneTor: received a RELAY_COMMAND_MT, unpacking and calling"
           " mt_proces_received_relaycell");
       relay_pheader_unpack(&rph, cell->payload+RELAY_HEADER_SIZE);
@@ -3117,7 +3120,6 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
   }
 #endif /* 0 */
   
-  mt_update_payment_window(circ);
 
   cell_queue_append_packed_copy(circ, queue, exitward, cell,
                                 chan->wide_circ_ids, 1);
@@ -3147,6 +3149,11 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
 
   /* New way: mark this as having waiting cells for the scheduler */
   scheduler_channel_has_waiting_cells(chan);
+  
+  /** Now we check again for apayment cell to send and append to the queue if
+   * needed */
+
+  mt_update_payment_window(circ);
 }
 
 /** Append an encoded value of <b>addr</b> to <b>payload_out</b>, which must

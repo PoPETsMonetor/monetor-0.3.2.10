@@ -442,6 +442,14 @@ static int init_chn_end_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   args->chn = chn;
   memcpy(args->pid, *pid, DIGEST_LEN);
 
+  // if single threaded then just call procedures in series
+  if(get_options()->MoneTorSingleThread){
+    if(cpu_task_estab(NULL, args) != WQ_RPL_REPLY)
+       return MT_ERROR;
+    return help_chn_end_estab1(args);
+  }
+
+  // if not single threaded then offload task to a different cpu task/reply flow
   if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_estab, (work_task)help_chn_end_estab1, args))
     return MT_ERROR;
   return MT_SUCCESS;
@@ -541,6 +549,14 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
   args->chn = chn;
   memcpy(args->pid, *pid, DIGEST_LEN);
 
+  // if single threaded then just call procedures in series
+  if(get_options()->MoneTorSingleThread){
+    if(cpu_task_nanestab(NULL, args) != WQ_RPL_REPLY)
+       return MT_ERROR;
+    return help_chn_int_estab4(args);
+  }
+
+  // if not single threaded then offload task to a different cpu task/reply flow
   if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanestab, (work_task)help_chn_int_estab4, args))
     return MT_ERROR;
   return MT_SUCCESS;
@@ -854,6 +870,14 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
   args->chn = chn;
   memcpy(args->pid, *pid, DIGEST_LEN);
 
+  // if single threaded then just call procedures in series
+  if(get_options()->MoneTorSingleThread){
+    if(cpu_task_nanclose(NULL, args) != WQ_RPL_REPLY)
+       return MT_ERROR;
+    return help_nan_int_close8(args);
+  }
+
+  // if not single threaded then offload task to a different cpu task/reply flow
   if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanclose, (work_task)help_nan_int_close8, args))
     return MT_ERROR;
   return MT_SUCCESS;
