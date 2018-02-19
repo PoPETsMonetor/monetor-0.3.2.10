@@ -576,8 +576,12 @@ int mt_crelay_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
   else if (signal == MT_SIGNAL_PAYMENT_RECEIVED) {
     if (!circ->marked_for_close) {
       circ->mt_priority++;
-      circ->payment_window += 2000;
-      log_info(LD_MT, "MoneTor: Payment %u received , increasing the window", circ->mt_priority);
+      if (circ->mt_priority == 1)
+        circ->payment_window = 3000;
+      else 
+        circ->payment_window += 2000;
+      log_info(LD_MT, "MoneTor: Payment %u received , increasing the window to %d",
+          circ->mt_priority, circ->payment_window);
     }
     else {
       log_info(LD_MT, "MoneTor: Seems that the circuit has been closed, it should"

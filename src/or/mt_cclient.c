@@ -613,8 +613,13 @@ void mt_cclient_update_payment_window(circuit_t *circ) {
             !ppath_tmp->p_marked_for_close) {
         /** pay :-) */
           intermediary_t* intermediary = get_intermediary_by_role(ppath_tmp->position);
-          log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d on hop %d with intermediary %s, desc: %s",
-              ppath_tmp->window, hop, extend_info_describe(intermediary->ei), mt_desc_describe(&intermediary->desc));
+          if (!intermediary) {
+            log_warn(LD_MT, "MoneTor: get_intermediary_by_role returned NULL :/");
+            if (hop > 1)
+              break;
+          }
+          log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d on hop %d with on desc: %s",
+              ppath_tmp->window, hop, mt_desc_describe(&intermediary->desc));
           ppath_tmp->payment_is_processing = 1;
           if (hop == 1) {
             /** We must do a direct payment, using same descriptor */
@@ -671,7 +676,7 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
         if (!ppath_tmp->first_payment_succeeded) {
           log_info(LD_MT, "MoneTor: Yay! First payment succeeded for hop %d", hop);
           ppath_tmp->first_payment_succeeded = 1;
-          ppath_tmp->window = 1640;
+          ppath_tmp->window = 3000;
         }
         else {
           ppath_tmp->window += 2000;
