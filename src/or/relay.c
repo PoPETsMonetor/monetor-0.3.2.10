@@ -487,6 +487,10 @@ relay_crypt(circuit_t *circ, cell_t *cell, cell_direction_t cell_direction,
         *recognized = 1;
         return 0;
       }
+      if (!relay_digest_matches(TO_OR_CIRCUIT(circ)->n_digest, cell)) {
+        log_warn(LD_MT, "We decrypt a cell that shows recognized field to 0 with a wrong digest (probabilistically possible "
+            " in one middle node, that's why we check the digest). If you see this log in an exit relay, that sucks.");
+      }
       if (rh.command == RELAY_COMMAND_MT  && !relay_digest_matches(TO_OR_CIRCUIT(circ)->n_digest, cell)) {
         log_warn(LD_MT, "MoneTor: WUT? cell recognized but digest does not match");
       }
