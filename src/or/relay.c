@@ -173,8 +173,8 @@ relay_digest_matches(crypto_digest_t *digest, cell_t *cell)
   crypto_digest_get_digest(digest, (char*) &calculated_integrity, 4);
 
   if (calculated_integrity != received_integrity) {
-    log_fn(LOG_PROTOCOL_WARN, LOG_INFO,
-        "Recognized=0 but bad digest. Not recognizing. (%u vs %u).", received_integrity, calculated_integrity);
+    /*log_fn(LOG_PROTOCOL_WARN, LOG_INFO,*/
+        /*"Recognized=0 but bad digest. Not recognizing. (%u vs %u).", received_integrity, calculated_integrity);*/
     /* restore digest to its old form */
     crypto_digest_assign(digest, backup_digest);
     /* restore the relay header */
