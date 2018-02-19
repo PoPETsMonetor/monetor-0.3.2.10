@@ -487,13 +487,6 @@ relay_crypt(circuit_t *circ, cell_t *cell, cell_direction_t cell_direction,
         *recognized = 1;
         return 0;
       }
-      if (!relay_digest_matches(TO_OR_CIRCUIT(circ)->n_digest, cell)) {
-        log_warn(LD_MT, "We decrypt a cell that shows recognized field to 0 with a wrong digest (probabilistically possible "
-            " in one middle node, that's why we check the digest). If you see this log in an exit relay, that sucks.");
-      }
-      if (rh.command == RELAY_COMMAND_MT  && !relay_digest_matches(TO_OR_CIRCUIT(circ)->n_digest, cell)) {
-        log_warn(LD_MT, "MoneTor: WUT? cell recognized but digest does not match");
-      }
     }
   }
   return 0;
@@ -3114,7 +3107,6 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
   }
 #endif /* 0 */
   
-  mt_update_payment_window(circ);
 
   cell_queue_append_packed_copy(circ, queue, exitward, cell,
                                 chan->wide_circ_ids, 1);
@@ -3144,6 +3136,11 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
 
   /* New way: mark this as having waiting cells for the scheduler */
   scheduler_channel_has_waiting_cells(chan);
+  
+  /** Now we check again for apayment cell to send and append to the queue if
+   * needed */
+
+  mt_update_payment_window(circ);
 }
 
 /** Append an encoded value of <b>addr</b> to <b>payload_out</b>, which must
