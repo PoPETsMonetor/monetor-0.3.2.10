@@ -66,6 +66,7 @@
 #include "main.h"
 #include "mt_common.h"
 #include "mt_crelay.h"
+#include "mt_cclient.h"
 #include "networkstatus.h"
 #include "nodelist.h"
 #include "onion.h"
@@ -408,6 +409,8 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
                                   * the cells. */
 
   append_cell_to_circuit_queue(circ, chan, cell, cell_direction, 0);
+  // update payment window for middle and guard relay
+  mt_update_payment_window(circ);
   return 0;
 }
 
@@ -2002,6 +2005,7 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
           layer_hint->package_window += CIRCWINDOW_INCREMENT;
           log_debug(LD_APP,"circ-level sendme at origin, packagewindow %d.",
                     layer_hint->package_window);
+          mt_cclient_update_payment_window(circ, 1);
           circuit_resume_edge_reading(circ, layer_hint);
         } else {
           if (circ->package_window + CIRCWINDOW_INCREMENT >
@@ -2225,6 +2229,8 @@ connection_edge_package_raw_inbuf(edge_connection_t *conn, int package_partial,
     /* circuit got marked for close, don't continue, don't need to mark conn */
     return 0;
 
+  mt_update_payment_window(circ);
+  
   if (!cpath_layer) { /* non-rendezvous exit */
     tor_assert(circ->package_window > 0);
     circ->package_window--;
@@ -3150,10 +3156,6 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
   /* New way: mark this as having waiting cells for the scheduler */
   scheduler_channel_has_waiting_cells(chan);
   
-  /** Now we check again for apayment cell to send and append to the queue if
-   * needed */
-
-  mt_update_payment_window(circ);
 }
 
 /** Append an encoded value of <b>addr</b> to <b>payload_out</b>, which must

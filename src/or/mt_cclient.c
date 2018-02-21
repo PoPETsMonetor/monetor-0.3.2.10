@@ -600,13 +600,17 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
   mt_cpay_set_status(&ledger->desc, 0);
 }
 
+/**
+ * If sendme is 1, we just decrease the payment windows for guard and middle relay
+ */
 
-
-void mt_cclient_update_payment_window(circuit_t *circ) {
+void mt_cclient_update_payment_window(circuit_t *circ, int sendme) {
   if (get_options()->EnablePayment && CIRCUIT_IS_ORIGIN(circ)) {
     pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
     int hop = 1;
     while(ppath_tmp) {
+      if (hop == 3 && sendme) // we don't remove anything from exit
+        break;
       if(ppath_tmp->first_payment_succeeded) {
         if (--ppath_tmp->window  < LIMIT_PAYMENT_WINDOW 
             && !ppath_tmp->payment_is_processing &&

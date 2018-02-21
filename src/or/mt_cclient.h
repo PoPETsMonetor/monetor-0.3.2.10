@@ -35,7 +35,7 @@ void run_cclient_scheduled_events(time_t now);
 
 int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc);
 
-void mt_cclient_update_payment_window(circuit_t *circ);
+void mt_cclient_update_payment_window(circuit_t *circ, int sendme);
 //handle intermediaries
 //XXX MoneTor maybe all of intermediary-handling
 //    function need to be in a separate file?

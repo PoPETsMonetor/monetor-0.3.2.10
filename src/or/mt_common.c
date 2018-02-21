@@ -460,7 +460,7 @@ void mt_update_payment_window(circuit_t *circ) {
   }
   else {
     /** We must be a client */
-    mt_cclient_update_payment_window(circ);
+    mt_cclient_update_payment_window(circ, 0);
   }
 }
 
