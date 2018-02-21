@@ -638,6 +638,9 @@ void mt_cclient_update_payment_window(circuit_t *circ) {
           }
         }
       }
+      else { /** even if the payment is processing, we have to discount current cell */
+        --ppath_tmp->window;
+      }
       hop++;
       ppath_tmp = ppath_tmp->next;
     }
