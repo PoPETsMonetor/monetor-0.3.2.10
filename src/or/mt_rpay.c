@@ -596,6 +596,10 @@ static int handle_nan_cli_estab1(mt_desc_t* desc, nan_cli_estab1_t* token, byte 
   byte idigest[DIGEST_LEN];
   mt_desc2digest(intermediary, &idigest);
 
+  // validate token
+
+  mt_paymod_signal(MT_SIGNAL_PAYMENT_INITIALIZED, desc);
+
   // we have a tor_free channel with this intermediary
   if((chn = digestmap_smartlist_pop_last(relay.chns_estab, (char*)idigest))){
 
