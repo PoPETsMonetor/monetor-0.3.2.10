@@ -502,6 +502,7 @@ nodelist_add_microdesc(microdesc_t *md)
 void
 nodelist_set_consensus(networkstatus_t *ns)
 {
+  log_info(LD_GENERAL, "Setting new consensus");
   const or_options_t *options = get_options();
   int authdir = authdir_mode_v3(options);
 

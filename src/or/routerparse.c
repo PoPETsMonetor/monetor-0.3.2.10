@@ -2027,6 +2027,7 @@ router_parse_entry_from_string(const char *s, const char *end,
   goto done;
 
  err:
+  log_warn(LD_GENERAL, "Parser error when parsing router");
   dump_desc(s_dup, "router descriptor");
   routerinfo_free(router);
   router = NULL;
@@ -3998,6 +3999,7 @@ networkstatus_parse_vote_from_string(const char *s, const char **eos_out,
 
   goto done;
  err:
+  log_warn(LD_GENERAL, "Parse error");
   dump_desc(s_dup, "v3 networkstatus");
   networkstatus_vote_free(ns);
   ns = NULL;

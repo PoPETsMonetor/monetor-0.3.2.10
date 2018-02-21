@@ -1441,8 +1441,7 @@ static int
 dirserv_thinks_router_is_intermediary(const routerinfo_t *router,
                                       const node_t *node, time_t now)
 {
-  return (router->wants_to_be_intermediary && node->is_stable &&
-          node->is_fast && router_is_active(router, node, now));
+  return (router->wants_to_be_intermediary && router_is_active(router, node, now));
 }
 
 /** Return true iff <b>router</b> should be assigned the "Ledger" flag.

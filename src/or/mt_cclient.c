@@ -35,6 +35,7 @@
 #include "router.h"
 #include "torlog.h"
 #include "main.h"
+#include "networkstatus.h"
 
 
 /* Some forward static declaration for ease of implem */
@@ -328,8 +329,7 @@ choose_intermediaries(time_t now, smartlist_t *exclude_list) {
   intermediary_t *intermediary = NULL;
   int count_middle = 0, count_exit = 0;
   /*Normal intermediary flags - We just need uptime*/
-  router_crn_flags_t flags = CRN_NEED_UPTIME;
-  flags |= CRN_NEED_INTERMEDIARY;
+  router_crn_flags_t flags = CRN_NEED_INTERMEDIARY;
 
   node = router_choose_random_node(exclude_list, get_options()->ExcludeNodes,
       flags);

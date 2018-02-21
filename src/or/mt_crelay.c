@@ -248,7 +248,7 @@ run_crelay_housekeeping_event(time_t now) {
   DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
     if (CIRCUIT_IS_ORCIRC(circ) && circ->mt_priority && circ->payment_window < 0) {
       /*tor_assert_nonfatal(circ->payment_window > 0);*/
-      log_warn(LD_MT, "MoneTor: this circuit has negative window, this should not happen!");
+      log_warn(LD_MT, "MoneTor: this circuit has negative window, this should not happen! window: %d", circ->payment_window);
     }
   } DIGESTMAP_FOREACH_END;
 }
