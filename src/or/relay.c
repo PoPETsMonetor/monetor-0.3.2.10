@@ -1754,7 +1754,7 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
   switch (rh.command) {
     case RELAY_COMMAND_DROP:
       rep_hist_padding_count_read(PADDING_TYPE_DROP);
-//      log_info(domain,"Got a relay-level padding cell. Dropping.");
+      /*log_info(domain,"Got a relay-level padding cell. Dropping.");*/
       return 0;
     case RELAY_COMMAND_BEGIN:
     case RELAY_COMMAND_BEGIN_DIR:
@@ -2230,7 +2230,7 @@ connection_edge_package_raw_inbuf(edge_connection_t *conn, int package_partial,
     return 0;
 
   mt_update_payment_window(circ);
-  
+
   if (!cpath_layer) { /* non-rendezvous exit */
     tor_assert(circ->package_window > 0);
     circ->package_window--;
@@ -2289,6 +2289,9 @@ connection_edge_consider_sending_sendme(edge_connection_t *conn)
                                      NULL, 0) < 0) {
       log_warn(LD_APP,"connection_edge_send_command failed. Skipping.");
       return; /* the circuit's closed, don't continue */
+    }
+    if (CIRCUIT_IS_ORIGIN(circ)) {
+      mt_cclient_update_payment_window(circ, 1);
     }
   }
 }
@@ -2537,6 +2540,9 @@ circuit_consider_sending_sendme(circuit_t *circ, crypt_path_t *layer_hint)
       log_warn(LD_CIRC,
                "relay_send_command_from_edge failed. Circuit's closed.");
       return; /* the circuit's closed, don't continue */
+    }
+    if (CIRCUIT_IS_ORIGIN(circ)) {
+      mt_cclient_update_payment_window(circ, 1);
     }
   }
 }
