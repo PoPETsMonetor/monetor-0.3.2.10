@@ -735,18 +735,7 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
 
   // create and fill reply token
   chn_end_estab3_t reply;
-
-  int content_size = MT_SZ_PK + sizeof(int);
-  byte content[content_size];
-  memcpy(content, chn->data.wallet.wpk, MT_SZ_PK);
-  memcpy(content + MT_SZ_PK, &chn->data.wallet.end_bal, sizeof(int));
-
-  if(mt_bsig_blind(content, content_size, &chn->data.wallet.int_pk,
-  		   &chn->data.wallet.blinded, &chn->data.wallet.unblinder) != MT_SUCCESS){
-    return MT_ERROR;
-  }
-
-  memcpy(reply.wcom_blinded, chn->data.wallet.blinded, MT_SZ_BL);
+  memcpy(reply.wcom, chn->data.wallet.wcom, MT_SZ_COM);
 
   // send reply message
   byte* msg;
@@ -767,7 +756,7 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
   }
 
   // check validity of incoming message;
-  if(mt_sig_verify(chn->data.wallet.blinded, MT_SZ_BL, &chn->data.wallet.int_pk, &token->sig)
+  if(mt_sig_verify(chn->data.wallet.wcom, MT_SZ_COM, &chn->data.wallet.int_pk, &token->sig)
      != MT_SUCCESS){
     return MT_ERROR;
   }
@@ -824,7 +813,6 @@ static int init_nan_cli_setup1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // make token
   nan_cli_setup1_t token;
-  token.value = -(chn->data.nan_public.val_from);
   memcpy(token.wpk, chn->data.wallet.wpk, MT_SZ_PK);
   memcpy(token.nwpk, chn->data.wallet_new.wpk, MT_SZ_PK);
   memcpy(token.wcom, chn->data.wallet_new.wcom, MT_SZ_COM);
@@ -858,10 +846,23 @@ static int handle_nan_int_setup2(mt_desc_t* desc, nan_int_setup2_t* token, byte 
   if(token->verified != MT_CODE_VERIFIED)
     return MT_ERROR;
 
-  // create and send reply token
-  nan_cli_setup3_t reply;
+  // Fill in refund token
+  chn_end_refund_t* refund = &chn->data.refund;
+  memset(refund, '\0', sizeof(chn_end_refund_t));
+  refund->code = MT_CODE_REFUND;
+  memcpy(refund->wpk, chn->data.wallet_new.wpk, MT_SZ_PK);
+  refund->end_bal = chn->data.wallet_new.end_bal;
 
-  // fill reply with correct values
+  // Parts of refund token involved in blind signature
+  byte nan_digest[DIGEST_LEN];
+  mt_nanpub2digest(&chn->data.nan_public, &nan_digest);
+  refund->msg[0] = (byte)refund->code;
+  memcpy(refund->msg + sizeof(byte), nan_digest, DIGEST_LEN);
+  memcpy(refund->msg + sizeof(byte) + DIGEST_LEN, chn->data.wallet_new.wcom, MT_SZ_COM);
+
+  // Create and send reply token
+  nan_cli_setup3_t reply;
+  memcpy(reply.refund_msg, refund->msg, sizeof(refund->msg));
 
   byte* msg;
   int msg_size = pack_nan_cli_setup3(&reply, pid, &msg);
@@ -881,10 +882,17 @@ static int handle_nan_int_setup4(mt_desc_t* desc, nan_int_setup4_t* token, byte 
   }
 
   // check validity incoming message
+  if(mt_sig_verify(chn->data.refund.msg, sizeof(chn->data.refund.msg),
+		   &chn->data.wallet_new.int_pk, &token->sig) != MT_SUCCESS){
+    return MT_ERROR;
+  }
 
+  // create and send reply message
   nan_cli_setup5_t reply;
-
-  // fill reply with correct values
+  reply.revocation.msg[0] = (byte)MT_CODE_REVOCATION;
+  memcpy(reply.revocation.msg + sizeof(byte), &chn->data.wallet.wpk, MT_SZ_PK);
+  mt_sig_sign(reply.revocation.msg, sizeof(reply.revocation.msg), &chn->data.wallet.wsk,
+  	      &reply.revocation.sig);
 
   byte* msg;
   int msg_size = pack_nan_cli_setup5(&reply, pid, &msg);
@@ -894,7 +902,6 @@ static int handle_nan_int_setup4(mt_desc_t* desc, nan_int_setup4_t* token, byte 
 }
 
 static int handle_nan_int_setup6(mt_desc_t* desc, nan_int_setup6_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
   (void)desc;
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
@@ -903,12 +910,12 @@ static int handle_nan_int_setup6(mt_desc_t* desc, nan_int_setup6_t* token, byte 
     return MT_ERROR;
   }
 
+  if(token->success != MT_CODE_SUCCESS)
+    return MT_ERROR;
+
   digestmap_remove(client.chns_transition, (char*)*pid);
   smartlist_add(client.nans_setup, chn);
 
-  // sort nans_setup here?
-
-  // check validity incoming message
   if(chn->callback.fn){
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
   }

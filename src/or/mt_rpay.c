@@ -508,18 +508,7 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
 
   // create and fill reply token
   chn_end_estab3_t reply;
-
-  int content_size = MT_SZ_PK + sizeof(int);
-  byte content[content_size];
-  memcpy(content, chn->data.wallet.wpk, MT_SZ_PK);
-  memcpy(content + MT_SZ_PK, &chn->data.wallet.end_bal, sizeof(int));
-
-  if(mt_bsig_blind(content, content_size, &chn->data.wallet.int_pk,
-  		   &chn->data.wallet.blinded, &chn->data.wallet.unblinder) != MT_SUCCESS){
-    return MT_ERROR;
-  }
-
-  memcpy(reply.wcom_blinded, chn->data.wallet.blinded, MT_SZ_BL);
+  memcpy(reply.wcom, chn->data.wallet.wcom, MT_SZ_COM);
 
   // send reply message
   byte* msg;
@@ -539,7 +528,8 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
     return MT_ERROR;
   }
 
-  if(mt_sig_verify(chn->data.wallet.blinded, MT_SZ_BL, &chn->data.wallet.int_pk, &token->sig)
+  // check validity of incoming message;
+  if(mt_sig_verify(chn->data.wallet.wcom, MT_SZ_COM, &chn->data.wallet.int_pk, &token->sig)
      != MT_SUCCESS){
     return MT_ERROR;
   }

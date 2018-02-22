@@ -5722,7 +5722,7 @@ typedef enum {
   MT_CODE_VERIFIED,
   MT_CODE_REFUND,
   MT_CODE_ACCEPT,
-  MT_CODE_REVOKE,
+  MT_CODE_REVOCATION,
   MT_CODE_REQCLOSE,
   MT_CODE_ESTABLISH,
   MT_CODE_SUCCESS,
@@ -5808,7 +5808,7 @@ typedef enum {
  * Locally maintained tokens that are never sent directly over the network
  */
 typedef enum {
-  MT_LTYPE_CHN_END_REVOKE,      // end user revocation of a wallet/nano channel
+  MT_LTYPE_CHN_END_REVOCATION,      // end user revocation of a wallet/nano channel
 
   MT_LTYPE_CHN_INT_STATE,       // intermediary micropayment state
   MT_LTYPE_CHN_END_WALLET,      // end user micropayment secrets
@@ -5928,13 +5928,12 @@ typedef struct {
 } any_led_receipt_t;
 
 typedef struct {
-  byte rev[MT_SZ_PK];
+  byte msg[sizeof(byte) + MT_SZ_PK];
   byte sig[MT_SZ_SIG];
-} chn_end_revoke_t;
+} chn_end_revocation_t;
 
-typedef struct {
-  // public keys -> revocation tokens
-  digestmap_t* map;
+typedef union {
+  chn_end_revocation_t revocation;
 } chn_int_state_t;
 
 typedef struct {
@@ -5949,9 +5948,9 @@ typedef struct {
   byte last_hash[MT_SZ_HASH];
 } nan_end_state_t;
 
-typedef struct {
-  // nanochannel tokens -> nanopayment states
-  digestmap_t* map;  // digest(nan_public) -> nan_end_state
+typedef union {
+  byte wcom[MT_SZ_COM];
+  nan_end_state_t end_state;
 } nan_int_state_t;
 
 typedef struct {
@@ -5968,10 +5967,8 @@ typedef struct {
   byte rand[MT_SZ_HASH];
   byte wcom[MT_SZ_COM];
   byte zkp[MT_SZ_ZKP];
-  byte blinded[MT_SZ_BL];
-  byte unblinder[MT_SZ_UBLR];
   byte sig[MT_SZ_SIG];
-  chn_end_revoke_t revoke;
+  chn_end_revocation_t revocation;
 } chn_end_wallet_t;
 
 typedef struct {
@@ -5995,19 +5992,18 @@ typedef struct {
 } chn_int_public_t;
 
 typedef struct {
-  mt_code_t refund_code;
+  mt_code_t code;
   byte wpk[MT_SZ_PK];
   int end_bal;
 
   // blank except for conditional refund
   byte conditional[MT_SZ_PK];
 
-  // blank if refund for micropayment
-  nan_any_public_t channel_token;
+  // code || digest of nan_public || blinded wcom
+  byte msg[sizeof(byte) + DIGEST_LEN + MT_SZ_COM];
 
-  // partial blind sig on everything but the code
+  // signature on the refund token
   byte sig[MT_SZ_SIG];
-  byte unblinder[MT_SZ_UBLR];
 } chn_end_refund_t;
 
 typedef struct {
@@ -6089,7 +6085,7 @@ typedef struct {
 typedef struct {
   mt_code_t close_code;
   byte chn[MT_SZ_ADDR];
-  chn_end_revoke_t revoke;
+  chn_end_revocation_t revocation;
 
   // blank for micropayment closes
   int last_pay_num;
@@ -6162,7 +6158,7 @@ typedef struct {
 } chn_int_estab2_t;
 
 typedef struct {
-  byte wcom_blinded[MT_SZ_BL];
+  byte wcom[MT_SZ_COM];
 } chn_end_estab3_t;
 
 typedef struct {
@@ -6194,13 +6190,13 @@ typedef struct {
 } mic_int_pay4_t;
 
 typedef struct {
-  chn_end_revoke_t cli_revoke;
+  chn_end_revocation_t cli_revocation;
   chn_end_refund_t rel_refund;
 } mic_cli_pay5_t;
 
 typedef struct {
-  chn_end_revoke_t cli_revoke;
-  chn_end_revoke_t rel_revoke;
+  chn_end_revocation_t cli_revocation;
+  chn_end_revocation_t rel_revocation;
 } mic_rel_pay6_t;
 
 typedef struct {
@@ -6214,7 +6210,6 @@ typedef struct {
 } mic_int_pay8_t;
 
 typedef struct {
-  int value;
   byte wpk[MT_SZ_PK];
   byte nwpk[MT_SZ_PK];
   byte wcom[MT_SZ_COM];
@@ -6227,7 +6222,7 @@ typedef struct {
 } nan_int_setup2_t;
 
 typedef struct {
-  byte nwcom_blinded[MT_SZ_BL];
+  byte refund_msg[sizeof(byte) + DIGEST_LEN + MT_SZ_COM];
 } nan_cli_setup3_t;
 
 typedef struct {
@@ -6235,7 +6230,7 @@ typedef struct {
 } nan_int_setup4_t;
 
 typedef struct {
-  chn_end_revoke_t revoke;
+  chn_end_revocation_t revocation;
 } nan_cli_setup5_t;
 
 typedef struct {
@@ -6330,7 +6325,7 @@ typedef struct {
 
 typedef struct {
   byte nwpk[MT_SZ_PK];
-  chn_end_revoke_t revoke;
+  chn_end_revocation_t revocation;
 } nan_end_close5_t;
 
 typedef struct {

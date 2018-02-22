@@ -1016,12 +1016,8 @@ static void test_mt_paymulti(void *arg){
     mt_ipay_import(ctx->state);
     int bal =  mt_ipay_mac_bal() + mt_ipay_chn_bal();
     int exp = *(int*)digestmap_get(exp_bal, digest);
-    printf("exp %d bal %d\n", exp, bal);
     tor_assert(bal == exp);
   } MAP_FOREACH_END;
-
-  printf("payment messages %d\n", num_payment_messages);
-  printf("other messages %d\n", num_other_messages);
 
  done:;
 
