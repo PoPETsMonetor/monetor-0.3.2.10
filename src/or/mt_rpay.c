@@ -586,8 +586,6 @@ static int handle_nan_cli_estab1(mt_desc_t* desc, nan_cli_estab1_t* token, byte 
   byte idigest[DIGEST_LEN];
   mt_desc2digest(intermediary, &idigest);
 
-  // validate token
-
   mt_paymod_signal(MT_SIGNAL_PAYMENT_INITIALIZED, desc);
 
   // we have a tor_free channel with this intermediary
@@ -608,6 +606,11 @@ static int handle_nan_cli_estab1(mt_desc_t* desc, nan_cli_estab1_t* token, byte 
     chn->data.nan_state.num_payments = 0;
 
     nan_rel_estab2_t reply;
+    memcpy(reply.wpk, &chn->data.wallet.wpk, MT_SZ_PK);
+    memcpy(reply.nwpk, &chn->data.wallet_new.wpk, MT_SZ_PK);
+    memcpy(reply.wcom, &chn->data.wallet_new.wcom, MT_SZ_COM);
+    memcpy(reply.zkp, &chn->data.wallet_new.zkp, MT_SZ_ZKP);
+    memcpy(&reply.nan_public, &token->nan_public, sizeof(nan_any_public_t));
 
     // send message
     byte* msg;
@@ -644,7 +647,6 @@ static int handle_nan_cli_estab1(mt_desc_t* desc, nan_cli_estab1_t* token, byte 
 }
 
 static int handle_nan_int_estab3(mt_desc_t* desc, nan_int_estab3_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
   (void)desc;
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
@@ -653,11 +655,26 @@ static int handle_nan_int_estab3(mt_desc_t* desc, nan_int_estab3_t* token, byte 
     return MT_ERROR;
   }
 
-  // check validity of incoming message;
+  // check token validity
+  if(token->verified != MT_CODE_VERIFIED)
+    return MT_ERROR;
+
+  // Fill in refund token
+  chn_end_refund_t* refund = &chn->data.refund;
+  memset(refund, '\0', sizeof(chn_end_refund_t));
+  refund->code = MT_CODE_REFUND;
+  memcpy(refund->wpk, chn->data.wallet_new.wpk, MT_SZ_PK);
+  refund->end_bal = chn->data.wallet_new.end_bal;
+
+  // Parts of refund token involved in blind signature
+  byte nan_digest[DIGEST_LEN];
+  mt_nanpub2digest(&chn->data.nan_public, &nan_digest);
+  refund->msg[0] = (byte)refund->code;
+  memcpy(refund->msg + sizeof(byte), nan_digest, DIGEST_LEN);
+  memcpy(refund->msg + sizeof(byte) + DIGEST_LEN, chn->data.wallet_new.wcom, MT_SZ_COM);
 
   nan_rel_estab4_t reply;
-
-  // fill reply with correct values;
+  memcpy(reply.refund_msg, refund->msg, sizeof(refund->msg));
 
   byte* msg;
   int msg_size = pack_nan_rel_estab4(&reply, pid, &msg);
@@ -667,7 +684,6 @@ static int handle_nan_int_estab3(mt_desc_t* desc, nan_int_estab3_t* token, byte 
 }
 
 static int handle_nan_int_estab5(mt_desc_t* desc, nan_int_estab5_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
   (void)desc;
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
@@ -677,15 +693,26 @@ static int handle_nan_int_estab5(mt_desc_t* desc, nan_int_estab5_t* token, byte 
   }
 
   // check validity of incoming message;
+  if(token->success != MT_CODE_SUCCESS)
+    return MT_ERROR;
+
+  if(mt_sig_verify(chn->data.refund.msg, sizeof(chn->data.refund.msg),
+		   &chn->data.wallet_new.int_pk, &token->sig) != MT_SUCCESS){
+    return MT_ERROR;
+  }
+
+  // update local data
+  chn->data.nan_state.num_payments = 0;
+  memcpy(chn->data.nan_state.last_hash, chn->data.nan_public.hash_tail, MT_SZ_HASH);
 
   byte digest[DIGEST_LEN];
   mt_nanpub2digest(&chn->data.nan_public, &digest);
   digestmap_remove(relay.chns_transition, (char*)*pid);
   digestmap_set(relay.nans_estab, (char*)digest, chn);
 
+  // create and send reply token to client
   nan_rel_estab6_t reply;
-
-  // fill reply with correct values;
+  reply.success = MT_CODE_SUCCESS;
 
   byte* msg;
   int msg_size = pack_nan_rel_estab6(&reply, pid, &msg);

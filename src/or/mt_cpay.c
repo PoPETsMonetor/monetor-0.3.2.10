@@ -881,7 +881,7 @@ static int handle_nan_int_setup4(mt_desc_t* desc, nan_int_setup4_t* token, byte 
     return MT_ERROR;
   }
 
-  // check validity incoming message
+  // check validity of incoming message
   if(mt_sig_verify(chn->data.refund.msg, sizeof(chn->data.refund.msg),
 		   &chn->data.wallet_new.int_pk, &token->sig) != MT_SUCCESS){
     return MT_ERROR;
@@ -949,7 +949,14 @@ static int handle_nan_rel_estab6(mt_desc_t* desc, nan_rel_estab6_t* token, byte 
     return MT_ERROR;
   }
 
-  // check validity incoming message
+  // check token validity
+  if(token->success != MT_CODE_SUCCESS)
+    return MT_ERROR;
+
+  // update local data
+  chn->data.nan_state.num_payments = 0;
+  memcpy(chn->data.nan_state.last_hash, chn->data.nan_public.hash_tail, MT_SZ_HASH);
+
   byte digest[DIGEST_LEN];
   mt_desc2digest(desc, &digest);
   digestmap_remove(client.chns_transition, (char*)*pid);
@@ -1020,7 +1027,6 @@ static int init_nan_cli_destab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 }
 
 static int handle_nan_int_destab2(mt_desc_t* desc, nan_int_destab2_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
   (void)desc;
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
@@ -1028,6 +1034,10 @@ static int handle_nan_int_destab2(mt_desc_t* desc, nan_int_destab2_t* token, byt
     log_debug(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
+
+  // check token validity
+  if(token->success != MT_CODE_SUCCESS)
+    return MT_ERROR;
 
   byte digest[DIGEST_LEN];
   mt_desc2digest(desc, &digest);

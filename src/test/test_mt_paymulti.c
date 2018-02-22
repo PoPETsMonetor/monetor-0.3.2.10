@@ -36,6 +36,7 @@
 #define REL_NUM 8
 #define INT_NUM 4
 #define REL_CONNS 4
+#define DPAY_ON 1
 
 #define DISCONNECT_PERCENT 5
 
@@ -574,18 +575,20 @@ static void set_up_main_loop(void){
     }
 
     // Make direct payments
-    event_t* event = tor_malloc(sizeof(event_t));
-    event->type = CALL_PAY;
-    event->src = ctx->desc;
-    event->desc1 = ((context_t*)digestmap_rand(int_ctx))->desc;
-    event->desc2 = event->desc1;
-    smartlist_add(event_queue, event);
+    if(DPAY_ON){
+      event_t* event = tor_malloc(sizeof(event_t));
+      event->type = CALL_PAY;
+      event->src = ctx->desc;
+      event->desc1 = ((context_t*)digestmap_rand(int_ctx))->desc;
+      event->desc2 = event->desc1;
+      smartlist_add(event_queue, event);
 
-    byte idigest[DIGEST_LEN];
-    mt_desc_t* idesc = tor_malloc(sizeof(mt_desc_t));
-    mt_desc2digest(&event->desc1, &idigest);
-    memcpy(idesc, &event->desc2, sizeof(mt_desc_t));
-    digestmap_set(rel2int, (char*)idigest, idesc);
+      byte idigest[DIGEST_LEN];
+      mt_desc_t* idesc = tor_malloc(sizeof(mt_desc_t));
+      mt_desc2digest(&event->desc1, &idigest);
+      memcpy(idesc, &event->desc2, sizeof(mt_desc_t));
+      digestmap_set(rel2int, (char*)idigest, idesc);
+    }
 
     mt_cpay_export(&ctx->state);
   } MAP_FOREACH_END;

@@ -5727,6 +5727,9 @@ typedef enum {
   MT_CODE_ESTABLISH,
   MT_CODE_SUCCESS,
   MT_CODE_FAILURE,
+  MT_CODE_READY,
+  MT_CODE_ESTABLISHED,
+  MT_CODE_DESTABLISHED,
 } mt_code_t;
 
 //-------------------------- Public Payment Parameters ----------------------//
@@ -5932,16 +5935,17 @@ typedef struct {
   byte sig[MT_SZ_SIG];
 } chn_end_revocation_t;
 
-typedef union {
-  chn_end_revocation_t revocation;
-} chn_int_state_t;
-
 typedef struct {
   int val_from;
   int val_to;
   int num_payments;
   byte hash_tail[MT_SZ_HASH];
 } nan_any_public_t;
+
+typedef union {
+  nan_any_public_t nan_public;
+  chn_end_revocation_t revocation;
+} chn_int_state_t;
 
 typedef struct {
   int num_payments;
@@ -5951,6 +5955,12 @@ typedef struct {
 typedef union {
   byte wcom[MT_SZ_COM];
   nan_end_state_t end_state;
+} nan_int_statedata_t;
+
+typedef struct {
+  mt_code_t status;
+  nan_any_public_t nan_public;
+  nan_int_statedata_t data;
 } nan_int_state_t;
 
 typedef struct {
@@ -6013,7 +6023,6 @@ typedef struct {
 
   nan_any_public_t nan_public;
   nan_end_wallet_t nan_wallet;
-  nan_end_wallet_t nan_wallet_new;
   nan_end_state_t nan_state;
 
   chn_end_refund_t refund;
@@ -6242,9 +6251,9 @@ typedef struct {
 } nan_cli_estab1_t;
 
 typedef struct {
-  byte rel_wpk[MT_SZ_PK];
-  byte rel_nwpk[MT_SZ_PK];
-  byte nwcom[MT_SZ_COM];
+  byte wpk[MT_SZ_PK];
+  byte nwpk[MT_SZ_PK];
+  byte wcom[MT_SZ_COM];
   byte zkp[MT_SZ_ZKP];
   nan_any_public_t nan_public;
 } nan_rel_estab2_t;
@@ -6254,7 +6263,7 @@ typedef struct {
 } nan_int_estab3_t;
 
 typedef struct {
-  byte nwcom[MT_SZ_COM];
+  byte refund_msg[sizeof(byte) + DIGEST_LEN + MT_SZ_COM];
 } nan_rel_estab4_t;
 
 typedef struct {
