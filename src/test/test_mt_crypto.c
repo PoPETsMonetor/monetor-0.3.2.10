@@ -12,6 +12,8 @@ static void test_mt_crypto(void *arg)
 {
   (void) arg;
 
+  MOCK(mt_micro_sleep, mock_micro_sleep);
+
   // test strings
   const char* str_1 = "This is a test message that is longer than the size of a single hash";
   const char* str_2 = "This is another message different from the first but has same length";
@@ -174,6 +176,8 @@ static void test_mt_crypto(void *arg)
   tt_assert(mt_zkp_verify(MT_ZKP_TYPE_1, &pp, msg_1, msg_1_size, &proof_1) == MT_ERROR);
 
  done:;
+
+  UNMOCK(mt_micro_sleep);
 }
 
 struct testcase_t mt_crypto_tests[] = {

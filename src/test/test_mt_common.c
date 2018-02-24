@@ -16,6 +16,9 @@
 
 static void test_mt_common(void *arg)
 {
+
+  MOCK(mt_micro_sleep, mock_micro_sleep);
+
   (void) arg;
 
     byte pp[MT_SZ_PP];
@@ -81,6 +84,8 @@ static void test_mt_common(void *arg)
     tt_assert(mt_hc_verify(&(hc[0]), &(hc[0]), hc_size) == MT_ERROR);
 
  done:;
+
+    UNMOCK(mt_micro_sleep);
 }
 
 static void

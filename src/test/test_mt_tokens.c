@@ -1,3 +1,5 @@
+#define MT_TEST
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +19,8 @@ static  void write_random_bytes(void* data, int size){
 static void test_mt_tokens(void *arg)
 {
   (void) arg;
+
+  MOCK(mt_micro_sleep, mock_micro_sleep);
 
   byte pp[MT_SZ_PP];
   byte pk[MT_SZ_PK];
@@ -134,6 +138,8 @@ static void test_mt_tokens(void *arg)
   tor_free(str_chn_int_close);
   tor_free(str_chn_end_cashout);
   tor_free(str_chn_int_cashout);
+
+  UNMOCK(mt_micro_sleep);
 }
 
 struct testcase_t mt_tokens_tests[] = {
