@@ -88,7 +88,7 @@ static void test_mt_lpay(void *arg)
   (void)arg;
   return;
   MOCK(mt_send_message, mock_send_message);
-  MOCK(mt_micro_sleep, mock_micro_sleep);
+  MOCK(mt_milli_sleep, mock_milli_sleep);
 
   //----------------------------------- Setup ---------------------------------//
 
@@ -277,7 +277,7 @@ static void test_mt_lpay(void *arg)
   tt_assert(mt_lpay_clear() == MT_SUCCESS);
 
   UNMOCK(mt_send_message);
-  UNMOCK(mt_micro_sleep);
+  UNMOCK(mt_milli_sleep);
 }
 
 struct testcase_t mt_lpay_tests[] = {

@@ -17,7 +17,7 @@
 static void test_mt_common(void *arg)
 {
 
-  MOCK(mt_micro_sleep, mock_micro_sleep);
+  MOCK(mt_milli_sleep, mock_milli_sleep);
 
   (void) arg;
 
@@ -85,7 +85,7 @@ static void test_mt_common(void *arg)
 
  done:;
 
-    UNMOCK(mt_micro_sleep);
+    UNMOCK(mt_milli_sleep);
 }
 
 static void

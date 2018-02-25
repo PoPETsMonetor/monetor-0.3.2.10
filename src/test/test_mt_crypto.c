@@ -12,7 +12,7 @@ static void test_mt_crypto(void *arg)
 {
   (void) arg;
 
-  MOCK(mt_micro_sleep, mock_micro_sleep);
+  MOCK(mt_milli_sleep, mock_milli_sleep);
 
   // test strings
   const char* str_1 = "This is a test message that is longer than the size of a single hash";
@@ -177,7 +177,7 @@ static void test_mt_crypto(void *arg)
 
  done:;
 
-  UNMOCK(mt_micro_sleep);
+  UNMOCK(mt_milli_sleep);
 }
 
 struct testcase_t mt_crypto_tests[] = {

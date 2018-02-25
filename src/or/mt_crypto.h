@@ -117,14 +117,14 @@ int mt_zkp_verify(mt_zkp_type_t type, byte (*pp)[MT_SZ_PP],
 		  byte (*zkp)[MT_SZ_ZKP]);
 
 /**
- * Call system nanosleep() to delay the thread for given the microseconds
+ * Call system nanosleep() to delay the thread for given the milliseconds
  */
-MOCK_DECL(void, mt_micro_sleep, (int microsecs));
+MOCK_DECL(void, mt_milli_sleep, (uint millisecs));
 
 /**
  * Don't do anything; useful to speed up tests via the mock functionality
  */
-void mock_micro_sleep(int microsecs);
+void mock_milli_sleep(uint millisecs);
 
 
 #endif
