@@ -5734,6 +5734,8 @@ typedef enum {
 
 //-------------------------- Public Payment Parameters ----------------------//
 
+#define MT_PRIORITY_SCALE 0.5
+
 #define MT_FEE 5
 #define MT_TAX 5
 #define MT_WINDOW 5
