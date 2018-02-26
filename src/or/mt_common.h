@@ -117,6 +117,11 @@ int mt_hc_verify(byte (*tail)[MT_SZ_HASH], byte (*preimage)[MT_SZ_HASH], int k);
 int mt_desc_comp(mt_desc_t* desc1, mt_desc_t* desc2);
 
 /**
+ * Return a string describing the party type for printing
+ */
+const char* mt_party_describe(mt_party_t party);
+
+/**
  * Create a signed receipt of a ledger transaction
  */
 int mt_receipt_sign(any_led_receipt_t* rec, byte (*sk)[MT_SZ_SK]);

@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 #include "or.h"
 #include "buffers.h"
@@ -30,6 +31,10 @@
 #include "router.h"
 #include "relay.h"
 #include "scheduler.h"
+
+// char offsets to trim token/party type descriptions
+#define NTYPE_OFFSET 9
+#define PARTY_OFFSET 9
 
 static uint64_t count[2] = {0, 0};
 
@@ -169,6 +174,32 @@ int mt_desc_comp(mt_desc_t* desc1, mt_desc_t* desc2){
     return (desc1->id[1] > desc2->id[1]) ? 1 : -1;
   return 0;
 }
+
+/**
+ * Return a string describing the party type for printing
+ */
+const char* mt_party_describe(mt_party_t party){
+  switch(party){
+    case MT_PARTY_CLI:
+      return "MT_PARTY_CLI";
+    case MT_PARTY_REL:
+      return "MT_PARTY_REL";
+    case MT_PARTY_INT:
+      return "MT_PARTY_INT";
+    case MT_PARTY_AUT:
+      return "MT_PARTY_AUT";
+    case MT_PARTY_LED:
+      return "MT_PARTY_LED";
+    case MT_PARTY_IDK:
+      return "MT_PARTY_IDK";
+    case MT_PARTY_END:
+      return "MT_PARTY_END";
+    default:
+      log_warn(LD_MT, "BUG - unknown party %hhx", party);
+      return "";
+  }
+}
+
 
 /**
  * Create a signed receipt of a ledger transaction
@@ -807,6 +838,10 @@ int mt_process_received_directpaymentcell(circuit_t *circ, cell_t *cell) {
 MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
       byte* msg, int size)) {
 
+  log_info(LD_MT, "MoneTor: Sending %s to %s %" PRIu64 ".%" PRIu64 "\n",
+	   mt_token_describe(type) + NTYPE_OFFSET, mt_party_describe(desc->party) + PARTY_OFFSET,
+	   desc->id[0], desc->id[1]);
+
   switch (type) {
     uint8_t command;
     /* sending Client related message */
@@ -1007,6 +1042,11 @@ MOCK_IMPL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2,
     log_info(LD_BUG, "MoneTor: this function should only be called on a client");
     return -1;
   }
+
+  log_info(LD_MT, "MoneTor: Sending %s to %s %" PRIu64 ".%" PRIu64 "\n",
+	   mt_token_describe(type) + NTYPE_OFFSET, mt_party_describe(desc1->party) + PARTY_OFFSET,
+	   desc1->id[0], desc1->id[1]);
+
   return mt_cclient_send_message_multidesc(desc1, desc2, type, msg, size);
 }
 
