@@ -443,7 +443,7 @@ ewma_notify_xmit_cells(circuitmux_t *cmux,
 
   /* XXX MoneTor - favor circuits that have been paid for */
   if(circ->mt_priority)
-    ewma_increment *= MT_PRIORITY_SCALE;
+    ewma_increment /= MT_PRIORITY_MOD;
 
   /* Do the adjustment */
   cell_ewma = &(cdata->cell_ewma);
