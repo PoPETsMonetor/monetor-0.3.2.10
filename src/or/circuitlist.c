@@ -679,6 +679,12 @@ circuit_purpose_to_controller_string(uint8_t purpose)
       return "MT_CLIENT_LEDGER";
     case CIRCUIT_PURPOSE_R_INTERMEDIARY:
       return "MT_RELAY_INTERMEDIARY";
+    case CIRCUIT_PURPOSE_R_LEDGER:
+      return "MT_RELAY_LEDGER";
+    case CIRCUIT_PURPOSE_INTERMEDIARY:
+      return "MT_INTERMEDIARY";
+    case CIRCUIT_PURPOSE_LEDGER:
+      return "MT_LEDGER";
     default:
       tor_snprintf(buf, sizeof(buf), "UNKNOWN_%d", (int)purpose);
       return buf;
@@ -706,6 +712,12 @@ circuit_purpose_to_controller_hs_state_string(uint8_t purpose)
     case CIRCUIT_PURPOSE_TESTING:
     case CIRCUIT_PURPOSE_CONTROLLER:
     case CIRCUIT_PURPOSE_PATH_BIAS_TESTING:
+    case CIRCUIT_PURPOSE_C_INTERMEDIARY:
+    case CIRCUIT_PURPOSE_C_LEDGER:
+    case CIRCUIT_PURPOSE_INTERMEDIARY:
+    case CIRCUIT_PURPOSE_LEDGER:
+    case CIRCUIT_PURPOSE_R_LEDGER:
+    case CIRCUIT_PURPOSE_R_INTERMEDIARY:
       return NULL;
 
     case CIRCUIT_PURPOSE_INTRO_POINT:
