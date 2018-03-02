@@ -213,6 +213,8 @@ static config_var_t option_vars_[] = {
 
   V(MoneTorPublicMint,           BOOL,     "0"),
   V(MoneTorSingleThread,         BOOL,     "0"),
+  V(MoneTorInitialWindow,        INT,     "3000"),
+  V(MoneTorPaymentRate,          INT,     "2000"),
   V(AccountingMax,               MEMUNIT,  "0 bytes"),
   VAR("AccountingRule",          STRING,   AccountingRule_option,  "max"),
   V(AccountingStart,             STRING,   NULL),

@@ -532,12 +532,11 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
  */
 
 void mt_crelay_update_payment_window(circuit_t *circ) {
-  if (get_options()->EnablePayment &&
-      circ->mt_priority) {
-    if (--circ->payment_window < 10) {
+  if (get_options()->EnablePayment && circ->mt_priority &&
+      --circ->payment_window < 10) {
        /*log_warn(LD_MT, "Payment window critically low: remains"*/
           /*" %d cells on relay side (negative value means we prioritize at credit!)", circ->payment_window);*/
-    }
+    
   }
 }
 
@@ -564,7 +563,7 @@ int mt_crelay_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
     /** Set this circuit with priority */
     if (!circ->marked_for_close) {
       circ->mt_priority = 1;
-      circ->payment_window = 3000;
+      circ->payment_window = get_options()->MoneTorInitialWindow;
       log_warn(LD_MT, "MoneTor: PRIORITY ENABLED on circ n_circ_id %u", circ->n_circ_id);
     } 
     else {
@@ -576,10 +575,7 @@ int mt_crelay_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
   else if (signal == MT_SIGNAL_PAYMENT_RECEIVED) {
     if (!circ->marked_for_close) {
       circ->mt_priority++;
-      if (circ->mt_priority == 1)
-        circ->payment_window = 3000;
-      else 
-        circ->payment_window += 2000;
+      circ->payment_window += get_options()->MoneTorPaymentRate;
       log_info(LD_MT, "MoneTor: Payment %u received , increasing the window to %d",
           circ->mt_priority, circ->payment_window);
     }

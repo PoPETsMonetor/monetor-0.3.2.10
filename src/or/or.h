@@ -4810,6 +4810,9 @@ typedef struct {
 
   int MoneTorSingleThread;
 
+  int MoneTorPaymentRate;
+  int MoneTorInitialWindow;
+
 } or_options_t;
 
 #define LOG_PROTOCOL_WARN (get_protocol_warning_severity_level())

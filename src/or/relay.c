@@ -2005,7 +2005,7 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
           layer_hint->package_window += CIRCWINDOW_INCREMENT;
           log_debug(LD_APP,"circ-level sendme at origin, packagewindow %d.",
                     layer_hint->package_window);
-          mt_cclient_update_payment_window(circ, 1);
+          mt_cclient_update_payment_window(circ, 3);
           circuit_resume_edge_reading(circ, layer_hint);
         } else {
           if (circ->package_window + CIRCWINDOW_INCREMENT >
@@ -2043,6 +2043,9 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
         /* (We already sent an end cell if possible) */
         connection_mark_for_close(TO_CONN(conn));
         return 0;
+      }
+      if (CIRCUIT_IS_ORIGIN(circ)) {
+        mt_cclient_update_payment_window(circ, 3);
       }
       return 0;
     case RELAY_COMMAND_RESOLVE:
@@ -2291,7 +2294,7 @@ connection_edge_consider_sending_sendme(edge_connection_t *conn)
       return; /* the circuit's closed, don't continue */
     }
     if (CIRCUIT_IS_ORIGIN(circ)) {
-      mt_cclient_update_payment_window(circ, 1);
+      mt_cclient_update_payment_window(circ, 3);
     }
   }
 }
@@ -2542,7 +2545,7 @@ circuit_consider_sending_sendme(circuit_t *circ, crypt_path_t *layer_hint)
       return; /* the circuit's closed, don't continue */
     }
     if (CIRCUIT_IS_ORIGIN(circ)) {
-      mt_cclient_update_payment_window(circ, 1);
+      mt_cclient_update_payment_window(circ, 3);
     }
   }
 }
