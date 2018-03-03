@@ -112,7 +112,7 @@ int mt_crypt_keygen(byte (*pp)[MT_SZ_PP], byte (*pk_out)[MT_SZ_PK], byte  (*sk_o
     BN_dec2bn(&exponent, exp_str);
     RSA* rsa = RSA_new();
     if(RSA_generate_key_ex(rsa, num_bits, exponent, NULL) != 1)
-	return MT_ERROR;
+      return MT_ERROR;
 
     // write public key
     BIO* bio_pk = BIO_new(BIO_s_mem());

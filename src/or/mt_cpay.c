@@ -422,7 +422,7 @@ int mt_cpay_close(mt_desc_t* rdesc, mt_desc_t* idesc){
     return init_nan_end_close1(chn, &pid);
   }
 
-  log_debug(LD_MT, "descriptor is in an incorrect state to perform the requested action");
+  log_warn(LD_MT, "descriptor is in an incorrect state to perform the requested action");
   return MT_ERROR;
 }
 
@@ -549,6 +549,9 @@ int mt_cpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
       break;
   }
 
+  if(result == MT_ERROR){
+    log_warn(LD_MT, "MoneTor: protocoal error processing message");
+  }
   return result;
 }
 
@@ -648,7 +651,7 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -717,7 +720,7 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -756,7 +759,7 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -843,7 +846,7 @@ static int handle_nan_int_setup2(mt_desc_t* desc, nan_int_setup2_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -882,7 +885,7 @@ static int handle_nan_int_setup4(mt_desc_t* desc, nan_int_setup4_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -911,7 +914,7 @@ static int handle_nan_int_setup6(mt_desc_t* desc, nan_int_setup6_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -950,7 +953,7 @@ static int handle_nan_rel_estab6(mt_desc_t* desc, nan_rel_estab6_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -1001,7 +1004,7 @@ static int handle_nan_rel_pay2(mt_desc_t* desc, nan_rel_pay2_t* token, byte (*pi
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -1036,7 +1039,7 @@ static int handle_nan_int_destab2(mt_desc_t* desc, nan_int_destab2_t* token, byt
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -1084,7 +1087,7 @@ static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*
   (void)desc;
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -1124,7 +1127,7 @@ static int handle_nan_rel_reqclose2(mt_desc_t* desc, nan_rel_reqclose2_t* token,
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -1165,7 +1168,7 @@ static int handle_nan_int_close2(mt_desc_t* desc, nan_int_close2_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -1188,7 +1191,7 @@ static int handle_nan_int_close4(mt_desc_t* desc, nan_int_close4_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -1211,7 +1214,7 @@ static int handle_nan_int_close6(mt_desc_t* desc, nan_int_close6_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -1234,7 +1237,7 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 

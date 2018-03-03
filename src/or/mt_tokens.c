@@ -613,8 +613,10 @@ int pack_token(mt_ntype_t type, void *ptr, int tkn_size, byte(*pid)[DIGEST_LEN],
 
 int unpack_token(mt_ntype_t type, byte* str, int tkn_size, void* tkn_out, byte(*pid_out)[DIGEST_LEN]){
   // message is not the type it clai)
-  if(type != *((mt_ntype_t*)str))
+  if(type != *((mt_ntype_t*)str)){
+    log_warn(LD_MT, "MoneTor: cannot unpack token of incorrect type");
     return MT_ERROR;
+  }
 
   memcpy(tkn_out, str + sizeof(mt_ntype_t), tkn_size);
   memcpy(*pid_out, str + sizeof(mt_ntype_t) + tkn_size, DIGEST_LEN);

@@ -100,9 +100,6 @@ int mt_lpay_init(void){
   ledger.mac_accounts = digestmap_new();
   ledger.chn_accounts = digestmap_new();
 
-  if(ledger.mac_accounts == NULL || ledger.chn_accounts == NULL)
-    return MT_ERROR;
-
   // set ledger attributes
   byte* pp_temp;
   byte* led_pk_temp;
@@ -258,6 +255,10 @@ int mt_lpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 
   tor_free(raw_msg);
   tor_free(response_msg);
+
+  if(result == MT_ERROR){
+    log_warn(LD_MT, "MoneTor: protocoal error processing message");
+  }
   return result;
 }
 

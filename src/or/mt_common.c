@@ -148,19 +148,17 @@ int mt_hc_verify(byte (*tail)[MT_SZ_HASH], byte (*preimage)[MT_SZ_HASH], int k){
     memcpy(current, temp, MT_SZ_HASH);
   }
 
-  if(memcmp(current, *tail, MT_SZ_HASH) != 0)
+  if(memcmp(current, *tail, MT_SZ_HASH) != 0){
+    log_warn(LD_MT, "MoneTor: hash chain component did not verify");
     return MT_ERROR;
+  }
 
   return MT_SUCCESS;
 }
 
-/* /\** */
-/*  * Accepts channel secrets and generates outputs for a new wallet */
-/*  *\/ */
-/* chn_end_secret_t mt_commit_wallet(byte (*pp)[MT_SZ_PP], chn_end_secret_t secret, int epsilon){ */
-
-/* } */
-
+/**
+ * Takes two mt_desc_t structures and compares them similarly to memcmp
+ */
 int mt_desc_comp(mt_desc_t* desc1, mt_desc_t* desc2){
   if(desc1->party != desc2->party)
     return (desc1->party > desc2->party) ? 1 : -1;
@@ -195,7 +193,6 @@ const char* mt_party_describe(mt_party_t party){
       return "";
   }
 }
-
 
 /**
  * Create a signed receipt of a ledger transaction
@@ -274,8 +271,10 @@ int mt_wallet_create(byte (*pp)[MT_SZ_PP], int value, chn_end_wallet_t* wal_old,
 
   errors += mt_zkp_prove(MT_ZKP_TYPE_2, pp, public, public_size, hidden, hidden_size, &wal_new->zkp);
 
-  if(errors != MT_SUCCESS * 4)
+  if(errors != MT_SUCCESS * 4){
+    log_warn(LD_MT, "MoneTor: error creating wallet");
     return MT_ERROR;
+  }
 
   return MT_SUCCESS;
 

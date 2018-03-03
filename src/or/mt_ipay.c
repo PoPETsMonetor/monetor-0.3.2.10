@@ -283,6 +283,9 @@ int mt_ipay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
       result = MT_ERROR;
   }
 
+  if(result == MT_ERROR){
+    log_warn(LD_MT, "MoneTor: protocoal error processing message");
+  }
   return result;
 }
 
@@ -383,7 +386,7 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
   // if this is confirmation of mac_any_trans call then ignore and return success
   mt_channel_t* chn = digestmap_get(intermediary.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -464,7 +467,7 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
     return init_chn_int_setup(chn, &ipid);
   }
 
-  log_debug(LD_MT, "insufficient funds to start channel\n");
+  log_warn(LD_MT, "insufficient funds to start channel\n");
   return MT_ERROR;
 }
 
@@ -472,7 +475,7 @@ static int handle_chn_end_estab3(mt_desc_t* desc, chn_end_estab3_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(intermediary.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -566,7 +569,7 @@ static int handle_nan_cli_setup3(mt_desc_t* desc, nan_cli_setup3_t* token, byte 
   nan_int_state_t* nan_state = digestmap_get(intermediary.nan_states,
 					 (char*)(token->refund_msg + sizeof(byte)));
   if(!nan_state){
-    log_debug(LD_MT, "nanopayment channel not recognized");
+    log_warn(LD_MT, "nanopayment channel not recognized");
     return MT_ERROR;
   }
 
@@ -598,7 +601,7 @@ static int handle_nan_cli_setup5(mt_desc_t* desc, nan_cli_setup5_t* token, byte 
 
   chn_int_state_t* chn_state = digestmap_get(intermediary.chn_states, (char*)wpk_digest);
   if(!chn_state){
-    log_debug(LD_MT, "micropayment channel not recognized");
+    log_warn(LD_MT, "micropayment channel not recognized");
     return MT_ERROR;
   }
 
@@ -612,7 +615,7 @@ static int handle_nan_cli_setup5(mt_desc_t* desc, nan_cli_setup5_t* token, byte 
   mt_nanpub2digest(&chn_state->nan_public, &nan_digest);
   nan_int_state_t* nan_state = digestmap_get(intermediary.nan_states, (char*)nan_digest);
   if(!nan_state){
-    log_debug(LD_MT, "nanopayment channel not recognized");
+    log_warn(LD_MT, "nanopayment channel not recognized");
     return MT_ERROR;
   }
 
@@ -647,13 +650,13 @@ static int handle_nan_rel_estab2(mt_desc_t* desc, nan_rel_estab2_t* token, byte 
   mt_nanpub2digest(&token->nan_public, &nan_digest);
   nan_int_state_t* nan_state = digestmap_get(intermediary.nan_states, (char*)nan_digest);
   if(!nan_state){
-    log_debug(LD_MT, "nanopayment channel not recognized");
+    log_warn(LD_MT, "nanopayment channel not recognized");
     return MT_ERROR;
   }
 
   // make sure that nanopayment channel is in the "ready" state
   if(nan_state->status != MT_CODE_READY){
-    log_debug(LD_MT, "nanopayment channel is not accepting connections");
+    log_warn(LD_MT, "nanopayment channel is not accepting connections");
     return MT_ERROR;
   }
 
@@ -702,7 +705,7 @@ static int handle_nan_rel_estab4(mt_desc_t* desc, nan_rel_estab4_t* token, byte 
   nan_int_state_t* nan_state = digestmap_get(intermediary.nan_states,
 					 (char*)(token->refund_msg + sizeof(byte)));
   if(!nan_state){
-    log_debug(LD_MT, "nanopayment channel not recognized");
+    log_warn(LD_MT, "nanopayment channel not recognized");
     return MT_ERROR;
   }
 
@@ -735,13 +738,13 @@ static int handle_nan_cli_destab1(mt_desc_t* desc, nan_cli_destab1_t* token, byt
 
   nan_int_state_t* nan_state = digestmap_get(intermediary.nan_states, (char*)digest);
   if(!nan_state){
-    log_debug(LD_MT, "nanopayment channel not recognized");
+    log_warn(LD_MT, "nanopayment channel not recognized");
     return MT_ERROR;
   }
 
   // make sure that nanopayment channel is in the "ready" state
   if(nan_state->status != MT_CODE_READY){
-    log_debug(LD_MT, "nanopayment channel is not accepting connections");
+    log_warn(LD_MT, "nanopayment channel is not accepting connections");
     return MT_ERROR;
   }
 
@@ -770,7 +773,7 @@ static int handle_nan_cli_dpay1(mt_desc_t* desc, nan_cli_dpay1_t* token, byte (*
 
   nan_int_state_t* nan_state = digestmap_get(intermediary.nan_states, (char*)digest);
   if(!nan_state){
-    log_debug(LD_MT, "nanopayment channel not recognized");
+    log_warn(LD_MT, "nanopayment channel not recognized");
     return MT_ERROR;
   }
 
@@ -806,7 +809,7 @@ static int handle_nan_end_close1(mt_desc_t* desc, nan_end_close1_t* token, byte 
 
   nan_int_state_t* nan_state = digestmap_get(intermediary.nan_states, (char*)digest);
   if(!nan_state){
-    log_debug(LD_MT, "nanopayment channel not recognized");
+    log_warn(LD_MT, "nanopayment channel not recognized");
     return MT_ERROR;
   }
 

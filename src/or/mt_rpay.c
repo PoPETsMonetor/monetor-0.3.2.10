@@ -320,6 +320,10 @@ int mt_rpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
     default:
       result = MT_ERROR;
   }
+
+  if(result == MT_ERROR){
+    log_warn(LD_MT, "MoneTor: protocoal error processing message");
+  }
   return result;
 }
 
@@ -422,7 +426,7 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -494,7 +498,7 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -532,7 +536,7 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -649,7 +653,7 @@ static int handle_nan_cli_estab1(mt_desc_t* desc, nan_cli_estab1_t* token, byte 
     return init_chn_end_setup(chn, &rpid);
   }
 
-  log_debug(LD_MT, "insufficient funds to start channel\n");
+  log_warn(LD_MT, "insufficient funds to start channel\n");
   return MT_ERROR;
 }
 
@@ -658,7 +662,7 @@ static int handle_nan_int_estab3(mt_desc_t* desc, nan_int_estab3_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -695,7 +699,7 @@ static int handle_nan_int_estab5(mt_desc_t* desc, nan_int_estab5_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -743,7 +747,7 @@ static int handle_nan_cli_pay1(mt_desc_t* desc, nan_cli_pay1_t* token, byte (*pi
   mt_nanpub2digest(&token->nan_public, &digest);
   mt_channel_t* chn = digestmap_get(relay.nans_estab, (char*)digest);
   if(!chn){
-    log_debug(LD_MT, "client descriptor not recognized");
+    log_warn(LD_MT, "client descriptor not recognized");
     return MT_ERROR;
   }
 
@@ -818,7 +822,7 @@ static int handle_nan_int_close2(mt_desc_t* desc, nan_int_close2_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -841,7 +845,7 @@ static int handle_nan_int_close4(mt_desc_t* desc, nan_int_close4_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -864,7 +868,7 @@ static int handle_nan_int_close6(mt_desc_t* desc, nan_int_close6_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
@@ -887,7 +891,7 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
   if(chn == NULL){
-    log_debug(LD_MT, "protocol id not recognized");
+    log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
 
