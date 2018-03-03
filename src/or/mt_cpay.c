@@ -238,8 +238,9 @@ int mt_cpay_pay(mt_desc_t* rdesc, mt_desc_t* idesc){
   if(mt_desc_comp(rdesc, idesc) != 0){
     return pay_helper(rdesc, idesc);
   }
-  else
+  else{
     return dpay_helper(rdesc, idesc);
+  }
 }
 
 /**
@@ -1077,7 +1078,6 @@ static int init_nan_cli_dpay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*pid)[DIGEST_LEN]){
   (void)token;
   (void)desc;
-
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
     log_debug(LD_MT, "protocol id not recognized");
@@ -1090,8 +1090,9 @@ static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*
   digestmap_set(client.nans_destab, (char*)digest, chn);
 
   // check validity incoming message
-  if(chn->callback.fn)
+  if(chn->callback.fn){
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
+  }
   return MT_SUCCESS;
 }
 
@@ -1260,10 +1261,13 @@ static int help_nan_int_close8(void* args){
   digestmap_remove(client.chns_transition, (char*)pid);
 
   // if sufficient funds left then move channel to establish state, otherwise move to spent
-  if(chn->data.wallet.end_bal >= MT_NAN_LEN * (MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100))
+  if(chn->data.wallet.end_bal >= MT_NAN_LEN * (MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100)){
+    //new wallet becomes old wallet
     smartlist_add(client.chns_estab, chn);
-  else
+  }
+  else{
     smartlist_add(client.chns_spent, chn);
+  }
 
   if(chn->callback.fn)
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);

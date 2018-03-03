@@ -5743,9 +5743,9 @@ typedef enum {
 #define MT_FAUCET_VAL 2147483647
 #define MT_NAN_VAL 100
 #define MT_NAN_LEN 1000
-#define MT_CHN_VAL_CLI 105 * 1000
+#define MT_CHN_VAL_CLI 105 * 1000 * 100
 #define MT_CHN_VAL_REL 0
-#define MT_CHN_VAL_INT 200 * 1000
+#define MT_CHN_VAL_INT 200 * 1000 * 100
 
 //-------------------- Cryptographic String Sizes (bytes) -------------------//
 

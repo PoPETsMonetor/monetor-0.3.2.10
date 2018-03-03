@@ -500,8 +500,9 @@ static int handle_nan_cli_setup1(mt_desc_t* desc, nan_cli_setup1_t* token, byte 
   byte wpk_digest[DIGEST_LEN];
   mt_bytes2digest(token->wpk, MT_SZ_PK, &wpk_digest);
 
-  if(digestmap_get(intermediary.chn_states, (char*)wpk_digest))
-    return MT_ERROR;
+  // TODO: this will be fixed once close in implemented
+  //  if(digestmap_get(intermediary.chn_states, (char*)wpk_digest))
+  //  return MT_ERROR;
 
   // only accept consensus values
   if(token->nan_public.val_from != MT_NAN_VAL + (MT_NAN_VAL * intermediary.tax) / 100)

@@ -163,14 +163,25 @@ static int mock_send_message(mt_desc_t *desc, mt_ntype_t type, byte* msg, int si
   // add event to queue
   smartlist_add(event_queue, send);
 
-  // increment intermediary expected balance if necessary
+  // increment intermediary expected balances if necessary
   if(send->msg_type == MT_NTYPE_CHN_END_ESTAB1 && send->src.party == MT_PARTY_REL){
-    byte int_digest[DIGEST_LEN];
-    mt_desc2digest(&send->desc1, &int_digest);
-    int* bal = digestmap_get(exp_bal, (char*)int_digest);
+    byte idigest[DIGEST_LEN];
+    mt_desc2digest(&send->desc1, &idigest);
+    int* bal = digestmap_get(exp_bal, (char*)idigest);
     *bal += MT_CHN_VAL_INT;
   }
 
+  // update connections/rel2int mapping for direct payments
+  if(send->msg_type == MT_NTYPE_NAN_CLI_DESTAB1){
+    byte cdigest[DIGEST_LEN];
+    byte idigest[DIGEST_LEN];
+    mt_desc2digest(&cur_desc, &cdigest);
+    mt_desc2digest(desc, &idigest);
+    digestmap_t* rel2int = digestmap_get(connections, (char*)cdigest);
+    mt_desc_t* idesc = tor_malloc(sizeof(mt_desc_t));
+    *idesc = *desc;
+    digestmap_set(rel2int, (char*)idigest, idesc);
+  }
   // track number of payment vs non-payment messages
   if(type == MT_NTYPE_NAN_CLI_PAY1 || type == MT_NTYPE_NAN_REL_PAY2 ||
      type == MT_NTYPE_NAN_CLI_DPAY1 || type == MT_NTYPE_NAN_INT_DPAY2)
@@ -183,11 +194,11 @@ static int mock_send_message(mt_desc_t *desc, mt_ntype_t type, byte* msg, int si
 
 static int mock_send_message_multidesc(mt_desc_t *desc1, mt_desc_t* desc2,  mt_ntype_t type, byte* msg, int size){
 
-  byte digest[DIGEST_LEN];
-  mt_desc2digest(desc1, &digest);
+  byte rdigest[DIGEST_LEN];
+  mt_desc2digest(desc1, &rdigest);
 
   // if desc is unavailable make it available later and return ERROR for now
-  if(*(int*)digestmap_get(statuses, (char*)digest) == 0){
+  if(*(int*)digestmap_get(statuses, (char*)rdigest) == 0){
 
     // inform the payment module that the desc is unavailable
     if(cur_desc.party == MT_PARTY_LED)
@@ -224,6 +235,14 @@ static int mock_send_message_multidesc(mt_desc_t *desc1, mt_desc_t* desc2,  mt_n
   send->msg = tor_malloc(size);
   memcpy(send->msg, msg, size);
 
+  // update connections/rel2int mapping
+  byte cdigest[DIGEST_LEN];
+  mt_desc2digest(&cur_desc, &cdigest);
+  digestmap_t* rel2int = digestmap_get(connections, (char*)cdigest);
+  mt_desc_t* idesc = tor_malloc(sizeof(mt_desc_t));
+  *idesc = *desc2;
+  digestmap_set(rel2int, (char*)rdigest, idesc);
+
   // add event to queue
   smartlist_add(event_queue, send);
   return MT_SUCCESS;
@@ -258,7 +277,6 @@ static int mock_paymod_signal(mt_signal_t signal, mt_desc_t* desc){
       byte rdigest[DIGEST_LEN];
       mt_desc2digest(&cur_desc, &cdigest);
       mt_desc2digest(desc, &rdigest);
-
       digestmap_t* rel2int = digestmap_get(connections, (char*)cdigest);
       mt_desc_t* idesc = digestmap_get(rel2int, (char*)rdigest);
 
@@ -270,7 +288,6 @@ static int mock_paymod_signal(mt_signal_t signal, mt_desc_t* desc){
 	event->src = cur_desc;
 	event->desc1 = *desc;
 	event->desc2 = *idesc;
-
 	smartlist_add(event_queue, event);
       }
       else {
@@ -285,7 +302,6 @@ static int mock_paymod_signal(mt_signal_t signal, mt_desc_t* desc){
 
     default:;
   }
-
   return MT_SUCCESS;
 }
 
@@ -538,8 +554,6 @@ static void set_up_main_loop(void){
   MAP_FOREACH(digestmap_, cli_ctx, const char*, digest, context_t*, ctx){
     mt_cpay_import(ctx->state);
     tor_free(ctx->state);
-    digestmap_t* rel2int = digestmap_new();
-    digestmap_set(connections, digest, rel2int);
 
     // populate random subset of relays
     mt_desc_t unique_rel_descs[REL_CONNS];
@@ -565,13 +579,6 @@ static void set_up_main_loop(void){
       event->desc1 = unique_rel_descs[i];
       event->desc2 = ((context_t*)digestmap_rand(int_ctx))->desc;
       smartlist_add(event_queue, event);
-
-      // record the relay -> intermediary pairing
-      byte rdigest[DIGEST_LEN];
-      mt_desc_t* idesc = tor_malloc(sizeof(mt_desc_t));
-      mt_desc2digest(&event->desc1, &rdigest);
-      memcpy(idesc, &event->desc2, sizeof(mt_desc_t));
-      digestmap_set(rel2int, (char*)rdigest, idesc);
     }
 
     // Make direct payments
@@ -582,12 +589,6 @@ static void set_up_main_loop(void){
       event->desc1 = ((context_t*)digestmap_rand(int_ctx))->desc;
       event->desc2 = event->desc1;
       smartlist_add(event_queue, event);
-
-      byte idigest[DIGEST_LEN];
-      mt_desc_t* idesc = tor_malloc(sizeof(mt_desc_t));
-      mt_desc2digest(&event->desc1, &idigest);
-      memcpy(idesc, &event->desc2, sizeof(mt_desc_t));
-      digestmap_set(rel2int, (char*)idigest, idesc);
     }
 
     mt_cpay_export(&ctx->state);
@@ -622,21 +623,23 @@ static int do_main_loop_once(void){
 
   context_t* ctx;
 
-  byte int_digest[DIGEST_LEN];
-  mt_desc2digest(&event->desc2, &int_digest);
   int MT_NAN_TAX = MT_NAN_VAL * MT_TAX / 100;
 
   // update expected balances for pay
-  if(event->type == CALL_PAY && memcmp(dst_digest, int_digest, DIGEST_LEN) != 0){
+  if(event->msg_type == MT_NTYPE_NAN_CLI_PAY1){
+    byte int_digest[DIGEST_LEN];
+    digestmap_t* rel2int = digestmap_get(connections, (char*)src_digest);
+    mt_desc2digest((mt_desc_t*)digestmap_get(rel2int, (char*)dst_digest), &int_digest);
+
     *(int*)digestmap_get(exp_bal, (char*)src_digest) -= MT_NAN_VAL + MT_NAN_TAX;
     *(int*)digestmap_get(exp_bal, (char*)dst_digest) += MT_NAN_VAL;
     *(int*)digestmap_get(exp_bal, (char*)int_digest) += MT_NAN_TAX;
   }
 
   // update expected balances for direct pay
-  if(event->type == CALL_PAY && memcmp(dst_digest, int_digest, DIGEST_LEN) == 0){
+  if(event->msg_type == MT_NTYPE_NAN_CLI_DPAY1){
     *(int*)digestmap_get(exp_bal, (char*)src_digest) -= MT_NAN_VAL + MT_NAN_TAX;
-    *(int*)digestmap_get(exp_bal, (char*)int_digest) += MT_NAN_VAL + MT_NAN_TAX;
+    *(int*)digestmap_get(exp_bal, (char*)dst_digest) += MT_NAN_VAL + MT_NAN_TAX;
   }
 
   switch(event->type){
@@ -817,7 +820,7 @@ static void test_mt_paymulti(void *arg){
   /****************************** Setup **********************************/
 
   // setup all of the parties and add to _ctx maps
-  uint32_t ids = 1;
+  uint64_t ids = 1;
 
   byte pp[MT_SZ_PP];
 
@@ -897,6 +900,10 @@ static void test_mt_paymulti(void *arg){
     int* balance = tor_malloc(sizeof(int));
     *balance = 0;
     digestmap_set(exp_bal, (char*)digest, balance);
+
+    // setup rel2int maps
+    digestmap_t* rel2int = digestmap_new();
+    digestmap_set(connections, (char*)digest, rel2int);
   }
 
   // initialize relays
@@ -933,7 +940,7 @@ static void test_mt_paymulti(void *arg){
     mt_desc_t int_desc;
     int_desc.party = MT_PARTY_INT;
     int_desc.id[0] = ids++;
-    int_desc.id[1] = ids++;
+    int_desc.id[1] = 0;
 
     tt_assert(mt_ipay_init() == MT_SUCCESS);
 
@@ -989,6 +996,8 @@ static void test_mt_paymulti(void *arg){
   // turn to single thread just for fun
   options->MoneTorSingleThread = 1;
 
+  printf("\n restarting \n\n");
+
   // do it again
   sim_time = 0;
   set_up_main_loop();
@@ -1003,8 +1012,7 @@ static void test_mt_paymulti(void *arg){
     mt_cpay_import(ctx->state);
     int bal = mt_cpay_mac_bal() + mt_cpay_chn_bal();
     int exp = *(int*)digestmap_get(exp_bal, digest);
-    exp -= MT_FEE * mt_cpay_chn_number();
-    exp += mt_cpay_chn_number() * (MT_CHN_VAL_CLI + MT_FEE);
+    exp += mt_cpay_chn_number() * MT_CHN_VAL_CLI;
     tor_assert(bal == exp);
   } MAP_FOREACH_END;
 
@@ -1012,8 +1020,7 @@ static void test_mt_paymulti(void *arg){
     mt_rpay_import(ctx->state);
     int bal = mt_rpay_mac_bal() + mt_rpay_chn_bal();
     int exp = *(int*)digestmap_get(exp_bal, digest);
-    exp -= MT_FEE * mt_rpay_chn_number();
-    exp += mt_rpay_chn_number() * (MT_CHN_VAL_REL + MT_FEE);
+    exp += mt_rpay_chn_number() * MT_CHN_VAL_REL;
     tor_assert(bal == exp);
   } MAP_FOREACH_END;
 
@@ -1021,6 +1028,7 @@ static void test_mt_paymulti(void *arg){
     mt_ipay_import(ctx->state);
     int bal =  mt_ipay_mac_bal() + mt_ipay_chn_bal();
     int exp = *(int*)digestmap_get(exp_bal, digest);
+    printf("%d %d\n\n", bal, exp);
     tor_assert(bal == exp);
   } MAP_FOREACH_END;
 

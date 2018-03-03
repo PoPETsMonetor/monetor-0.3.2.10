@@ -519,7 +519,6 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
 }
 
 static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
   (void)desc;
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
@@ -553,7 +552,6 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
 }
 
 static int help_chn_int_estab4(void* args){
-
   // extract parameters
   mt_channel_t* chn = ((mt_zkp_args_t*)args)->chn;
   byte pid[DIGEST_LEN];
@@ -913,7 +911,14 @@ static int help_nan_int_close8(void *args){
   byte digest[DIGEST_LEN];
   mt_desc2digest(&chn->idesc, &digest);
   digestmap_remove(relay.chns_transition, (char*)pid);
-  digestmap_smartlist_add(relay.chns_estab, (char*)digest, chn);
+
+  // if sufficient funds left then move channel to establish state, otherwise move to spent
+  if(chn->data.wallet.int_bal >= MT_NAN_LEN * MT_NAN_VAL){
+    digestmap_smartlist_add(relay.chns_estab, (char*)digest, chn);
+  }
+  else{
+    smartlist_add(relay.chns_spent, chn);
+  }
 
   if(chn->callback.fn){
     mt_callback_t cb = chn->callback;
