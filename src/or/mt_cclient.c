@@ -601,18 +601,18 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
 }
 
 /**
- * If sendme is 1, we just decrease the payment windows for guard and middle relay
+ * stop_hop means that we decrease payment window until hop stop_hop.
  */
 
-void mt_cclient_update_payment_window(circuit_t *circ, int sendme) {
+void mt_cclient_update_payment_window(circuit_t *circ, int stop_hop) {
   if (get_options()->EnablePayment && CIRCUIT_IS_ORIGIN(circ)) {
     pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
     int hop = 1;
     while(ppath_tmp) {
-      if (hop == 3 && sendme) // we don't remove anything from exit
+      if (hop == stop_hop) // we don't remove anything from exit
         break;
       if(ppath_tmp->first_payment_succeeded) {
-        if (--ppath_tmp->window  < LIMIT_PAYMENT_WINDOW 
+        if (--ppath_tmp->window  < (get_options()->MoneTorInitialWindow-get_options()->MoneTorPaymentRate)
             && !ppath_tmp->payment_is_processing &&
             !ppath_tmp->p_marked_for_close) {
         /** pay :-) */
@@ -680,10 +680,10 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
         if (!ppath_tmp->first_payment_succeeded) {
           log_info(LD_MT, "MoneTor: Yay! First payment succeeded for hop %d", hop);
           ppath_tmp->first_payment_succeeded = 1;
-          ppath_tmp->window = 3000;
+          ppath_tmp->window = get_options()->MoneTorInitialWindow;
         }
         else {
-          ppath_tmp->window += 2000;
+          ppath_tmp->window += get_options()->MoneTorPaymentRate;
         }
         ppath_tmp->last_mt_cpay_succeeded = 1;
         ppath_tmp->payment_is_processing = 0;
@@ -862,20 +862,29 @@ void mt_cclient_mark_payment_channel_for_close(circuit_t *circ, int abort, int r
     if (abort) {
       log_info(LD_MT, "We should abort the payment channel");
     }
+    log_info(LD_MT, "MoneTor: closing circuit purpose %s", circuit_purpose_to_string(circ->purpose));
     circuit_mark_for_close(circ, reason);
   }
   else {
     /** We have a general circuit, let's see if we have
      * a payment channel over it */
     oricirc = TO_ORIGIN_CIRCUIT(circ);
+    mt_desc_t *desci = NULL;
     if (oricirc->ppath) {
       pay_path_t *ppath_tmp = oricirc->ppath;
+      int hop = 1;
       while (ppath_tmp) {
         if (!ppath_tmp->p_marked_for_close) {
           ppath_tmp->p_marked_for_close = 1;
           log_info(LD_MT, "MoneTor: Trying to close the nanopayment channel");
           intermediary_t *intermediary = get_intermediary_by_identity(ppath_tmp->inter_ident);
-          if (mt_cpay_close(&ppath_tmp->desc, &intermediary->desc) < 0) {
+          if (hop == 1) {
+            desci = &ppath_tmp->desc;
+          }
+          else {
+            desci = &intermediary->desc;
+          }
+          if (mt_cpay_close(&ppath_tmp->desc, desci) < 0) {
             log_info(LD_MT, "MoneTor: We tried to close the channel and we got"
                   " an error from the payment module. We mark this channel as closed");
               /** XXX Ask thien-Nam if mt_cpay_close which returns -1 also send a
@@ -884,9 +893,11 @@ void mt_cclient_mark_payment_channel_for_close(circuit_t *circ, int abort, int r
           }
         }
         ppath_tmp = ppath_tmp->next;
+        hop++;
       }
     }
     else {
+      log_info(LD_MT, "MoneTor: closing circuit purpose %s", circuit_purpose_to_string(circ->purpose));
       circuit_mark_for_close(circ, reason);
     }
   }
@@ -949,6 +960,11 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
       } while(layer_start != TO_ORIGIN_CIRCUIT(circ)->cpath && ppath_tmp);
       if (BUG(!found))
         return -2;
+      if (hop > 1) {
+        for (int i=0; i < (int)size/RELAY_PPAYLOAD_SIZE+1; i++) {
+          mt_cclient_update_payment_window(circ, hop);
+        }
+      }
     }
     log_debug(LD_MT, "MoneTor: Sending message type %s with payload size of %d bytes to hop %d %s",
         mt_token_describe(type), size, hop, extend_info_describe(layer_start->extend_info));
@@ -1060,15 +1076,20 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
     tor_assert(cpath);
 
     /* find the right ppath */
+    int hop = 1;
     while (cpath != layer_hint && ppath) {
       cpath = cpath->next;
       ppath = ppath->next;
+      hop++;
     }
     tor_assert(ppath);
     /* get the right desc */
     desc = &ppath->desc;
     log_info(LD_MT, "MoneTor: Processed a msg sent by relay linked to desc %s - calling mt_cpay_recv",
         mt_desc_describe(desc));
+    for (int i = 0; i < (int)msg_len/RELAY_PPAYLOAD_SIZE+1; i++) {
+      mt_cclient_update_payment_window(TO_CIRCUIT(circ), hop);
+    }
     if (mt_cpay_recv(desc, pcommand, msg, msg_len) < 0) {
       /* De we retry or close? Let's assume easiest things -> we close*/
       log_warn(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %s", mt_token_describe(pcommand));

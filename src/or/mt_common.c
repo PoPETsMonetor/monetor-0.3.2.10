@@ -838,7 +838,7 @@ int mt_process_received_directpaymentcell(circuit_t *circ, cell_t *cell) {
 MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
       byte* msg, int size)) {
 
-  log_info(LD_MT, "MoneTor: Sending %s to %s %" PRIu64 ".%" PRIu64 "\n",
+  log_info(LD_MT, "MoneTor: Sending %s to %s %" PRIu64 ".%" PRIu64 "",
 	   mt_token_describe(type) + NTYPE_OFFSET, mt_party_describe(desc->party) + PARTY_OFFSET,
 	   desc->id[0], desc->id[1]);
 
