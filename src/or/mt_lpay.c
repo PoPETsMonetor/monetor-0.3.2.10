@@ -151,6 +151,11 @@ int mt_lpay_init(void){
  * done with the request.
  */
 int mt_lpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
+
+  log_info(LD_MT, "MoneTor: Received %s from %s %" PRIu64 ".%" PRIu64 "",
+	   mt_token_describe(type), mt_party_describe(desc->party),
+	   desc->id[0], desc->id[1]);
+
   // verify signed message, produce addr to pass into handlers
   byte pk[MT_SZ_PK];
   byte addr[MT_SZ_ADDR];

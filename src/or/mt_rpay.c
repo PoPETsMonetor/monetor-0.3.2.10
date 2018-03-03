@@ -205,6 +205,11 @@ int mt_rpay_init(void){
  */
 int mt_rpay_recv_multidesc(mt_desc_t* cdesc, mt_desc_t* idesc, mt_ntype_t type, byte* msg, int size){
 
+  log_info(LD_MT, "MoneTor: Receiving %s from %s %" PRIu64 ".%" PRIu64 " | %" PRIu64 ".%" PRIu64 "",
+	   mt_token_describe(type), mt_party_describe(cdesc->party),
+	   cdesc->id[0], cdesc->id[1], idesc->id[0], idesc->id[1]);
+
+
   byte digest[DIGEST_LEN];
   mt_desc2digest(cdesc, &digest);
   mt_desc_t* int_desc = tor_malloc(sizeof(mt_desc_t));
@@ -218,6 +223,10 @@ int mt_rpay_recv_multidesc(mt_desc_t* cdesc, mt_desc_t* idesc, mt_ntype_t type, 
  * Handle an incoming message from the given descriptor
  */
 int mt_rpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
+
+  log_info(LD_MT, "MoneTor: Received %s from %s %" PRIu64 ".%" PRIu64 "",
+	   mt_token_describe(type), mt_party_describe(desc->party),
+	   desc->id[0], desc->id[1]);
 
   int result;
   byte pid[DIGEST_LEN];

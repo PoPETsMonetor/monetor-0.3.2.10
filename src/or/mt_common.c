@@ -32,10 +32,6 @@
 #include "relay.h"
 #include "scheduler.h"
 
-// char offsets to trim token/party type descriptions
-#define NTYPE_OFFSET 9
-#define PARTY_OFFSET 9
-
 static uint64_t count[2] = {0, 0};
 
 /**
@@ -839,7 +835,7 @@ MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
       byte* msg, int size)) {
 
   log_info(LD_MT, "MoneTor: Sending %s to %s %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type) + NTYPE_OFFSET, mt_party_describe(desc->party) + PARTY_OFFSET,
+	   mt_token_describe(type), mt_party_describe(desc->party),
 	   desc->id[0], desc->id[1]);
 
   switch (type) {
@@ -1043,9 +1039,9 @@ MOCK_IMPL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2,
     return -1;
   }
 
-  log_info(LD_MT, "MoneTor: Sending %s to %s %" PRIu64 ".%" PRIu64 "\n",
-	   mt_token_describe(type) + NTYPE_OFFSET, mt_party_describe(desc1->party) + PARTY_OFFSET,
-	   desc1->id[0], desc1->id[1]);
+  log_info(LD_MT, "MoneTor: Sending %s to %s %" PRIu64 ".%" PRIu64 " | %" PRIu64 ".%" PRIu64 "",
+	   mt_token_describe(type), mt_party_describe(desc1->party),
+	   desc1->id[0], desc1->id[1], desc2->id[0], desc2->id[1]);
 
   return mt_cclient_send_message_multidesc(desc1, desc2, type, msg, size);
 }

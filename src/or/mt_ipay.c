@@ -172,6 +172,10 @@ int mt_ipay_init(void){
  */
 int mt_ipay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 
+  log_info(LD_MT, "MoneTor: Received %s from %s %" PRIu64 ".%" PRIu64 "",
+	   mt_token_describe(type), mt_party_describe(desc->party),
+	   desc->id[0], desc->id[1]);
+
   int result;
   byte pid[DIGEST_LEN];
 
