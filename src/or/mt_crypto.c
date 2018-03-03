@@ -32,6 +32,7 @@
 #include <string.h>
 #include <time.h>
 
+#include <openssl/aes.h>
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
@@ -39,9 +40,11 @@
 #include <openssl/err.h>
 #include <openssl/sha.h>
 
+#include "or.h"
+#include "config.h"
 #include "mt_crypto.h"
 
-/************ Crytpographic Simulaed Delays (microsec) ******************/
+/*************** Crytpographic Simulaed Delays (microsec) ***************/
 
 #define MT_DELAY_COM_COMMIT 0
 #define MT_DELAY_COM_DECOMMIT 0
@@ -58,26 +61,41 @@
 #define MT_DELAY_ZKP_PROVE_3 100000
 #define MT_DELAY_ZKP_VERIFY_3 82000
 
+/******************** Stuff For MoneTorSingleCore Delays ****************/
+
+const unsigned char key[] = {
+  0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+  0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+  0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
+};
+
+static unsigned char text[] = "ransdfs;ldldfhsda;fhsda;lkfsd;lfkhadsf;lhgiug34giu3qhfiqu3qhf3u4g34puh34oupuhg34pouggh324poutth324weopfhwewopvvhm98fgroucgmoiugceoiucgerioucgreioug merwioucgmreicouogh,weiucgb3u,9guh3ccoigucbg,coiehg4oiucgh24ucgh23ciuh3m4cmg0-93ux,powhtqweeo;flxfh,3oiheoifhaerouhe[oifh3w4q8g92rh2dI[GHTQ3[[8RFH24P9UGHQE[0B842THWEPOGTHQ34PGUH34GP98T34HGPOIW;LHALGQ3PU4GHQ489WGHQWEPOIGH34PT9834HTPIQWHFO4oiggh324oih324oipghq;lo;ifo3rohg342oi2gh33;lrgh3;3o2ighigh324;oiggh3oi;fhh32oi4igh34o;igh34oigh234iogh32ugh32ugh342ough34ouugh234uogh324ugh34gou34h2gou2344hgou34hgou32pugb342ough324oiggh34poigh234oigh324opgh342goiherengui3ht93p48y439thg9hg89-3h2g9834hg9384gh34984gh23498gh239uhg34289gh24389-gh32498gh34-98gh239ugh3489gh34g8023h4g9-8432hg9834hg8-342hg3498ghprueher89gh34-8gh324-8gh342g-8342g34g3gdom text23;OIH34POTOUHQ3GUPI34HIUG34HGUPI4W5HGPUERHGPOI45HGIOERGJ4W5POHGIN3P9UGHERPGHW45OGH3ROEIUVSDFFKJGHSADV980745HG9RHGWO4I5THGSIUOBUHWT[T88TH34GP9UEWRHGP9REROBHBEWIUGMC8R7OICIGNUGCEMWROIGM349M4GHEQR,EUG9O3HMG,8G7CORIMGCG,OIMWEUHM,G9PEWRVGW";
+
+static unsigned char enc_out[2][1024];
+static AES_KEY enc_key, dec_key;
+
+# define MICROSEC_PER_ENCRYPT 0.108
+
 /************************************************************************/
 
 #define PEM_LINE_SIZE 64
 
 // global parameters for key generation
-int num_bits = 1024;
-const char* exp_str = "65537";
+static int num_bits = 1024;
+static const char* exp_str = "65537";
 
 // random byte string used to simulate a "blinder" for bsig operations
-byte* bsig_fake_blinder = (byte*)"1234567812345678123456781234567812345678";
-
-const char* pk_header = "-----BEGIN PUBLIC KEY-----\n";
-const char* pk_footer = "-----END PUBLIC KEY-----\n";
-const char* sk_header = "-----BEGIN RSA PRIVATE KEY-----\n";
-const char* sk_footer = "-----END RSA PRIVATE KEY-----\n";
+static byte* bsig_fake_blinder = (byte*)"1234567812345678123456781234567812345678";
 
 /**
  * Called at system setup to obtain public parameters
  */
 int mt_crypt_setup(byte (*pp_out)[MT_SZ_PP]){
+  AES_set_encrypt_key(key, 128, &enc_key);
+  AES_set_decrypt_key(key, 128, &dec_key);
+  AES_encrypt(text, enc_out[0], &enc_key);
+
   return mt_crypt_rand(MT_SZ_PP, *pp_out);
 }
 
@@ -396,10 +414,19 @@ int mt_zkp_verify(mt_zkp_type_t type, byte (*pp)[MT_SZ_PP],
  * Call system nanosleep() to delay the thread for given the microseconds
  */
 MOCK_IMPL(void, mt_micro_sleep, (uint microsecs)){
-  struct timespec delay;
-  delay.tv_sec = microsecs / 1000000;
-  delay.tv_nsec = (microsecs % 1000000) * 1000;
-  nanosleep(&delay, NULL);
+
+  if(!get_options()->MoneTorSingleCore){
+    struct timespec delay;
+    delay.tv_sec = microsecs / 1000000;
+    delay.tv_nsec = (microsecs % 1000000) * 1000;
+    nanosleep(&delay, NULL);
+  }
+  else{
+    // simulate delay by idling AES_encrypt; should be intercepted by shadow
+    for(int i = 0; i < microsecs / MICROSEC_PER_ENCRYPT; i++){
+      AES_encrypt(enc_out[i % 2], enc_out[(i + 1) % 2], &enc_key);
+    }
+  }
 }
 
 /**
