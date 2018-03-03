@@ -24,7 +24,7 @@ void mt_cclient_mark_payment_channel_for_close(circuit_t *circ, int abort, int r
 //XXX MoneTor - define following as the sum of the two above
 
 // XXX MoneTor - do we need backup intermediaries?
-#define MAX_INTERMEDIARY_CHOSEN 2
+#define MAX_INTERMEDIARY_CHOSEN 1
 
 #ifdef MT_CCLIENT_PRIVATE
 STATIC intermediary_t* intermediary_new(const node_t *node, extend_info_t *ei, time_t now);

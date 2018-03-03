@@ -2928,6 +2928,7 @@ typedef struct {
 typedef enum {
   MIDDLE,
   EXIT,
+  ALLPOS,
 } position_t;
 
 /** Holds information for payment to perform on circuit

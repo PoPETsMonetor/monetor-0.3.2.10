@@ -231,7 +231,11 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   /* Choosing right intermediary */
   tor_assert(circ->ppath->next);
   pay_path_t* middle = circ->ppath->next;
-  intermediary_t* intermediary_g = get_intermediary_by_role(MIDDLE);
+  intermediary_t* intermediary_g;
+  if (MAX_INTERMEDIARY_CHOSEN == 1)
+    intermediary_g = get_intermediary_by_role(ALLPOS);
+  else
+    intermediary_g = get_intermediary_by_role(MIDDLE);
   increment(count);
   middle->desc.id[0] = count[0];
   middle->desc.id[1] = count[1];
@@ -249,7 +253,11 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   }
   tor_assert(middle->next);
   pay_path_t* exit = middle->next;
-  intermediary_t* intermediary_e = get_intermediary_by_role(EXIT);
+  intermediary_t* intermediary_e;
+  if (MAX_INTERMEDIARY_CHOSEN == 1)
+    intermediary_e = get_intermediary_by_role(ALLPOS);
+  else
+    intermediary_e = get_intermediary_by_role(EXIT);
   increment(count);
   exit->desc.id[0] = count[0];
   exit->desc.id[1] = count[1];
@@ -361,7 +369,9 @@ choose_intermediaries(time_t now, smartlist_t *exclude_list) {
   log_info(LD_MT, "MoneTor: Chose an intermediary: %s at time %ld", extend_info_describe(ei),
       (long) now);
   intermediary = intermediary_new(node, ei, now);
-  if (count_middle < count_exit)
+  if (MAX_INTERMEDIARY_CHOSEN == 1)
+    intermediary->linked_to = ALLPOS;
+  else if (count_middle < count_exit)
     intermediary->linked_to = MIDDLE;
   else
     intermediary->linked_to = EXIT;
@@ -616,7 +626,11 @@ void mt_cclient_update_payment_window(circuit_t *circ, int stop_hop) {
             && !ppath_tmp->payment_is_processing &&
             !ppath_tmp->p_marked_for_close) {
         /** pay :-) */
-          intermediary_t* intermediary = get_intermediary_by_role(ppath_tmp->position);
+          intermediary_t* intermediary;
+          if (MAX_INTERMEDIARY_CHOSEN == 1)
+            intermediary = get_intermediary_by_role(ALLPOS);
+          else
+            intermediary = get_intermediary_by_role(ppath_tmp->position);
           if (!intermediary) {
             log_warn(LD_MT, "MoneTor: get_intermediary_by_role returned NULL :/");
             if (hop > 1)
