@@ -4810,7 +4810,10 @@ typedef struct {
 
   int MoneTorSingleThread;
 
+  int MoneTorSingleCore;
+
   int MoneTorPaymentRate;
+
   int MoneTorInitialWindow;
 
 } or_options_t;

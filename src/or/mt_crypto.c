@@ -41,7 +41,7 @@
 
 #include "mt_crypto.h"
 
-/************ Crytpographic Simulaed Delays (millisec) ******************/
+/************ Crytpographic Simulaed Delays (microsec) ******************/
 
 #define MT_DELAY_COM_COMMIT 0
 #define MT_DELAY_COM_DECOMMIT 0
@@ -51,12 +51,12 @@
 
 // turn off delay if testing
 
-#define MT_DELAY_ZKP_PROVE_1 8
-#define MT_DELAY_ZKP_VERIFY_1 15
-#define MT_DELAY_ZKP_PROVE_2 100
-#define MT_DELAY_ZKP_VERIFY_2 82
-#define MT_DELAY_ZKP_PROVE_3 100
-#define MT_DELAY_ZKP_VERIFY_3 82
+#define MT_DELAY_ZKP_PROVE_1 8000
+#define MT_DELAY_ZKP_VERIFY_1 15000
+#define MT_DELAY_ZKP_PROVE_2 100000
+#define MT_DELAY_ZKP_VERIFY_2 82000
+#define MT_DELAY_ZKP_PROVE_3 100000
+#define MT_DELAY_ZKP_VERIFY_3 82000
 
 /************************************************************************/
 
@@ -228,7 +228,7 @@ int mt_com_commit(byte* msgs, int msg_size, byte (*rand)[MT_SZ_HASH], byte (*com
   if(mt_crypt_rand(MT_SZ_COM - MT_SZ_HASH, (*com_out) + MT_SZ_HASH) !=  MT_SUCCESS)
     return MT_ERROR;
 
-  mt_milli_sleep(MT_DELAY_COM_COMMIT);
+  mt_micro_sleep(MT_DELAY_COM_COMMIT);
   return MT_SUCCESS;
 }
 
@@ -242,7 +242,7 @@ int mt_com_decommit(byte* msg, int msg_size, byte (*rand)[MT_SZ_HASH], byte  (*c
   if(memcmp(com, com_ver, MT_SZ_HASH) != 0)
     return MT_ERROR;
 
-  mt_milli_sleep(MT_DELAY_COM_DECOMMIT);
+  mt_micro_sleep(MT_DELAY_COM_DECOMMIT);
   return MT_SUCCESS;
 }
 
@@ -266,7 +266,7 @@ int mt_bsig_blind(byte *msg, int msg_size, byte (*pk)[MT_SZ_PK], byte (*blinded_
   if(mt_crypt_rand(MT_SZ_UBLR, *unblinder_out) != MT_SUCCESS)
     return MT_ERROR;
 
-  mt_milli_sleep(MT_DELAY_BSIG_BLIND);
+  mt_micro_sleep(MT_DELAY_BSIG_BLIND);
   return MT_SUCCESS;
 }
 
@@ -281,7 +281,7 @@ int mt_bsig_unblind(byte (*pk)[MT_SZ_PK], byte (*blinded_sig)[MT_SZ_SIG], byte (
   (void)unblinder;
 
   memcpy(*unblinded_sig_out, *blinded_sig, MT_SZ_SIG);
-  mt_milli_sleep(MT_DELAY_BSIG_UNBLIND);
+  mt_micro_sleep(MT_DELAY_BSIG_UNBLIND);
   return MT_SUCCESS;
 }
 
@@ -304,7 +304,7 @@ int mt_bsig_verify(byte* msg, int msg_size, byte (*pk)[MT_SZ_PK], byte (*unblind
   if(mt_sig_verify(blinded, MT_SZ_BL, pk, unblinded_sig) != MT_SUCCESS)
     return MT_ERROR;
 
-  mt_milli_sleep(MT_DELAY_BSIG_VERIFY);
+  mt_micro_sleep(MT_DELAY_BSIG_VERIFY);
   return MT_SUCCESS;
 }
 
@@ -351,13 +351,13 @@ int mt_zkp_prove(mt_zkp_type_t type, byte (*pp)[MT_SZ_PP],
 
   switch(type){
     case MT_ZKP_TYPE_1:
-      mt_milli_sleep(MT_DELAY_ZKP_PROVE_1);
+      mt_micro_sleep(MT_DELAY_ZKP_PROVE_1);
       break;
     case MT_ZKP_TYPE_2:
-      mt_milli_sleep(MT_DELAY_ZKP_PROVE_2);
+      mt_micro_sleep(MT_DELAY_ZKP_PROVE_2);
       break;
     case MT_ZKP_TYPE_3:
-      mt_milli_sleep(MT_DELAY_ZKP_PROVE_3);
+      mt_micro_sleep(MT_DELAY_ZKP_PROVE_3);
       break;
   }
 
@@ -379,13 +379,13 @@ int mt_zkp_verify(mt_zkp_type_t type, byte (*pp)[MT_SZ_PP],
 
   switch(type){
     case MT_ZKP_TYPE_1:
-      mt_milli_sleep(MT_DELAY_ZKP_VERIFY_1);
+      mt_micro_sleep(MT_DELAY_ZKP_VERIFY_1);
       break;
     case MT_ZKP_TYPE_2:
-      mt_milli_sleep(MT_DELAY_ZKP_VERIFY_2);
+      mt_micro_sleep(MT_DELAY_ZKP_VERIFY_2);
       break;
     case MT_ZKP_TYPE_3:
-      mt_milli_sleep(MT_DELAY_ZKP_VERIFY_3);
+      mt_micro_sleep(MT_DELAY_ZKP_VERIFY_3);
       break;
   }
 
@@ -393,19 +393,19 @@ int mt_zkp_verify(mt_zkp_type_t type, byte (*pp)[MT_SZ_PP],
 }
 
 /**
- * Call system nanosleep() to delay the thread for given the milliseconds
+ * Call system nanosleep() to delay the thread for given the microseconds
  */
-MOCK_IMPL(void, mt_milli_sleep, (uint millisecs)){
+MOCK_IMPL(void, mt_micro_sleep, (uint microsecs)){
   struct timespec delay;
-  delay.tv_sec = millisecs / 1000;
-  delay.tv_nsec = (millisecs % 1000) * 1000000;
+  delay.tv_sec = microsecs / 1000000;
+  delay.tv_nsec = (microsecs % 1000000) * 1000;
   nanosleep(&delay, NULL);
 }
 
 /**
  * Don't do anything; useful to speed up tests via the mock functionality
  */
-void mock_milli_sleep(uint millisecs){
-  (void)millisecs;
+void mock_micro_sleep(uint microsecs){
+  (void)microsecs;
   return;
 }

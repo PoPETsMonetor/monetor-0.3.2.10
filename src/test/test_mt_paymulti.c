@@ -798,7 +798,7 @@ static void test_mt_paymulti(void *arg){
   MOCK(mt_send_message, mock_send_message);
   MOCK(mt_send_message_multidesc, mock_send_message_multidesc);
   MOCK(mt_paymod_signal, mock_paymod_signal);
-  MOCK(mt_milli_sleep, mock_milli_sleep);
+  MOCK(mt_micro_sleep, mock_micro_sleep);
   MOCK(cpuworker_queue_work, (cpuworker_fn)mock_cpuworker_queue_work);
 
 
@@ -1040,7 +1040,7 @@ static void test_mt_paymulti(void *arg){
   UNMOCK(mt_send_message_multidesc);
   UNMOCK(mt_paymod_signal);
   UNMOCK(cpuworker_queue_work);
-  UNMOCK(mt_milli_sleep);
+  UNMOCK(mt_micro_sleep);
 
   // free maps
 }
