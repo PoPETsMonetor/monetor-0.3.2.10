@@ -4807,15 +4807,22 @@ typedef struct {
   /* An ordered list of scheduler_types mapped from Schedulers. */
   smartlist_t *SchedulerTypes_;
 
+  /* Used for testing purposes to signal that money can be publically created */
   int MoneTorPublicMint;
 
+  /* Enforce single thread (i.e. non-current or blocking) mode for zkp calculations */
   int MoneTorSingleThread;
 
+  /* Enforce single core (i.e. no parallel computations) mode for zkp calculations */
   int MoneTorSingleCore;
+
+  /* Set value for how much moneTor prioritized paid traffic */
+  double MoneTorPriorityMod;
 
   int MoneTorPaymentRate;
 
   int MoneTorInitialWindow;
+
 
 } or_options_t;
 
@@ -5740,8 +5747,6 @@ typedef enum {
 } mt_code_t;
 
 //-------------------------- Public Payment Parameters ----------------------//
-
-#define MT_PRIORITY_MOD 2
 
 #define MT_FEE 5
 #define MT_TAX 5

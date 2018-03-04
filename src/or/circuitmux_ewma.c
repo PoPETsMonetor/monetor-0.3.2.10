@@ -35,6 +35,7 @@
 #include <math.h>
 
 #include "or.h"
+#include "config.h"
 #include "circuitmux.h"
 #include "circuitmux_ewma.h"
 #include "networkstatus.h"
@@ -443,7 +444,7 @@ ewma_notify_xmit_cells(circuitmux_t *cmux,
 
   /* XXX MoneTor - favor circuits that have been paid for */
   if(circ->mt_priority)
-    ewma_increment /= MT_PRIORITY_MOD;
+    ewma_increment /= get_options()->MoneTorPriorityMod;
 
   /* Do the adjustment */
   cell_ewma = &(cdata->cell_ewma);
