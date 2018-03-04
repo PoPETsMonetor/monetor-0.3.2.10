@@ -2589,6 +2589,10 @@ typedef struct node_t {
    * in order to know what's the hs directory index for this node at the time
    * the consensus is set. */
   struct hsdir_index_t *hsdir_index;
+  /** Hold a pointer to a valid desc for the guard node*/
+  /* This pointer is NULL for none-used node at the guard position */
+  mt_desc_t* desc;
+
 } node_t;
 
 /** Linked list of microdesc hash lines for a single router in a directory

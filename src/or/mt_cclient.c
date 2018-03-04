@@ -224,9 +224,25 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
     log_warn(LD_MT, "MoneTor: Looks like we launch a payment while we still not bootstrapped?");
     return;
   }
-  increment(count);
-  circ->ppath->desc.id[0] = count[0];
-  circ->ppath->desc.id[1] = count[1];
+  /** get guard's desc pointer */
+  tor_assert(circ->cpath->extend_info);
+  node_t* node = node_get_by_id(circ->cpath->extend_info->identity_digest);
+  if (!node) {
+    log_warn(LD_MT, "MoneTor: node is NULL");
+    return;
+  }
+  if (!node->desc) {
+    /** a desc pointer in node_t should work fine we have more than one guard
+     * but not the right architecture if we want to save this information to
+     * the disk*/ 
+    increment(count);
+    node->desc = tor_malloc_zero(sizeof(mt_desc_t));
+    node->desc->id[0] = count[0];
+    node->desc->id[1] = count[1];
+    node->desc->party = MT_PARTY_REL;
+  }
+  circ->ppath->desc.id[0] = node->desc->id[0];
+  circ->ppath->desc.id[1] = node->desc->id[1];
   circ->ppath->desc.party = MT_PARTY_REL;
   /* Choosing right intermediary */
   tor_assert(circ->ppath->next);
@@ -834,7 +850,7 @@ mt_cclient_ledger_circ_has_opened(origin_circuit_t *circ) {
   ledger->is_reachable = LEDGER_REACHABLE_YES;
   /*Circ is already in the smartlist*/
   /*Need  a new desc and add this circ in desc2circ */
-  increment(count);
+  /*increment(count);*/
   /*circ->desc.id[0] = count[0]; // To change later */
   /*circ->desc.id[1] = count[1];*/
   /*circ->desc.party = MT_PARTY_LED;*/

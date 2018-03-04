@@ -667,6 +667,8 @@ node_free(node_t *node)
     node->md->held_by_nodes--;
   tor_assert(node->nodelist_idx == -1);
   tor_free(node->hsdir_index);
+  if (node->desc)
+    tor_free(node->desc);
   tor_free(node);
 }
 
