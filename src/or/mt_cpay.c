@@ -1068,8 +1068,7 @@ static int init_nan_cli_dpay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   // intiate token
   nan_cli_dpay1_t token;
   memcpy(&token.nan_public, &chn->data.nan_public, sizeof(nan_any_public_t));
-
-  // TODO finish making setup;
+  memcpy(token.preimage, chn->data.nan_wallet.hc[chn->data.nan_state.num_payments], MT_SZ_HASH);
 
   // update balances
   client.chn_bal -= chn->data.nan_public.val_from;
@@ -1085,8 +1084,11 @@ static int init_nan_cli_dpay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 }
 
 static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
   (void)desc;
+
+  if(token->success != MT_CODE_SUCCESS)
+    return MT_ERROR;
+
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
     log_warn(LD_MT, "protocol id not recognized");

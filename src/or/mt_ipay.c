@@ -750,6 +750,9 @@ static int handle_nan_cli_destab1(mt_desc_t* desc, nan_cli_destab1_t* token, byt
 
   // update local data
   nan_state->status = MT_CODE_DESTABLISHED;
+  memcpy(&nan_state->nan_public, &token->nan_public, sizeof(token->nan_public));
+  nan_state->data.end_state.num_payments = 0;
+  memcpy(nan_state->data.end_state.last_hash, token->nan_public.hash_tail, MT_SZ_HASH);
 
   nan_int_destab2_t reply;
   reply.success = MT_CODE_SUCCESS;
@@ -764,9 +767,6 @@ static int handle_nan_cli_destab1(mt_desc_t* desc, nan_cli_destab1_t* token, byt
 /**************************** Nano Direct Pay ***************************/
 
 static int handle_nan_cli_dpay1(mt_desc_t* desc, nan_cli_dpay1_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
-
-  // verify token validity
 
   byte digest[DIGEST_LEN];
   mt_nanpub2digest(&token->nan_public, &digest);
@@ -777,13 +777,19 @@ static int handle_nan_cli_dpay1(mt_desc_t* desc, nan_cli_dpay1_t* token, byte (*
     return MT_ERROR;
   }
 
+  // if the payment number > 0 then need to check hashes
+  if(nan_state->data.end_state.num_payments &&
+     mt_hc_verify(&nan_state->data.end_state.last_hash, &token->preimage, 1)){
+    return MT_ERROR;
+  }
+
   // update local information
   intermediary.chn_bal += token->nan_public.val_from;
   nan_state->data.end_state.num_payments ++;
+  memcpy(nan_state->data.end_state.last_hash, token->preimage, MT_SZ_HASH);
 
   nan_int_dpay2_t reply;
-
-  // fill out token
+  reply.success = MT_CODE_SUCCESS;
 
   //mt_alert_payment(desc);
   mt_paymod_signal(MT_SIGNAL_PAYMENT_RECEIVED, desc);
