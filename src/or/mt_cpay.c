@@ -1114,8 +1114,7 @@ static int init_nan_cli_reqclose1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   // intiate token
   nan_cli_reqclose1_t token;
   memcpy(&token.nan_public, &chn->data.nan_public, sizeof(nan_any_public_t));
-
-  // TODO finish making token;
+  token.reqclose = MT_CODE_REQCLOSE;
 
   // send message
   byte* msg;
@@ -1126,8 +1125,8 @@ static int init_nan_cli_reqclose1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 }
 
 static int handle_nan_rel_reqclose2(mt_desc_t* desc, nan_rel_reqclose2_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
-  (void)desc;
+  if(token->success != MT_CODE_SUCCESS)
+    return MT_ERROR;
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){

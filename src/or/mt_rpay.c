@@ -777,9 +777,10 @@ static int handle_nan_cli_pay1(mt_desc_t* desc, nan_cli_pay1_t* token, byte (*pi
 /*************************** Nano Req Close *****************************/
 
 static int handle_nan_cli_reqclose1(mt_desc_t* desc, nan_cli_reqclose1_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)desc;
 
   // check validity of incoming message;
+  if(token->reqclose != MT_CODE_REQCLOSE)
+    return MT_ERROR;
 
   mt_channel_t* chn;
   byte digest[DIGEST_LEN];
@@ -793,9 +794,9 @@ static int handle_nan_cli_reqclose1(mt_desc_t* desc, nan_cli_reqclose1_t* token,
     return init_nan_end_close1(chn, pid);
   }
 
-  nan_rel_reqclose2_t reply;
-
   // fill reply with correct values;
+  nan_rel_reqclose2_t reply;
+  reply.success = MT_CODE_SUCCESS;
 
   byte* msg;
   int msg_size = pack_nan_rel_reqclose2(&reply, pid, &msg);
