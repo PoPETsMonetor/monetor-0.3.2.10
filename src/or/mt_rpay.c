@@ -737,12 +737,6 @@ static int handle_nan_int_estab5(mt_desc_t* desc, nan_int_estab5_t* token, byte 
 static int handle_nan_cli_pay1(mt_desc_t* desc, nan_cli_pay1_t* token, byte (*pid)[DIGEST_LEN]){
   (void)desc;
 
-  // check validity of incoming message;
-
-  nan_rel_pay2_t reply;
-
-  // fill reply with correct values;
-
   byte digest[DIGEST_LEN];
   mt_nanpub2digest(&token->nan_public, &digest);
   mt_channel_t* chn = digestmap_get(relay.nans_estab, (char*)digest);
@@ -751,10 +745,20 @@ static int handle_nan_cli_pay1(mt_desc_t* desc, nan_cli_pay1_t* token, byte (*pi
     return MT_ERROR;
   }
 
+  // if the payment number > 0 then need to check hashes
+  if(chn->data.nan_state.num_payments &&
+     mt_hc_verify(&chn->data.nan_state.last_hash, &token->preimage, 1)){
+    return MT_ERROR;
+  }
+
+  nan_rel_pay2_t reply;
+  reply.success = MT_CODE_SUCCESS;
+
   // update channel data
   relay.chn_bal += chn->data.nan_public.val_to;
   chn->data.wallet.end_bal += chn->data.nan_public.val_to;
   chn->data.nan_state.num_payments ++;
+  memcpy(chn->data.nan_state.last_hash, token->preimage, MT_SZ_HASH);
 
   //mt_alert_payment(desc);
   mt_paymod_signal(MT_SIGNAL_PAYMENT_RECEIVED, desc);
