@@ -545,8 +545,8 @@ static int handle_nan_cli_setup1(mt_desc_t* desc, nan_cli_setup1_t* token, byte 
   digestmap_set(intermediary.chn_states, (char*)nwpk_digest, nchn_state);
 
   nan_int_state_t* nan_state = tor_calloc(1, sizeof(nan_int_state_t));
-  memcpy(nan_state->data.wcom, token->wcom, MT_SZ_COM);
-  nan_state->nan_public = token->nan_public;
+  memcpy(nan_state->wcom, token->wcom, MT_SZ_COM);
+  memcpy(&nan_state->nan_public, &token->nan_public, sizeof(token->nan_public));
   digestmap_set(intermediary.nan_states, (char*)nan_digest, nan_state);
 
   // create and send reply token
@@ -573,7 +573,7 @@ static int handle_nan_cli_setup3(mt_desc_t* desc, nan_cli_setup3_t* token, byte 
     return MT_ERROR;
   }
 
-  if(memcmp(nan_state->data.wcom, token->refund_msg + sizeof(byte) + DIGEST_LEN, MT_SZ_COM) != 0)
+  if(memcmp(nan_state->wcom, token->refund_msg + sizeof(byte) + DIGEST_LEN, MT_SZ_COM) != 0)
     return MT_ERROR;
 
   memset(nan_state, '\0', sizeof(nan_int_state_t));
@@ -682,7 +682,7 @@ static int handle_nan_rel_estab2(mt_desc_t* desc, nan_rel_estab2_t* token, byte 
   chn_int_state_t* nchn_state = tor_calloc(1, sizeof(chn_int_state_t));
   digestmap_set(intermediary.chn_states, (char*)nwpk_digest, nchn_state);
 
-  memcpy(nan_state->data.wcom, token->wcom, MT_SZ_COM);
+  memcpy(nan_state->wcom, token->wcom, MT_SZ_COM);
 
   // create and send reply token
   nan_int_estab3_t reply;
@@ -711,8 +711,8 @@ static int handle_nan_rel_estab4(mt_desc_t* desc, nan_rel_estab4_t* token, byte 
 
   // update local info
   memset(nan_state, '\0', sizeof(nan_int_state_t));
-  nan_state->data.end_state.num_payments = 0;
-  memcpy(nan_state->data.end_state.last_hash, nan_state->nan_public.hash_tail, MT_SZ_HASH);
+  nan_state->end_state.num_payments = 0;
+  memcpy(nan_state->end_state.last_hash, nan_state->nan_public.hash_tail, MT_SZ_HASH);
   nan_state->status = MT_CODE_ESTABLISHED;
 
   // create and send reply token
@@ -751,8 +751,8 @@ static int handle_nan_cli_destab1(mt_desc_t* desc, nan_cli_destab1_t* token, byt
   // update local data
   nan_state->status = MT_CODE_DESTABLISHED;
   memcpy(&nan_state->nan_public, &token->nan_public, sizeof(token->nan_public));
-  nan_state->data.end_state.num_payments = 0;
-  memcpy(nan_state->data.end_state.last_hash, token->nan_public.hash_tail, MT_SZ_HASH);
+  nan_state->end_state.num_payments = 0;
+  memcpy(nan_state->end_state.last_hash, token->nan_public.hash_tail, MT_SZ_HASH);
 
   nan_int_destab2_t reply;
   reply.success = MT_CODE_SUCCESS;
@@ -778,19 +778,19 @@ static int handle_nan_cli_dpay1(mt_desc_t* desc, nan_cli_dpay1_t* token, byte (*
   }
 
   // if the payment number > 0 then need to check hashes
-  if(nan_state->data.end_state.num_payments &&
-     mt_hc_verify(&nan_state->data.end_state.last_hash, &token->preimage, 1)){
+  if(nan_state->end_state.num_payments &&
+     mt_hc_verify(&nan_state->end_state.last_hash, &token->preimage, 1)){
     return MT_ERROR;
   }
-  else if(!nan_state->data.end_state.num_payments &&
+  else if(!nan_state->end_state.num_payments &&
 	  memcmp(token->preimage, token->nan_public.hash_tail, MT_SZ_HASH) != 0){
     return MT_ERROR;
   }
 
   // update local information
   intermediary.chn_bal += token->nan_public.val_from;
-  nan_state->data.end_state.num_payments ++;
-  memcpy(nan_state->data.end_state.last_hash, token->preimage, MT_SZ_HASH);
+  nan_state->end_state.num_payments ++;
+  memcpy(nan_state->end_state.last_hash, token->preimage, MT_SZ_HASH);
 
   nan_int_dpay2_t reply;
   reply.success = MT_CODE_SUCCESS;
@@ -808,11 +808,6 @@ static int handle_nan_cli_dpay1(mt_desc_t* desc, nan_cli_dpay1_t* token, byte (*
 /******************************* Nano Close *****************************/
 
 static int handle_nan_end_close1(mt_desc_t* desc, nan_end_close1_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
-  // verify token validity
-
-  nan_int_close2_t reply;
-  // fill out token
 
   byte digest[DIGEST_LEN];
   mt_nanpub2digest(&token->nan_public, &digest);
@@ -823,10 +818,46 @@ static int handle_nan_end_close1(mt_desc_t* desc, nan_end_close1_t* token, byte 
     return MT_ERROR;
   }
 
+  // TODO: make sure payment values are accurate
+
+  // make sure client isn't trying to close before relay
+  if(nan_state->status != MT_CODE_DESTABLISHED &&
+     token->total_val > 0 && nan_state->status != MT_CODE_CLOSED){
+    log_warn(LD_MT, "client attempting to close channel before relay");
+    return MT_ERROR;
+  }
+
+  // public zkp parameters
+  int val = token->total_val > 0 ? -token->nan_public.val_from : token->nan_public.val_to;
+  int public_size = MT_SZ_PK + sizeof(int) + MT_SZ_PK + MT_SZ_COM;
+  byte public[public_size];
+  memcpy(public, intermediary.pk, MT_SZ_PK);
+  memcpy(public + MT_SZ_PK, &val, sizeof(int));
+  memcpy(public + MT_SZ_PK + sizeof(int), token->wpk, MT_SZ_PK);
+  memcpy(public + MT_SZ_PK + sizeof(int) + MT_SZ_PK, token->wcom_new, MT_SZ_COM);
+
+  if(mt_zkp_verify(MT_ZKP_TYPE_2, &intermediary.pp, public, public_size, &token->zkp_new) != MT_SUCCESS)
+    return MT_ERROR;
+
+  // verify hash chain
+  if(token->num_payments && mt_hc_verify(&token->nan_public.hash_tail, &token->preimage,
+		  token->num_payments - 1) != MT_SUCCESS){
+    return MT_ERROR;
+  }
+
+  // update local data
+
   // if channel was NOT a direct payment then update balance
   if(nan_state->status != MT_CODE_DESTABLISHED){
     intermediary.chn_bal += token->total_val;
   }
+
+  // update local information
+  nan_state->status = MT_CODE_CLOSED;
+  memcpy(nan_state->wcom, token->wcom_new, sizeof(nan_state->wcom));
+
+  nan_int_close2_t reply;
+  reply.verified = MT_CODE_SUCCESS;
 
   byte* msg;
   int msg_size = pack_nan_int_close2(&reply, pid, &msg);
@@ -836,12 +867,24 @@ static int handle_nan_end_close1(mt_desc_t* desc, nan_end_close1_t* token, byte 
 }
 
 static int handle_nan_end_close3(mt_desc_t* desc, nan_end_close3_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
-  // verify token validity
+
+  byte digest[DIGEST_LEN];
+  mt_nanpub2digest(&token->nan_public, &digest);
+
+  nan_int_state_t* nan_state = digestmap_get(intermediary.nan_states, (char*)digest);
+  if(!nan_state){
+    log_warn(LD_MT, "nanopayment channel not recognized");
+    return MT_ERROR;
+  }
+
+  // check token validity
+  if(token->refund_msg[0] != (byte)MT_CODE_REFUND)
+    return MT_ERROR;
+  if(memcmp(token->refund_msg + sizeof(byte), nan_state->wcom, sizeof(nan_state->wcom)) != 0)
+    return MT_ERROR;
 
   nan_int_close4_t reply;
-
-  // fill out token
+  mt_sig_sign(token->refund_msg, sizeof(token->refund_msg), &intermediary.sk, &reply.sig);
 
   byte* msg;
   int msg_size = pack_nan_int_close4(&reply, pid, &msg);

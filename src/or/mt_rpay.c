@@ -140,6 +140,7 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
 // special helper functions for protocol steps involving a zkp proof generation
 static int help_chn_end_estab1(void* args);
 static int help_chn_int_estab4(void* args);
+static int help_nan_end_close1(void* args);
 static int help_nan_int_close8(void *args);
 
 // miscallaneous helper functions
@@ -618,9 +619,9 @@ static int handle_nan_cli_estab1(mt_desc_t* desc, nan_cli_estab1_t* token, byte 
 
     nan_rel_estab2_t reply;
     memcpy(reply.wpk, &chn->data.wallet.wpk, MT_SZ_PK);
-    memcpy(reply.nwpk, &chn->data.wallet_new.wpk, MT_SZ_PK);
-    memcpy(reply.wcom, &chn->data.wallet_new.wcom, MT_SZ_COM);
-    memcpy(reply.zkp, &chn->data.wallet_new.zkp, MT_SZ_ZKP);
+    memcpy(reply.nwpk, &chn->data.wallet_nan.wpk, MT_SZ_PK);
+    memcpy(reply.wcom, &chn->data.wallet_nan.wcom, MT_SZ_COM);
+    memcpy(reply.zkp, &chn->data.wallet_nan.zkp, MT_SZ_ZKP);
     memcpy(&reply.nan_public, &token->nan_public, sizeof(nan_any_public_t));
 
     // send message
@@ -674,15 +675,15 @@ static int handle_nan_int_estab3(mt_desc_t* desc, nan_int_estab3_t* token, byte 
   chn_end_refund_t* refund = &chn->data.refund;
   memset(refund, '\0', sizeof(chn_end_refund_t));
   refund->code = MT_CODE_REFUND;
-  memcpy(refund->wpk, chn->data.wallet_new.wpk, MT_SZ_PK);
-  refund->end_bal = chn->data.wallet_new.end_bal;
+  memcpy(refund->wpk, chn->data.wallet_nan.wpk, MT_SZ_PK);
+  refund->end_bal = chn->data.wallet_nan.end_bal;
 
   // Parts of refund token involved in blind signature
   byte nan_digest[DIGEST_LEN];
   mt_nanpub2digest(&chn->data.nan_public, &nan_digest);
   refund->msg[0] = (byte)refund->code;
   memcpy(refund->msg + sizeof(byte), nan_digest, DIGEST_LEN);
-  memcpy(refund->msg + sizeof(byte) + DIGEST_LEN, chn->data.wallet_new.wcom, MT_SZ_COM);
+  memcpy(refund->msg + sizeof(byte) + DIGEST_LEN, chn->data.wallet_nan.wcom, MT_SZ_COM);
 
   nan_rel_estab4_t reply;
   memcpy(reply.refund_msg, refund->msg, sizeof(refund->msg));
@@ -708,7 +709,7 @@ static int handle_nan_int_estab5(mt_desc_t* desc, nan_int_estab5_t* token, byte 
     return MT_ERROR;
 
   if(mt_sig_verify(chn->data.refund.msg, sizeof(chn->data.refund.msg),
-		   &chn->data.wallet_new.int_pk, &token->sig) != MT_SUCCESS){
+		   &chn->data.wallet_nan.int_pk, &token->sig) != MT_SUCCESS){
     return MT_ERROR;
   }
 
@@ -809,25 +810,54 @@ static int handle_nan_cli_reqclose1(mt_desc_t* desc, nan_cli_reqclose1_t* token,
 
 static int init_nan_end_close1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
+  mt_zkp_args_t* args = tor_malloc(sizeof(mt_zkp_args_t));
+  args->chn = chn;
+  memcpy(args->pid, *pid, DIGEST_LEN);
+
+  // if single threaded then just call procedures in series
+  if(get_options()->MoneTorSingleThread){
+    if(cpu_task_nanclose(NULL, args) != WQ_RPL_REPLY)
+       return MT_ERROR;
+    return help_nan_end_close1(args);
+  }
+
+  // if not single threaded then offload task to a different cpu task/reply flow
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanclose, (work_task)help_nan_end_close1, args))
+    return MT_ERROR;
+  return MT_SUCCESS;
+}
+
+static int help_nan_end_close1(void* args){
+  // extract parameters
+  mt_zkp_args_t* zkp_args = (mt_zkp_args_t*)args;
+  mt_channel_t* chn = zkp_args->chn;
+  byte pid[DIGEST_LEN];
+  memcpy(pid, zkp_args->pid, DIGEST_LEN);
+  tor_free(args);
+
   // intiate token
   nan_end_close1_t token;
-  token.total_val = -(chn->data.nan_state.num_payments * chn->data.nan_public.val_to);
+  token.total_val = -chn->data.nan_state.num_payments * chn->data.nan_public.val_to;
   token.num_payments = chn->data.nan_state.num_payments;
   memcpy(&token.nan_public, &chn->data.nan_public, sizeof(nan_any_public_t));
-
-  // TODO finish making token;
+  memcpy(token.wpk, chn->data.wallet.wpk, MT_SZ_PK);
+  memcpy(token.wcom_new, chn->data.wallet_new.wcom, MT_SZ_COM);
+  memcpy(token.preimage, chn->data.nan_state.last_hash, MT_SZ_HASH);
+  memcpy(token.zkp_new, chn->data.wallet_new.zkp, MT_SZ_ZKP);
 
   // send message
   byte* msg;
-  int msg_size = pack_nan_end_close1(&token, pid, &msg);
+  int msg_size = pack_nan_end_close1(&token, &pid, &msg);
   int result = mt_buffer_message(relay.msgbuf, &chn->idesc, MT_NTYPE_NAN_END_CLOSE1, msg, msg_size);
   tor_free(msg);
   return result;
 }
 
 static int handle_nan_int_close2(mt_desc_t* desc, nan_int_close2_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
   (void)desc;
+
+  if(token->verified != MT_CODE_SUCCESS)
+    return MT_ERROR;
 
   mt_channel_t* chn = digestmap_get(relay.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -835,11 +865,11 @@ static int handle_nan_int_close2(mt_desc_t* desc, nan_int_close2_t* token, byte 
     return MT_ERROR;
   }
 
-  // check validity of incoming message;
-
+  // refund message to be signed
   nan_end_close3_t reply;
-
-  // fill reply with correct values;
+  reply.refund_msg[0] = (byte)MT_CODE_REFUND;
+  memcpy(reply.refund_msg + sizeof(byte), chn->data.wallet_new.wcom, MT_SZ_COM);
+  memcpy(&reply.nan_public, &chn->data.nan_public, sizeof(reply.nan_public));
 
   byte* msg;
   int msg_size = pack_nan_end_close3(&reply, pid, &msg);
@@ -858,7 +888,15 @@ static int handle_nan_int_close4(mt_desc_t* desc, nan_int_close4_t* token, byte 
     return MT_ERROR;
   }
 
-  // check validity of incoming message;
+  //verify signature
+  byte refund_msg[sizeof(byte) + MT_SZ_COM];
+  refund_msg[0] = (byte)MT_CODE_REFUND;
+  memcpy(refund_msg + sizeof(byte), chn->data.wallet_new.wcom, MT_SZ_COM);
+
+  if(mt_sig_verify(refund_msg, sizeof(refund_msg),
+		   &chn->data.wallet_new.int_pk, &token->sig) != MT_SUCCESS){
+    return MT_ERROR;
+  }
 
   nan_end_close5_t reply;
 
@@ -906,20 +944,19 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
 
   // check validity of incoming message;
 
-
   mt_zkp_args_t* args = tor_malloc(sizeof(mt_zkp_args_t));
   args->chn = chn;
   memcpy(args->pid, *pid, DIGEST_LEN);
 
   // if single threaded then just call procedures in series
   if(get_options()->MoneTorSingleThread){
-    if(cpu_task_nanclose(NULL, args) != WQ_RPL_REPLY)
+    if(cpu_task_nanestab(NULL, args) != WQ_RPL_REPLY)
        return MT_ERROR;
     return help_nan_int_close8(args);
   }
 
   // if not single threaded then offload task to a different cpu task/reply flow
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanclose, (work_task)help_nan_int_close8, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanestab, (work_task)help_nan_int_close8, args))
     return MT_ERROR;
   return MT_SUCCESS;
 }
@@ -1032,7 +1069,7 @@ static workqueue_reply_t cpu_task_nanestab(void* thread, void* args){
 
   mt_channel_t* chn = ((mt_zkp_args_t*)args)->chn;
 
-  if(mt_wallet_create(&relay.pp, MT_NAN_VAL, &chn->data.wallet, &chn->data.wallet_new)
+  if(mt_wallet_create(&relay.pp, MT_NAN_VAL, &chn->data.wallet, &chn->data.wallet_nan)
      != MT_SUCCESS)
     return WQ_RPL_ERROR;
   return WQ_RPL_REPLY;
@@ -1043,8 +1080,8 @@ static workqueue_reply_t cpu_task_nanclose(void* thread, void* args){
 
   // extract parameters
   mt_channel_t* chn = ((mt_zkp_args_t*)args)->chn;
-  (void)chn;
-
-  // call mt_commit_wallet here
+  if(mt_wallet_create(&relay.pp, MT_NAN_VAL, &chn->data.wallet, &chn->data.wallet_new)
+     != MT_SUCCESS)
+    return WQ_RPL_ERROR;
   return WQ_RPL_REPLY;
 }

@@ -5742,6 +5742,7 @@ typedef enum {
   MT_CODE_ACCEPT,
   MT_CODE_REVOCATION,
   MT_CODE_REQCLOSE,
+  MT_CODE_CLOSED,
   MT_CODE_ESTABLISH,
   MT_CODE_SUCCESS,
   MT_CODE_FAILURE,
@@ -5970,15 +5971,11 @@ typedef struct {
   byte last_hash[MT_SZ_HASH];
 } nan_end_state_t;
 
-typedef union {
-  byte wcom[MT_SZ_COM];
-  nan_end_state_t end_state;
-} nan_int_statedata_t;
-
 typedef struct {
   mt_code_t status;
   nan_any_public_t nan_public;
-  nan_int_statedata_t data;
+  byte wcom[MT_SZ_COM];
+  nan_end_state_t end_state;
 } nan_int_state_t;
 
 typedef struct {
@@ -6037,6 +6034,7 @@ typedef struct {
 typedef struct {
   chn_end_public_t public;
   chn_end_wallet_t wallet;
+  chn_end_wallet_t wallet_nan;
   chn_end_wallet_t wallet_new;
 
   nan_any_public_t nan_public;
@@ -6330,8 +6328,8 @@ typedef struct {
 
 typedef struct {
   byte wpk[MT_SZ_PK];
-  byte wcom[MT_SZ_COM];
-  byte zkp[MT_SZ_ZKP];
+  byte wcom_new[MT_SZ_COM];
+  byte zkp_new[MT_SZ_ZKP];
   nan_any_public_t nan_public;
   int total_val;
   int num_payments;
@@ -6343,7 +6341,8 @@ typedef struct {
 } nan_int_close2_t;
 
 typedef struct {
-  byte refund_com[MT_SZ_COM];
+  nan_any_public_t nan_public;
+  byte refund_msg[sizeof(byte) + MT_SZ_COM];
 } nan_end_close3_t;
 
 typedef struct {
