@@ -782,6 +782,10 @@ static int handle_nan_cli_dpay1(mt_desc_t* desc, nan_cli_dpay1_t* token, byte (*
      mt_hc_verify(&nan_state->data.end_state.last_hash, &token->preimage, 1)){
     return MT_ERROR;
   }
+  else if(!nan_state->data.end_state.num_payments &&
+	  memcmp(token->preimage, token->nan_public.hash_tail, MT_SZ_HASH) != 0){
+    return MT_ERROR;
+  }
 
   // update local information
   intermediary.chn_bal += token->nan_public.val_from;

@@ -750,6 +750,10 @@ static int handle_nan_cli_pay1(mt_desc_t* desc, nan_cli_pay1_t* token, byte (*pi
      mt_hc_verify(&chn->data.nan_state.last_hash, &token->preimage, 1)){
     return MT_ERROR;
   }
+  else if(!chn->data.nan_state.num_payments &&
+	  memcmp(token->preimage, token->nan_public.hash_tail, MT_SZ_HASH) != 0){
+    return MT_ERROR;
+  }
 
   nan_rel_pay2_t reply;
   reply.success = MT_CODE_SUCCESS;
