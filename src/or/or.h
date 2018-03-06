@@ -6236,7 +6236,7 @@ typedef struct {
 
 typedef struct {
   byte wpk[MT_SZ_PK];
-  byte nwpk[MT_SZ_PK];
+  byte wpk_nan[MT_SZ_PK];
   byte wcom[MT_SZ_COM];
   byte zkp[MT_SZ_ZKP];
   nan_any_public_t nan_public;
@@ -6268,7 +6268,7 @@ typedef struct {
 
 typedef struct {
   byte wpk[MT_SZ_PK];
-  byte nwpk[MT_SZ_PK];
+  byte wpk_nan[MT_SZ_PK];
   byte wcom[MT_SZ_COM];
   byte zkp[MT_SZ_ZKP];
   nan_any_public_t nan_public;
@@ -6350,7 +6350,7 @@ typedef struct {
 } nan_int_close4_t;
 
 typedef struct {
-  byte nwpk[MT_SZ_PK];
+  byte wpk_nan[MT_SZ_PK];
   chn_end_revocation_t revocation;
 } nan_end_close5_t;
 
@@ -6359,7 +6359,8 @@ typedef struct {
 } nan_int_close6_t;
 
 typedef struct {
-  byte wcom[MT_SZ_COM];
+  nan_any_public_t nan_public;
+  byte wcom_new[MT_SZ_COM];
 } nan_end_close7_t;
 
 typedef struct {

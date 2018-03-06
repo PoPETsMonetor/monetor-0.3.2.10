@@ -823,7 +823,7 @@ static int init_nan_cli_setup1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   // make token
   nan_cli_setup1_t token;
   memcpy(token.wpk, chn->data.wallet.wpk, MT_SZ_PK);
-  memcpy(token.nwpk, chn->data.wallet_nan.wpk, MT_SZ_PK);
+  memcpy(token.wpk_nan, chn->data.wallet_nan.wpk, MT_SZ_PK);
   memcpy(token.wcom, chn->data.wallet_nan.wcom, MT_SZ_COM);
   memcpy(token.zkp, chn->data.wallet_nan.zkp, MT_SZ_ZKP);
   memcpy(&token.nan_public, &chn->data.nan_public, sizeof(nan_any_public_t));
@@ -1241,9 +1241,13 @@ static int handle_nan_int_close4(mt_desc_t* desc, nan_int_close4_t* token, byte 
     return MT_ERROR;
   }
 
+  // create reply message
   nan_end_close5_t reply;
-
-  // fill reply with correct values
+  memcpy(reply.wpk_nan, chn->data.wallet_nan.wpk, MT_SZ_PK);
+  reply.revocation.msg[0] = (byte)MT_CODE_REVOCATION;
+  memcpy(reply.revocation.msg + sizeof(byte), &chn->data.wallet_nan.wpk, MT_SZ_PK);
+  mt_sig_sign(reply.revocation.msg, sizeof(reply.revocation.msg), &chn->data.wallet_nan.wsk,
+  	      &reply.revocation.sig);
 
   byte* msg;
   int msg_size = pack_nan_end_close5(&reply, pid, &msg);
@@ -1253,8 +1257,9 @@ static int handle_nan_int_close4(mt_desc_t* desc, nan_int_close4_t* token, byte 
 }
 
 static int handle_nan_int_close6(mt_desc_t* desc, nan_int_close6_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
-  (void)desc;
+
+  if(token->verified != MT_CODE_VERIFIED)
+    return MT_ERROR;
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -1262,11 +1267,9 @@ static int handle_nan_int_close6(mt_desc_t* desc, nan_int_close6_t* token, byte 
     return MT_ERROR;
   }
 
-  // check validity incoming message
-
   nan_end_close7_t reply;
-
-  // fill reply with correct values
+  memcpy(&reply.nan_public, &chn->data.nan_public, sizeof(reply.nan_public));
+  memcpy(reply.wcom_new, chn->data.wallet_new.wcom, sizeof(reply.wcom_new));
 
   byte* msg;
   int msg_size = pack_nan_end_close7(&reply, pid, &msg);
@@ -1285,7 +1288,15 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
     return MT_ERROR;
   }
 
-  // validate token
+  // verify token validity
+  if(token->success != MT_CODE_SUCCESS)
+    return MT_ERROR;
+  if(mt_sig_verify(chn->data.wallet_new.wcom, MT_SZ_COM, &chn->data.wallet_new.int_pk, &token->sig)
+     != MT_SUCCESS)
+    return MT_ERROR;
+
+  // new wallet becomes current wallet
+  memcpy(&chn->data.wallet, &chn->data.wallet_new, sizeof(chn->data.wallet));
 
   mt_zkp_args_t* args = tor_malloc(sizeof(mt_zkp_args_t));
   args->chn = chn;
