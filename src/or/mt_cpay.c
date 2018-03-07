@@ -946,6 +946,7 @@ static int handle_nan_int_setup6(mt_desc_t* desc, nan_int_setup6_t* token, byte 
 static int init_nan_cli_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // record start of nanopayment channel for log
+  chn->log.direct = 0;
   chn->log.start_time = approx_time();
 
   // make token
@@ -1030,7 +1031,6 @@ static int handle_nan_rel_pay2(mt_desc_t* desc, nan_rel_pay2_t* token, byte (*pi
 
   // record logging info
   if(!chn->log.tt_payment){
-    chn->log.direct = 1;
     chn->log.tt_payment = approx_time() - chn->log.start_time;
   }
   chn->log.num_payments++;
@@ -1045,6 +1045,7 @@ static int handle_nan_rel_pay2(mt_desc_t* desc, nan_rel_pay2_t* token, byte (*pi
 static int init_nan_cli_destab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // record start of nanopayment channel for log
+  chn->log.direct = 1;
   chn->log.start_time = approx_time();
 
   // intiate token
@@ -1125,7 +1126,6 @@ static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*
 
   // record logging info
   if(!chn->log.tt_payment)
-    chn->log.direct = 1;
     chn->log.tt_payment = approx_time() - chn->log.start_time;
   chn->log.num_payments++;
 
@@ -1140,7 +1140,8 @@ static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*
 static int init_nan_cli_reqclose1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // record time at the start of closing for log
-  chn->log.close_time = approx_time();
+  if(!chn->log.direct)
+    chn->log.close_time = approx_time();
 
   // intiate token
   nan_cli_reqclose1_t token;
@@ -1364,9 +1365,12 @@ static int help_nan_int_close8(void* args){
   }
 
   // log nanopayment channel statistics for analysis
-  time_t tt_close = approx_time() - chn->log.close_time;
-  time_t lifetime = approx_time() - chn->log.start_time;
+  time_t now = approx_time();
+  time_t tt_close = now - chn->log.close_time;
+  time_t lifetime = now - chn->log.start_time;
   const char* type = chn->log.direct ? "direct" : "intermediary";
+
+  log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %ld, ttpayment: %ld, ttclose: %ld}", now, type, chn->log.num_payments, (long)lifetime, (long)chn->log.tt_payment, (long)tt_close);
 
   memset(&chn->log, '\0', sizeof(chn->log));
 
