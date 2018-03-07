@@ -954,8 +954,6 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
     return MT_ERROR;
 
   // new wallet becomes current wallet
-  //  chn->data.wallet_new.end_bal = chn->data.wallet.end_bal;
-  //chn->data.wallet_new.int_bal = chn->data.wallet.int_bal;
   memcpy(&chn->data.wallet, &chn->data.wallet_new, sizeof(chn->data.wallet));
 
   mt_zkp_args_t* args = tor_malloc(sizeof(mt_zkp_args_t));

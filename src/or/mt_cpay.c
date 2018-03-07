@@ -72,6 +72,14 @@ typedef struct {
   mt_desc_t dref2;
 } mt_callback_t;
 
+typedef struct {
+  int direct;
+  time_t start_time;
+  time_t tt_payment;
+  time_t close_time;
+  int num_payments;
+} mt_log_info_t;
+
 /**
  * Hold information necessary to maintain a single payment channel
  */
@@ -81,6 +89,8 @@ typedef struct {
   chn_end_data_t data;
 
   mt_callback_t callback;
+
+  mt_log_info_t log;
 } mt_channel_t;
 
 /**
@@ -315,7 +325,7 @@ static int pay_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
     return init_chn_end_setup(chn, &pid);
   }
 
-  log_warn(LD_MT, "MoneTor: insufficient funds to start channel\n");
+  log_warn(LD_MT, "MoneTor: insufficient funds to start channel");
   return MT_ERROR;
 }
 
@@ -386,7 +396,7 @@ static int dpay_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
     return init_chn_end_setup(chn, &pid);
   }
 
-  log_warn(LD_MT, "MoneTor: insufficient funds to start channel\n");
+  log_warn(LD_MT, "MoneTor: insufficient funds to start channel");
   return MT_ERROR;
 }
 
@@ -935,6 +945,9 @@ static int handle_nan_int_setup6(mt_desc_t* desc, nan_int_setup6_t* token, byte 
 
 static int init_nan_cli_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
+  // record start of nanopayment channel for log
+  chn->log.start_time = approx_time();
+
   // make token
   nan_cli_estab1_t token;
   memcpy(&token.nan_public, &chn->data.nan_public, sizeof(nan_any_public_t));
@@ -1000,8 +1013,6 @@ static int init_nan_cli_pay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 }
 
 static int handle_nan_rel_pay2(mt_desc_t* desc, nan_rel_pay2_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)token;
-  (void)desc;
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -1017,6 +1028,13 @@ static int handle_nan_rel_pay2(mt_desc_t* desc, nan_rel_pay2_t* token, byte (*pi
   digestmap_remove(client.chns_transition, (char*)*pid);
   digestmap_set(client.nans_estab, (char*)digest, chn);
 
+  // record logging info
+  if(!chn->log.tt_payment){
+    chn->log.direct = 1;
+    chn->log.tt_payment = approx_time() - chn->log.start_time;
+  }
+  chn->log.num_payments++;
+
   if(chn->callback.fn)
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
   return MT_SUCCESS;
@@ -1025,6 +1043,9 @@ static int handle_nan_rel_pay2(mt_desc_t* desc, nan_rel_pay2_t* token, byte (*pi
 /************************ Nano Direct Establish *************************/
 
 static int init_nan_cli_destab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
+
+  // record start of nanopayment channel for log
+  chn->log.start_time = approx_time();
 
   // intiate token
   nan_cli_destab1_t token;
@@ -1087,7 +1108,6 @@ static int init_nan_cli_dpay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 }
 
 static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*pid)[DIGEST_LEN]){
-  (void)desc;
 
   if(token->success != MT_CODE_SUCCESS)
     return MT_ERROR;
@@ -1103,7 +1123,12 @@ static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*
   digestmap_remove(client.chns_transition, (char*)*pid);
   digestmap_set(client.nans_destab, (char*)digest, chn);
 
-  // check validity incoming message
+  // record logging info
+  if(!chn->log.tt_payment)
+    chn->log.direct = 1;
+    chn->log.tt_payment = approx_time() - chn->log.start_time;
+  chn->log.num_payments++;
+
   if(chn->callback.fn){
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
   }
@@ -1113,6 +1138,9 @@ static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*
 /****************************** Nano Req Close **************************/
 
 static int init_nan_cli_reqclose1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
+
+  // record time at the start of closing for log
+  chn->log.close_time = approx_time();
 
   // intiate token
   nan_cli_reqclose1_t token;
@@ -1151,6 +1179,10 @@ static int handle_nan_rel_reqclose2(mt_desc_t* desc, nan_rel_reqclose2_t* token,
 /******************************* Nano Close *****************************/
 
 static int init_nan_end_close1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
+
+  // record time at the start of closing for log
+  if(chn->log.direct)
+    chn->log.close_time = approx_time();
 
   mt_zkp_args_t* args = tor_malloc(sizeof(mt_zkp_args_t));
   args->chn = chn;
@@ -1330,6 +1362,13 @@ static int help_nan_int_close8(void* args){
   else{
     smartlist_add(client.chns_spent, chn);
   }
+
+  // log nanopayment channel statistics for analysis
+  time_t tt_close = approx_time() - chn->log.close_time;
+  time_t lifetime = approx_time() - chn->log.start_time;
+  const char* type = chn->log.direct ? "direct" : "intermediary";
+
+  memset(&chn->log, '\0', sizeof(chn->log));
 
   if(chn->callback.fn)
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
