@@ -193,6 +193,9 @@ mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
    * ready? */
   log_info(LD_MT, "MoneTor: Yay! An intermediary circuit opened");
   /** XXX notify payment module that the intermediary circuit is open */
+  tor_assert(ocirc->desci);
+  log_info(LD_MT, "MoneTor: changing status on the payment module, for descriptor %s",
+      mt_desc_describe(ocirc->desci));
   mt_rpay_set_status(ocirc->desci, 1);
 }
 
@@ -248,7 +251,8 @@ run_crelay_housekeeping_event(time_t now) {
   DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
     if (CIRCUIT_IS_ORCIRC(circ) && circ->mt_priority && circ->payment_window < 0) {
       /*tor_assert_nonfatal(circ->payment_window > 0);*/
-      log_warn(LD_MT, "MoneTor: this circuit has negative window, this should not happen! window: %d", circ->payment_window);
+      log_warn(LD_MT, "MoneTor: this circuit has negative window, this should not happen! window: %d linked to desc %s", circ->payment_window,
+          mt_desc_describe(&TO_OR_CIRCUIT(circ)->desc));
     }
   } DIGESTMAP_FOREACH_END;
 }
