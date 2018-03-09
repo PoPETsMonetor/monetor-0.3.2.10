@@ -64,7 +64,7 @@ mt_crelay_ledger_circ_has_opened(origin_circuit_t *ocirc) {
   ledger->circuit_retries = 0;
   ledger->is_reachable = LEDGER_REACHABLE_YES;
   /* Generate new desc and add this circ into desc2circ */
-  increment(count);
+  /*increment(count);*/
   /*ocirc->desc.id[0] = count[0];*/
   /*ocirc->desc.id[1] = count[1];*/
   /*ocirc->desc.party = MT_PARTY_LED;*/
@@ -212,7 +212,7 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
     log_warn(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
   }
 
-  if (*circ->desci) {
+  if (circ->desci && *circ->desci) {
     mt_rpay_set_status(*circ->desci, 0);
     mt_desc2digest(*circ->desci, &id);
     /** remove or intermediary map duplication */
