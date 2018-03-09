@@ -3650,9 +3650,9 @@ typedef struct or_circuit_t {
   mt_desc_t desc;
 
   /**
-   * Contains a pointer to an existing intermediary descriptor
+   * Contains a pointer to a pointer of an existing intermediary descriptor
    */
-  mt_desc_t *desci;
+  mt_desc_t **desci;
 
   /**
    * Set to 1 when we receive the first payment cell */

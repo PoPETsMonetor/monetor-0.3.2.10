@@ -212,9 +212,9 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
     log_warn(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
   }
 
-  if (circ->desci) {
-    mt_rpay_set_status(circ->desci, 0);
-    mt_desc2digest(circ->desci, &id);
+  if (*circ->desci) {
+    mt_rpay_set_status(*circ->desci, 0);
+    mt_desc2digest(*circ->desci, &id);
     /** remove or intermediary map duplication */
     if (digestmap_get(desc2circ, (char*) id)) {
       digestmap_remove(desc2circ, (char*) id);
@@ -497,7 +497,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         log_info(LD_MT, "MoneTor: Cool, we already have a circuit towards that intermediary");
       }
 
-      orcirc->desci = oricirc->desci;
+      *orcirc->desci = oricirc->desci;
 
       /** adding to digestmap desci => oricirc */
       byte id[DIGEST_LEN];
