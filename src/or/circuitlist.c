@@ -718,6 +718,7 @@ circuit_purpose_to_controller_hs_state_string(uint8_t purpose)
     case CIRCUIT_PURPOSE_LEDGER:
     case CIRCUIT_PURPOSE_R_LEDGER:
     case CIRCUIT_PURPOSE_R_INTERMEDIARY:
+    case CIRCUIT_PURPOSE_I_LEDGER:
       return NULL;
 
     case CIRCUIT_PURPOSE_INTRO_POINT:
@@ -799,6 +800,8 @@ circuit_purpose_to_string(uint8_t purpose)
       return "Payment relay controller: circuit toward the ledger";
     case CIRCUIT_PURPOSE_INTERMEDIARY:
       return "Payment intermediary controller: payment circuit at the intermediary";
+    case CIRCUIT_PURPOSE_I_LEDGER:
+      return "Intermediary controller: circuit toward the ledger";
     case CIRCUIT_PURPOSE_LEDGER:
       return "Payment ledger controller: payment circuit at the ledger";
     case CIRCUIT_PURPOSE_S_ESTABLISH_INTRO:
