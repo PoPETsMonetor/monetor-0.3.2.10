@@ -497,7 +497,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         log_info(LD_MT, "MoneTor: Cool, we already have a circuit towards that intermediary");
       }
 
-      *orcirc->desci = oricirc->desci;
+      orcirc->desci = &oricirc->desci;
 
       /** adding to digestmap desci => oricirc */
       byte id[DIGEST_LEN];
