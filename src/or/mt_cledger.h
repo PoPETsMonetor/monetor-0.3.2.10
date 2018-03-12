@@ -30,6 +30,8 @@ void mt_cledger_mark_payment_channel_for_close(circuit_t *circ, int abort, int r
 
 int mt_cledger_paymod_signal(mt_signal_t signal, mt_desc_t *desc);
 
+void mt_cledger_orcirc_free(or_circuit_t *circ);
+
 /******************* Payment related messages *******/
 
 

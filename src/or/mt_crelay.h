@@ -33,5 +33,8 @@ int mt_crelay_paymod_signal(mt_signal_t signal, mt_desc_t *desc);
 
 void mt_crelay_update_payment_window(circuit_t *circ);
 
+void mt_crelay_intermediary_circuit_free(origin_circuit_t *circ);
+
+void mt_crelay_orcirc_free(or_circuit_t *circ);
 
 #endif

@@ -1,5 +1,6 @@
 
 #include "or.h"
+#include "buffers.h"
 #include "container.h"
 #include "config.h"
 #include "mt_common.h"
@@ -469,6 +470,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       /** We didn't find a circ connected/connecting to ninter */
       mt_desc_t *desci = tor_malloc_zero(sizeof(mt_desc_t));
       memcpy(desci, msg+sizeof(int_id_t), sizeof(mt_desc_t));
+      int can_free_desci = 0;
       if (!oricirc) {
         log_info(LD_MT, "MoneTor: We don't have any current circuit towards %s that intermediary"
             " .. Building one. ", node_describe(ninter));
@@ -494,6 +496,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       else {
         /** XXX: Should we notify the payment module about that it can send towards the
          * intermediary without waiting?*/
+        can_free_desci = 1;
         log_info(LD_MT, "MoneTor: Cool, we already have a circuit towards that intermediary");
       }
 
@@ -505,7 +508,9 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       if (!digestmap_get(desc2circ, (char*) id)) {
         digestmap_set(desc2circ, (char*) id, oricirc);
       }
-
+      if (can_free_desci) {
+        tor_free(desci);
+      }
       if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
          msg+sizeof(int_id_t)+sizeof(mt_desc_t),
          msg_len-sizeof(int_id_t)-sizeof(mt_desc_t)) < 0) {
@@ -631,3 +636,16 @@ void mt_crelay_mark_payment_channel_for_close(circuit_t *circ, int abort, int re
     // XXX No mt_rpay_close ??
   }
 }
+
+void
+mt_crelay_intermediary_circuit_free(origin_circuit_t *oricirc) {
+  if (oricirc->desci) {
+    tor_free(oricirc->desci);
+  }
+  buf_free(oricirc->buf);
+}
+
+void mt_crelay_orcirc_free(or_circuit_t* circ) {
+  buf_free(circ->buf);
+}
+

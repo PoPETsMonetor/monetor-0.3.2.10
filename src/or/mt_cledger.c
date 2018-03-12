@@ -3,6 +3,7 @@
  */
 
 #include "or.h"
+#include "buffers.h"
 #include "config.h"
 #include "mt_common.h"
 #include "mt_cledger.h"
@@ -146,4 +147,8 @@ void mt_cledger_process_received_msg(circuit_t *circ, mt_ntype_t type,
     log_info(LD_MT, "MoneTor: Processing circuit with unsupported purpose %s",
         circuit_purpose_to_string(circ->purpose));
   }
+}
+
+void mt_cledger_orcirc_free(or_circuit_t *circ) {
+  buf_free(circ->buf);
 }

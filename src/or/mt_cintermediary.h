@@ -29,6 +29,8 @@ int mt_cintermediary_paymod_signal(mt_signal_t signal, mt_desc_t *desc);
 
 void mt_cintermediary_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason);
 
+void mt_cintermediary_orcirc_free(or_circuit_t *circ);
+
 /********************* Utility stuffs ****************************/
 
 ledger_t *mt_cintermediary_get_ledger(void);

@@ -1,4 +1,5 @@
 #include "or.h"
+#include "buffers.h"
 #include "mt_cintermediary.h"
 #include "mt_common.h"
 #include "mt_ipay.h"
@@ -303,3 +304,6 @@ void mt_cintermediary_init(void) {
   mt_ipay_init();
 }
 
+void mt_cintermediary_orcirc_free(or_circuit_t *circ) {
+  buf_free(circ->buf);
+}

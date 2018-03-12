@@ -1025,8 +1025,11 @@ circuit_free(circuit_t *circ)
     if (ocirc->ppath) {
       mt_cclient_general_circuit_free(ocirc);
     }
-    if (ocirc->inter_ident) {
+    else if (ocirc->inter_ident) {
       mt_cclient_intermediary_circuit_free(ocirc);
+    }
+    else if (ocirc->desci) {
+      mt_crelay_intermediary_circuit_free(ocirc);
     }
   } else {
     or_circuit_t *ocirc = TO_OR_CIRCUIT(circ);
@@ -1048,6 +1051,16 @@ circuit_free(circuit_t *circ)
       or_circuit_t *other = ocirc->rend_splice;
       tor_assert(other->base_.magic == OR_CIRCUIT_MAGIC);
       other->rend_splice = NULL;
+    }
+
+    if (ledger_mode(get_options())) {
+      mt_cledger_orcirc_free(ocirc);
+    }
+    else if (intermediary_mode(get_options())) {
+      mt_cintermediary_orcirc_free(ocirc);
+    }
+    else if (server_mode(get_options())) {
+      mt_crelay_orcirc_free(ocirc);
     }
 
     /* remove from map. */

@@ -1154,6 +1154,7 @@ mt_cclient_general_circuit_free(origin_circuit_t* circ) {
   if (!circ)
     return;
   pay_path_free(circ->ppath);
+  buf_free(circ->buf); //normally untouched
 }
 
 void 
@@ -1161,5 +1162,6 @@ mt_cclient_intermediary_circuit_free(origin_circuit_t* circ) {
   if (!circ)
     return;
   tor_free(circ->inter_ident);
+  buf_free(circ->buf);
 }
 
