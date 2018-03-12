@@ -1065,6 +1065,7 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
 
   int ret = mt_cclient_send_message(desc1, RELAY_COMMAND_MT, type, msg_with_desc, size+size_int_id+sizeof(mt_desc_t));
   tor_free(msg_with_desc);
+  tor_free(msg_int_id);
   return ret;
 }
 
