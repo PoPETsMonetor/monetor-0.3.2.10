@@ -157,7 +157,9 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
         return;
       }
       /** We should not keep the same pointer*/
-      *circ->desc = *ocirc->desc;
+      circ->desci = tor_malloc_zero(sizeof(mt_desc_t));
+      memcpy(circ->desci, ocirc->desci, sizeof(mt_desc_t));
+      digestmap_set(desc2circ, (char*) id, circ);
     }
     else { /** We reache max retries */
       log_warn(LD_MT, "MoneTor: we reached the maximum allowed retry for intermediary %s"
