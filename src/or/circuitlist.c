@@ -1052,15 +1052,17 @@ circuit_free(circuit_t *circ)
       tor_assert(other->base_.magic == OR_CIRCUIT_MAGIC);
       other->rend_splice = NULL;
     }
-
-    if (ledger_mode(get_options())) {
-      mt_cledger_orcirc_free(ocirc);
-    }
-    else if (intermediary_mode(get_options())) {
-      mt_cintermediary_orcirc_free(ocirc);
-    }
-    else if (server_mode(get_options())) {
-      mt_crelay_orcirc_free(ocirc);
+    
+    if (get_options()->EnablePayment) {
+      if (ledger_mode(get_options())) {
+        mt_cledger_orcirc_free(ocirc);
+      }
+      else if (intermediary_mode(get_options())) {
+        mt_cintermediary_orcirc_free(ocirc);
+      }
+      else if (server_mode(get_options())) {
+        mt_crelay_orcirc_free(ocirc);
+      }
     }
 
     /* remove from map. */

@@ -147,7 +147,6 @@ void mt_cintermediary_ledger_circ_has_closed(circuit_t *circ) {
 }
 
 void mt_cintermediary_orcirc_has_closed(or_circuit_t *circ) {
-  buf_free(circ->buf);
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
   if (digestmap_get(desc2circ, (char*) id)) {
