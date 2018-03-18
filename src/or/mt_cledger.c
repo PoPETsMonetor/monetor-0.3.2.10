@@ -63,7 +63,6 @@ void run_cledger_scheduled_events(time_t now) {
  * the function in circuit_about_to_free*/
 void
 mt_cledger_orcirc_has_closed(or_circuit_t *circ) {
-  buf_free(circ->buf);
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
   if (digestmap_get(desc2circ, (char*) id)) {
