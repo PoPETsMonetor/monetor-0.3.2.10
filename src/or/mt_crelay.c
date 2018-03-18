@@ -156,8 +156,8 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
         // XXX Todo alert the payment system to aboard
         return;
       }
-      /** retrieve the pointer we change the circuit but we keep the same descriptor*/
-      circ->desc = ocirc->desc;
+      /** We should not keep the same pointer*/
+      *circ->desc = *ocirc->desc;
     }
     else { /** We reache max retries */
       log_warn(LD_MT, "MoneTor: we reached the maximum allowed retry for intermediary %s"
@@ -639,9 +639,9 @@ void mt_crelay_mark_payment_channel_for_close(circuit_t *circ, int abort, int re
 
 void
 mt_crelay_intermediary_circuit_free(origin_circuit_t *oricirc) {
-  if (oricirc->desci) {
-    tor_free(oricirc->desci);
-  }
+  /*if (oricirc->desci) {*/
+    /*tor_free(oricirc->desci);*/
+  /*}*/
   buf_free(oricirc->buf);
 }
 
