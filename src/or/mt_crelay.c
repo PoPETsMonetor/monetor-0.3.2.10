@@ -148,8 +148,6 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
       ei->retries = ++ocirc->cpath->prev->extend_info->retries;
       int purpose = CIRCUIT_PURPOSE_R_INTERMEDIARY;
       int flags = CIRCLAUNCH_IS_INTERNAL;
-      flags |= CIRCLAUNCH_NEED_UPTIME;
-
       origin_circuit_t *circ = circuit_launch_by_extend_info(purpose, ei, flags);
       if (!circ) {
         log_warn(LD_MT, "MoneTor: Something went wrong when re-creating a circuit, we should abort");
@@ -205,7 +203,6 @@ mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
 
 void
 mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
-  buf_free(circ->buf);
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
   if (digestmap_get(desc2circ, (char*) id)) {
