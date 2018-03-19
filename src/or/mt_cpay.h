@@ -10,6 +10,10 @@
 
 #include "or.h"
 
+#define MT_CPAY_GUARD 1
+#define MT_CPAY_MIDDLE 2
+#define MT_CPAY_EXIT 3
+
 /**
  * Initialize the module; should only be called once. All necessary variables
  * will be loaded from the torrc configuration file.

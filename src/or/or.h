@@ -5751,6 +5751,12 @@ typedef enum {
   MT_CODE_DESTABLISHED,
 } mt_code_t;
 
+// relay roles for logging purposes; may be redudant with internal Tor
+// defs but oh well
+#define MT_GUARD 1
+#define MT_MIDDLE 2
+#define MT_EXIT 3
+
 //-------------------------- Public Payment Parameters ----------------------//
 
 #define MT_FEE 5

@@ -79,7 +79,7 @@ extend_info_t* mt_cclient_get_intermediary_from_edge(edge_connection_t* conn);
 
 
 /**
- * Get the intermediary whose identity is linked to that origin_circuit_t 
+ * Get the intermediary whose identity is linked to that origin_circuit_t
  */
 intermediary_t* mt_cclient_get_intermediary_from_ocirc(origin_circuit_t* circ);
 
@@ -126,5 +126,11 @@ void mt_cclient_init(void);
  * NOT URGENT
  */
 int intermediary_parse_state(or_state_t *state, int set, char** msg);
+
+/**
+ * Looks up descriptor and returns one of MT_GUARD, MT_MIDDLE, or
+ * MT_EXIT or -1 on error
+ */
+int mt_cclient_relay_type(mt_desc_t *desc);
 
 #endif

@@ -77,8 +77,8 @@ intermediary_new(const node_t *node, extend_info_t *ei, time_t now) {
   memcpy(intermediary->identity->identity, node->identity, DIGEST_LEN);
   intermediary->is_reachable = INTERMEDIARY_REACHABLE_MAYBE;
   increment(count);
-  intermediary->desc.id[0] = count[0]; 
-  intermediary->desc.id[1] = count[1]; 
+  intermediary->desc.id[0] = count[0];
+  intermediary->desc.id[1] = count[1];
   intermediary->desc.party = MT_PARTY_INT;
   intermediary->chosen_at = now;
   intermediary->ei = ei;
@@ -124,7 +124,7 @@ intermediary_t* get_intermediary_by_role(position_t position) {
 
 intermediary_t *get_intermediary_by_identity(intermediary_identity_t *ident) {
   SMARTLIST_FOREACH_BEGIN(intermediaries, intermediary_t*, intermediary) {
-    if (tor_memeq(intermediary->identity->identity, 
+    if (tor_memeq(intermediary->identity->identity,
           ident->identity, DIGEST_LEN)){
       return intermediary;
     }
@@ -182,7 +182,7 @@ static void
 intermediary_need_cleanup(intermediary_t *intermediary, time_t now) {
   if (intermediary->circuit_retries > INTERMEDIARY_MAX_RETRIES ||
       intermediary->is_reachable == INTERMEDIARY_REACHABLE_NO) {
-    
+
     log_warn(LD_MT, "MoneTor: Looks like we have to cleanup intermediary :/");
     /* Get all general circuit linked to this intermediary and
      * mark the payment as closed */
@@ -218,7 +218,7 @@ intermediary_need_cleanup(intermediary_t *intermediary, time_t now) {
 void
 mt_cclient_launch_payment(origin_circuit_t* circ) {
   log_info(LD_MT, "MoneTor - Initiating payment - calling payment module");
-  
+
   if (router_have_consensus_path() == CONSENSUS_PATH_UNKNOWN ||
       !have_completed_a_circuit()) {
     log_warn(LD_MT, "MoneTor: Looks like we launch a payment while we still not bootstrapped?");
@@ -226,7 +226,7 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   }
   /** get guard's desc pointer */
   tor_assert(circ->cpath->extend_info);
-  node_t* node = node_get_by_id(circ->cpath->extend_info->identity_digest);
+  node_t* node = (node_t*)node_get_by_id(circ->cpath->extend_info->identity_digest);
   if (!node) {
     log_warn(LD_MT, "MoneTor: node is NULL");
     return;
@@ -234,7 +234,7 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   if (!node->desc) {
     /** a desc pointer in node_t should work fine we have more than one guard
      * but not the right architecture if we want to save this information to
-     * the disk*/ 
+     * the disk*/
     increment(count);
     node->desc = tor_malloc_zero(sizeof(mt_desc_t));
     node->desc->id[0] = count[0];
@@ -279,7 +279,7 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   exit->desc.id[1] = count[1];
   exit->desc.party = MT_PARTY_REL;
   tor_assert_nonfatal(intermediary_e);
-  
+
   if (intermediary_e) {
     memcpy(exit->inter_ident->identity, intermediary_e->identity->identity,
         DIGEST_LEN);
@@ -357,13 +357,13 @@ choose_intermediaries(time_t now, smartlist_t *exclude_list) {
 
   node = router_choose_random_node(exclude_list, get_options()->ExcludeNodes,
       flags);
-  
+
   if (!node) {
     log_warn(LD_MT, "MoneTor - Something went wrong, we did not select any intermediary");
     goto err;
   }
   log_info(LD_MT, "MoneTor: Chosen relay %s as intermediary", node_describe(node));
-  
+
   /* Since we have to provide extend_info for clients to connect as a 4th relay from a 3-hop
    * path, let's extract it now? */
   ei = extend_info_from_node(node, 0);
@@ -420,7 +420,7 @@ run_cclient_housekeeping_event(time_t now) {
       intermediary_need_cleanup(intermediary, now);
     }
   } SMARTLIST_FOREACH_END(intermediary);
-   
+
   /*log_info(LD_MT, "MoneTor: relay digestmap length: %d", digestmap_size(desc2circ));*/
   /*DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {*/
     /*if (!CIRCUIT_IS_ORIGIN(circ) && !TO_ORIGIN_CIRCUIT(circ)->ppath) {*/
@@ -506,15 +506,15 @@ run_cclient_build_circuit_event(time_t now) {
         continue;
       }
       /*We have circuit building - mark the intermediary*/
-      log_info(LD_MT, "MoneTor: Building intermediary circuit towards %s", 
+      log_info(LD_MT, "MoneTor: Building intermediary circuit towards %s",
           node_describe(node_get_by_id(intermediary->identity->identity)));
       circ->inter_ident = tor_malloc_zero(sizeof(intermediary_identity_t));
       memcpy(circ->inter_ident->identity,
           intermediary->identity->identity, DIGEST_LEN);
     }
   } SMARTLIST_FOREACH_END(intermediary);
-  
-  /* Ledger stuff now  - We initiate ou ledger if not already done and we 
+
+  /* Ledger stuff now  - We initiate ou ledger if not already done and we
    * ensure enough circuit are built to it*/
 
   extend_info_t *ei = NULL;
@@ -598,7 +598,7 @@ run_cclient_scheduled_events(time_t now) {
 
 
 void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
-  
+
   time_t now;
   /* If the circuit is closed before we successfully extend
    * a general circuit towards the ledger, then we may have
@@ -681,7 +681,7 @@ void mt_cclient_update_payment_window(circuit_t *circ, int stop_hop) {
 
 /**
  * Called by the payment module to signal an event
- * 
+ *
  * Can be either:
  *   MT_SIGNAL_PAYMENT_SUCCESS
  *   MT_SIGNAL_PAYMENT_FAILURE
@@ -690,7 +690,7 @@ void mt_cclient_update_payment_window(circuit_t *circ, int stop_hop) {
  */
 
 int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
-  
+
   byte id[DIGEST_LEN];
   mt_desc2digest(desc, &id);
   circuit_t *circ = digestmap_get(desc2circ, (char*) id);
@@ -843,7 +843,7 @@ cleanup:
   }
 }
 
-void 
+void
 mt_cclient_ledger_circ_has_opened(origin_circuit_t *circ) {
   log_info(LD_MT, "MoneTor: Yay! one ledger circuit has opened");
   ledger->circuit_retries = 0;
@@ -863,7 +863,7 @@ mt_cclient_ledger_circ_has_opened(origin_circuit_t *circ) {
 /**
  * We got notified that a CIRCUIT_PURPOSE_C_INTERMEDIARY has opened
  */
-void 
+void
 mt_cclient_intermediary_circ_has_opened(origin_circuit_t *circ) {
   log_info(LD_MT, "MoneTor: Yay! intermediary circuit opened");
   intermediary_t* intermediary = mt_cclient_get_intermediary_from_ocirc(circ);
@@ -948,7 +948,7 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
     log_warn(LD_MT, "MoneTor: in mt_cclient_send_message, digestmap_get failed to return a circ for descriptor"
         " %s", mt_desc_describe(desc));
     return -2;
-  } 
+  }
   if(circ->marked_for_close) {
     log_warn(LD_MT, "MoneTor: This circuit is about to be freed");
     return -2;
@@ -1015,7 +1015,7 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
  * Send message intermediary's information to the right relay in the path
  */
 int
-mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2, 
+mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
     mt_ntype_t type, byte* msg, int size) {
   byte id[DIGEST_LEN];
   mt_desc2digest(desc1, &id);
@@ -1057,7 +1057,7 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
   memcpy(int_id.identity, intermediary->identity->identity, DIGEST_LEN);
   byte *msg_int_id;
   int size_int_id = pack_int_id(&msg_int_id, &int_id);
-  
+
   byte *msg_with_desc = tor_malloc_zero(size+size_int_id+sizeof(mt_desc_t));
   memcpy(msg_with_desc, msg_int_id, size_int_id);
   memcpy(msg_with_desc+size_int_id, desc2, sizeof(mt_desc_t)); // XXX not safe over network ~ byte ordering
@@ -1074,7 +1074,7 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
  * to do upon failure
  */
 MOCK_IMPL(void,
-mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hint, 
+mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hint,
     mt_ntype_t pcommand, byte *msg, size_t msg_len)) {
   mt_desc_t *desc;
   /*What type of node sent us this cell? relay, intermediary or ledger? */
@@ -1149,7 +1149,7 @@ pay_path_free(pay_path_t* ppath) {
 /*
  * XXX MoneTor - Todo: call them in appropriate place
  */
-void 
+void
 mt_cclient_general_circuit_free(origin_circuit_t* circ) {
   if (!circ)
     return;
@@ -1157,7 +1157,7 @@ mt_cclient_general_circuit_free(origin_circuit_t* circ) {
   buf_free(circ->buf); //normally untouched
 }
 
-void 
+void
 mt_cclient_intermediary_circuit_free(origin_circuit_t* circ) {
   if (!circ)
     return;
@@ -1165,3 +1165,30 @@ mt_cclient_intermediary_circuit_free(origin_circuit_t* circ) {
   buf_free(circ->buf);
 }
 
+/************************** Informational (Logging purposes) ***************************/
+
+int mt_cclient_relay_type(mt_desc_t *desc){
+  byte digest[DIGEST_LEN];
+  mt_desc2digest(desc, &digest);
+
+  circuit_t* circ;
+  if(!(circ = digestmap_get(desc2circ, (char*)digest)))
+    return -1;
+
+  pay_path_t* current;
+
+  current = TO_ORIGIN_CIRCUIT(circ)->ppath;
+  if(mt_desc_comp(desc, &current->desc) == 0)
+    return MT_GUARD;
+
+  current = current->next;
+  if(mt_desc_comp(desc, &current->desc) == 0)
+    return MT_MIDDLE;
+
+  current = current->next;
+  if(mt_desc_comp(desc, &current->desc) == 0)
+    return MT_EXIT;
+
+  // This should never happen
+  tor_assert(0);
+}

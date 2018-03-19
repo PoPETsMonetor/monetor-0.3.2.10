@@ -52,6 +52,7 @@
 #include "mt_messagebuffer.h"
 #include "mt_common.h"
 #include "mt_cpay.h"
+#include "mt_cclient.h"
 
 #define NON_NULL 1
 
@@ -73,11 +74,13 @@ typedef struct {
 } mt_callback_t;
 
 typedef struct {
-  int direct;
-  time_t start_time;
-  time_t tt_payment;
-  time_t close_time;
+  int relay_type;
   int num_payments;
+
+  struct timeval start_estab;
+  struct timeval start_pay;
+  struct timeval end_pay;
+  struct timeval start_close;
 } mt_log_info_t;
 
 /**
@@ -174,6 +177,7 @@ static int help_nan_int_close8(void* args);
 // miscallaneous helper functions
 static int pay_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
 static int dpay_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
+static double timeval_diff(struct timeval t1, struct timeval t2);
 
 static mt_channel_t* new_channel(void);
 static int compare_chn_end_data(const void** a, const void** b);
@@ -946,8 +950,9 @@ static int handle_nan_int_setup6(mt_desc_t* desc, nan_int_setup6_t* token, byte 
 static int init_nan_cli_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // record start of nanopayment channel for log
-  chn->log.direct = 0;
-  chn->log.start_time = approx_time();
+  chn->log.relay_type = mt_cclient_relay_type(&chn->rdesc);
+  tor_assert(chn->log.relay_type == MT_MIDDLE || chn->log.relay_type == MT_EXIT);
+  tor_gettimeofday(&chn->log.start_estab);
 
   // make token
   nan_cli_estab1_t token;
@@ -994,6 +999,10 @@ static int handle_nan_rel_estab6(mt_desc_t* desc, nan_rel_estab6_t* token, byte 
 
 static int init_nan_cli_pay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
+  // record logging info
+  if(!chn->log.start_pay.tv_sec && !chn->log.start_pay.tv_usec)
+    tor_gettimeofday(&chn->log.start_pay);
+
   // make token
   nan_cli_pay1_t token;
   memcpy(&token.nan_public, &chn->data.nan_public, sizeof(nan_any_public_t));
@@ -1030,8 +1039,8 @@ static int handle_nan_rel_pay2(mt_desc_t* desc, nan_rel_pay2_t* token, byte (*pi
   digestmap_set(client.nans_estab, (char*)digest, chn);
 
   // record logging info
-  if(!chn->log.tt_payment){
-    chn->log.tt_payment = approx_time() - chn->log.start_time;
+  if(!chn->log.end_pay.tv_sec && !chn->log.end_pay.tv_usec){
+    tor_gettimeofday(&chn->log.end_pay);
   }
   chn->log.num_payments++;
 
@@ -1045,8 +1054,9 @@ static int handle_nan_rel_pay2(mt_desc_t* desc, nan_rel_pay2_t* token, byte (*pi
 static int init_nan_cli_destab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // record start of nanopayment channel for log
-  chn->log.direct = 1;
-  chn->log.start_time = approx_time();
+  chn->log.relay_type = mt_cclient_relay_type(&chn->idesc);
+  tor_assert(chn->log.relay_type == MT_GUARD);
+  tor_gettimeofday(&chn->log.start_estab);
 
   // intiate token
   nan_cli_destab1_t token;
@@ -1089,6 +1099,10 @@ static int handle_nan_int_destab2(mt_desc_t* desc, nan_int_destab2_t* token, byt
 
 static int init_nan_cli_dpay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
+  // record logging info
+  if(!chn->log.start_pay.tv_sec && !chn->log.start_pay.tv_usec)
+    tor_gettimeofday(&chn->log.start_pay);
+
   // intiate token
   nan_cli_dpay1_t token;
   memcpy(&token.nan_public, &chn->data.nan_public, sizeof(nan_any_public_t));
@@ -1125,8 +1139,8 @@ static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*
   digestmap_set(client.nans_destab, (char*)digest, chn);
 
   // record logging info
-  if(!chn->log.tt_payment)
-    chn->log.tt_payment = approx_time() - chn->log.start_time;
+  if(!chn->log.end_pay.tv_sec && !chn->log.end_pay.tv_usec)
+    tor_gettimeofday(&chn->log.end_pay);
   chn->log.num_payments++;
 
   if(chn->callback.fn){
@@ -1140,8 +1154,8 @@ static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*
 static int init_nan_cli_reqclose1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // record time at the start of closing for log
-  if(!chn->log.direct)
-    chn->log.close_time = approx_time();
+  if(chn->log.relay_type == MT_MIDDLE || chn->log.relay_type == MT_EXIT)
+    tor_gettimeofday(&chn->log.start_close);
 
   // intiate token
   nan_cli_reqclose1_t token;
@@ -1182,8 +1196,8 @@ static int handle_nan_rel_reqclose2(mt_desc_t* desc, nan_rel_reqclose2_t* token,
 static int init_nan_end_close1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // record time at the start of closing for log
-  if(chn->log.direct)
-    chn->log.close_time = approx_time();
+  if(chn->log.relay_type == MT_GUARD)
+    tor_gettimeofday(&chn->log.start_close);
 
   mt_zkp_args_t* args = tor_malloc(sizeof(mt_zkp_args_t));
   args->chn = chn;
@@ -1365,12 +1379,32 @@ static int help_nan_int_close8(void* args){
   }
 
   // log nanopayment channel statistics for analysis
-  time_t now = approx_time();
-  time_t tt_close = now - chn->log.close_time;
-  time_t lifetime = now - chn->log.start_time;
-  const char* type = chn->log.direct ? "direct" : "intermediary";
+  const char* type_str;
+  if(chn->log.relay_type == MT_GUARD)
+    type_str = "guard";
+  else if(chn->log.relay_type == MT_MIDDLE)
+    type_str = "middle";
+  else if(chn->log.relay_type == MT_EXIT)
+    type_str = "exit";
+  else
+    tor_assert(0);
 
-  log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %ld, ttpayment: %ld, ttclose: %ld}", now, type, chn->log.num_payments, (long)lifetime, (long)chn->log.tt_payment, (long)tt_close);
+  struct timeval now;
+  tor_gettimeofday(&now);
+
+  double lifetime = timeval_diff(now, chn->log.start_estab);
+  double tt_establish = timeval_diff(chn->log.start_pay, chn->log.start_estab);
+  double tt_payment = timeval_diff(chn->log.end_pay, chn->log.start_estab);
+  double tt_close = timeval_diff(now, chn->log.start_close);
+
+  log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %lf, tt_establish: %lf, ttpayment: %lf, ttclose: %lf}",
+	   approx_time(),
+	   type_str,
+	   chn->log.num_payments,
+	   lifetime,
+	   tt_establish,
+	   tt_payment,
+	   tt_close);
 
   memset(&chn->log, '\0', sizeof(chn->log));
 
@@ -1491,4 +1525,10 @@ static mt_channel_t* smartlist_idesc_remove(smartlist_t* list, mt_desc_t* desc){
     }
   } SMARTLIST_FOREACH_END(elm);
   return NULL;
+}
+
+static double timeval_diff(struct timeval t1, struct timeval t2){
+  time_t sec_diff = t1.tv_sec - t2.tv_sec;
+  long usec_diff = t1.tv_usec - t2.tv_usec;
+  return (sec_diff * 1000000000.0 + usec_diff) / 1000000000.0;
 }
