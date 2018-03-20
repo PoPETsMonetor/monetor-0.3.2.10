@@ -1397,7 +1397,7 @@ static int help_nan_int_close8(void* args){
   double tt_payment = timeval_diff(chn->log.end_pay, chn->log.start_estab);
   double tt_close = timeval_diff(now, chn->log.start_close);
 
-  log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %lf, tt_establish: %lf, ttpayment: %lf, ttclose: %lf}",
+  log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %lf, ttestablish: %lf, ttpayment: %lf, ttclose: %lf}",
 	   approx_time(),
 	   type_str,
 	   chn->log.num_payments,
