@@ -1196,12 +1196,8 @@ static int handle_nan_rel_reqclose2(mt_desc_t* desc, nan_rel_reqclose2_t* token,
 static int init_nan_end_close1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // record time at the start of closing for log
-  if(chn->log.relay_type == MT_GUARD){
+  if(chn->log.relay_type == MT_GUARD)
     tor_gettimeofday(&chn->log.start_close);
-    struct timeval now;
-    tor_gettimeofday(&now);
-    log_info(LD_MT, "mt_log_debug time %ld %ld", now.tv_sec, now.tv_usec);
-  }
 
   mt_zkp_args_t* args = tor_malloc(sizeof(mt_zkp_args_t));
   args->chn = chn;
@@ -1260,13 +1256,6 @@ static int handle_nan_int_close2(mt_desc_t* desc, nan_int_close2_t* token, byte 
     return MT_ERROR;
   }
 
-  if(chn->log.relay_type == MT_GUARD){
-    struct timeval now;
-    tor_gettimeofday(&now);
-    log_info(LD_MT, "mt_log_debug time %ld %ld", now.tv_sec, now.tv_usec);
-  }
-
-
   // refund message to be signed
   nan_end_close3_t reply;
   reply.refund_msg[0] = (byte)MT_CODE_REFUND;
@@ -1289,14 +1278,6 @@ static int handle_nan_int_close4(mt_desc_t* desc, nan_int_close4_t* token, byte 
     log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
-
-  if(chn->log.relay_type == MT_GUARD){
-    struct timeval now;
-    tor_gettimeofday(&now);
-    log_info(LD_MT, "mt_log_debug time %ld %ld", now.tv_sec, now.tv_usec);
-  }
-
-
 
   //verify signature
   byte refund_msg[sizeof(byte) + MT_SZ_COM];
@@ -1335,14 +1316,6 @@ static int handle_nan_int_close6(mt_desc_t* desc, nan_int_close6_t* token, byte 
     return MT_ERROR;
   }
 
-  if(chn->log.relay_type == MT_GUARD){
-    struct timeval now;
-    tor_gettimeofday(&now);
-    log_info(LD_MT, "mt_log_debug time %ld %ld", now.tv_sec, now.tv_usec);
-  }
-
-
-
   nan_end_close7_t reply;
   memcpy(&reply.nan_public, &chn->data.nan_public, sizeof(reply.nan_public));
   memcpy(reply.wcom_new, chn->data.wallet_new.wcom, sizeof(reply.wcom_new));
@@ -1363,13 +1336,6 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
     log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
-
-  if(chn->log.relay_type == MT_GUARD){
-    struct timeval now;
-    tor_gettimeofday(&now);
-    log_info(LD_MT, "mt_log_debug time %ld %ld", now.tv_sec, now.tv_usec);
-  }
-
 
   // verify token validity
   if(token->success != MT_CODE_SUCCESS)
