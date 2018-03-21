@@ -638,9 +638,11 @@ void mt_crelay_mark_payment_channel_for_close(circuit_t *circ, int abort, int re
 
 void
 mt_crelay_intermediary_circuit_free(origin_circuit_t *oricirc) {
-  if (oricirc->desci) {
-    tor_free(oricirc->desci);
-  }
+  /** It seems to have rare situation where freeing this memory
+   * cause a segfault ... keep leaking for now*/
+  /*if (oricirc->desci) {*/
+    /*tor_free(oricirc->desci);*/
+  /*}*/
   buf_free(oricirc->buf);
 }
 
