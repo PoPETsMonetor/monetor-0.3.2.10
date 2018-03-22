@@ -216,7 +216,7 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
   }
 
   if (circ->desci && *circ->desci) {
-    mt_rpay_set_status(*circ->desci, 0);
+    /*mt_rpay_set_status(*circ->desci, 0);*/
     mt_desc2digest(*circ->desci, &id);
     /** remove or intermediary map duplication */
     if (digestmap_get(desc2circ, (char*) id)) {
