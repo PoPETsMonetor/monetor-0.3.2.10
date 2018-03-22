@@ -19,6 +19,7 @@ static uint64_t count[2] = {0, 0};
 static digestmap_t  *desc2circ = NULL;
 static ledger_t *ledger = NULL;
 static smartlist_t *ledgercircs = NULL;
+static smartlist_t *intercircs = NULL;
 static int intermediary_role_initiated = 0;
 
 static void run_crelay_housekeeping_event(time_t now);
@@ -29,6 +30,7 @@ mt_crelay_init(void) {
   log_info(LD_MT, "MoneTor: initialization of controler relay code");
   ledgercircs = smartlist_new();
   desc2circ = digestmap_new();
+  intercircs = smartlist_new();
   count[0] = rand_uint64();
   count[1] = rand_uint64();
   log_info(LD_MT, "MoneTor: initialization of payment relay code");
@@ -123,6 +125,8 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
   log_info(LD_MT, "MoneTor: Intermediary circ has closed");
   byte id[DIGEST_LEN];
   mt_desc2digest(ocirc->desci, &id);
+  mt_rpay_set_status(ocirc->desci, 0);
+  smartlist_remove(intercircs, ocirc);
   if (TO_CIRCUIT(ocirc)->state != CIRCUIT_STATE_OPEN) {
     /** Someway to indicate that we retry on an extend_info_t */
     tor_assert(ocirc->cpath);
@@ -158,16 +162,15 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
       circ->desci = tor_malloc_zero(sizeof(mt_desc_t));
       memcpy(circ->desci, ocirc->desci, sizeof(mt_desc_t));
       digestmap_set(desc2circ, (char*) id, circ);
+      smartlist_add(intercircs, circ);
     }
     else { /** We reache max retries */
       log_warn(LD_MT, "MoneTor: we reached the maximum allowed retry for intermediary %s"
           " .. we abort", extend_info_describe(ocirc->cpath->prev->extend_info));
       // XXX TODO alert the payement system to aboard
     }
-    mt_rpay_set_status(ocirc->desci, 0);
     return;
   }
-  mt_rpay_set_status(ocirc->desci, 0);
   if (!digestmap_get(desc2circ, (char*) id)) {
     // then its find
     log_warn(LD_MT, "MoneTor: Our intermerdiary circuit closed but it looks"
@@ -449,18 +452,13 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       /** Now, try to find a circuit to ninter of launch one */
       origin_circuit_t *oricirc = NULL;
       
-      SMARTLIST_FOREACH_BEGIN(circuit_get_global_list(), circuit_t*, circtmp) {
-        if (!circtmp->marked_for_close && CIRCUIT_IS_ORIGIN(circtmp) &&
-            circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY) {
-          if (!TO_ORIGIN_CIRCUIT(circtmp)->cpath)
-            continue;
-          if (!TO_ORIGIN_CIRCUIT(circtmp)->cpath->prev)
-            continue;
-          if (!TO_ORIGIN_CIRCUIT(circtmp)->cpath->prev->extend_info)
-            continue;
-          if (tor_memeq(TO_ORIGIN_CIRCUIT(circtmp)->cpath->prev->extend_info->identity_digest,
+      SMARTLIST_FOREACH_BEGIN(intercircs, origin_circuit_t*, circtmp) {
+        if (!TO_CIRCUIT(circtmp)->marked_for_close) {
+          log_info(LD_MT, "MoneTor: we found one intermediary circ:");
+          circuit_log_path(LOG_INFO, LD_MT, circtmp);
+          if (tor_memeq(circtmp->inter_ident->identity,
                 int_id.identity, DIGEST_LEN)) {
-            oricirc = TO_ORIGIN_CIRCUIT(circtmp);
+            oricirc = circtmp;
             break;
           }
         }
@@ -483,14 +481,16 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         }
         int purpose = CIRCUIT_PURPOSE_R_INTERMEDIARY;
         int flags = CIRCLAUNCH_IS_INTERNAL;
-        flags |= CIRCLAUNCH_NEED_UPTIME;
         oricirc = circuit_launch_by_extend_info(purpose, ei, flags);
         if (!oricirc) {
           log_warn(LD_MT, "MoneTor: Not successfully launch a circuit :/ abording");
           //XXX alert payment module
           return;
         }
+        oricirc->inter_ident = tor_malloc_zero(sizeof(intermediary_identity_t));
+        memcpy(oricirc->inter_ident->identity, int_id.identity, DIGEST_LEN);
         oricirc->desci = desci;
+        smartlist_add(intercircs, oricirc);
       }
       else {
         /** XXX: Should we notify the payment module about that it can send towards the
@@ -508,11 +508,19 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         digestmap_set(desc2circ, (char*) id, oricirc);
       }
       if (can_free_desci) {
+        /** We don't nee this descriptor */
         tor_free(desci);
+        if (mt_rpay_recv_multidesc(&orcirc->desc, oricirc->desci, pcommand,
+              msg+sizeof(int_id_t)+sizeof(mt_desc_t),
+              msg_len-sizeof(int_id_t)-sizeof(mt_desc_t)) < 0) {
+          log_warn(LD_MT, "MoneTor: Payment module returned -1"
+              " we should stop prioritizing this circuit");
+          circ->mt_priority = 0;
+        }
       }
-      if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
-         msg+sizeof(int_id_t)+sizeof(mt_desc_t),
-         msg_len-sizeof(int_id_t)-sizeof(mt_desc_t)) < 0) {
+      else if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
+            msg+sizeof(int_id_t)+sizeof(mt_desc_t),
+            msg_len-sizeof(int_id_t)-sizeof(mt_desc_t)) < 0) {
         log_warn(LD_MT, "MoneTor: Payment module returned -1"
             " we should stop prioritizing this circuit");
         circ->mt_priority = 0;
