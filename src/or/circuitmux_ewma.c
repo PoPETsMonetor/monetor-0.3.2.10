@@ -35,6 +35,7 @@
 #include <math.h>
 
 #include "or.h"
+#include "config.h"
 #include "circuitmux.h"
 #include "circuitmux_ewma.h"
 #include "networkstatus.h"
@@ -84,6 +85,8 @@ struct cell_ewma_s {
   /** The position of the circuit within the OR connection's priority
    * queue. */
   int heap_index;
+
+  int mt_priority;
 };
 
 struct ewma_policy_data_s {
@@ -309,6 +312,7 @@ ewma_alloc_circ_data(circuitmux_t *cmux,
   cdata->base_.magic = EWMA_POL_CIRC_DATA_MAGIC;
   cdata->circ = circ;
 
+
   /*
    * Initialize the cell_ewma_t structure (formerly in
    * init_circuit_base())
@@ -316,6 +320,9 @@ ewma_alloc_circ_data(circuitmux_t *cmux,
   cdata->cell_ewma.last_adjusted_tick = cell_ewma_get_tick();
   cdata->cell_ewma.cell_count = 0.0;
   cdata->cell_ewma.heap_index = -1;
+
+  cdata->cell_ewma.mt_priority = circ->mt_priority;
+
   if (direction == CELL_DIRECTION_IN) {
     cdata->cell_ewma.is_for_p_chan = 1;
   } else {
@@ -370,6 +377,8 @@ ewma_notify_circ_active(circuitmux_t *cmux,
 
   pol = TO_EWMA_POL_DATA(pol_data);
   cdata = TO_EWMA_POL_CIRC_DATA(pol_circ_data);
+
+  cdata->cell_ewma.mt_priority = circ->mt_priority;
 
   add_cell_ewma(pol, &(cdata->cell_ewma));
 }
@@ -441,9 +450,15 @@ ewma_notify_xmit_cells(circuitmux_t *cmux,
   ewma_increment =
     ((double)(n_cells)) * pow(ewma_scale_factor, -fractional_tick);
 
+  /* XXX MoneTor - favor circuits that have been paid for */
+  if(circ->mt_priority && get_options()->MoneTorPriorityMod > 0.0)
+    ewma_increment /= get_options()->MoneTorPriorityMod;
+
   /* Do the adjustment */
   cell_ewma = &(cdata->cell_ewma);
   cell_ewma->cell_count += ewma_increment;
+
+  cell_ewma->mt_priority = circ->mt_priority;
 
   /*
    * Since we just sent on this circuit, it should be at the head of
@@ -539,6 +554,12 @@ static int
 compare_cell_ewma_counts(const void *p1, const void *p2)
 {
   const cell_ewma_t *e1 = p1, *e2 = p2;
+  if(get_options()->MoneTorPriorityMod <= 0.0){
+    if(e1->mt_priority && !e2->mt_priority)
+      return -1;
+    else if(!e1->mt_priority && e2->mt_priority)
+      return 1;
+  }
 
   if (e1->cell_count < e2->cell_count)
     return -1;
@@ -762,4 +783,3 @@ pop_first_cell_ewma(ewma_policy_data_t *pol)
                               compare_cell_ewma_counts,
                               offsetof(cell_ewma_t, heap_index));
 }
-

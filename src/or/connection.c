@@ -87,6 +87,7 @@
 #include "main.h"
 #include "hs_common.h"
 #include "hs_ident.h"
+#include "mt_common.h"
 #include "nodelist.h"
 #include "proto_http.h"
 #include "proto_socks.h"
@@ -4102,8 +4103,14 @@ connection_write_to_buf_impl_,(const char *string, size_t len,
          wrong compared to our max outbuf size. close the whole circuit. */
       log_warn(LD_NET,
                "write_to_buf failed. Closing circuit (fd %d).", (int)conn->s);
-      circuit_mark_for_close(circuit_get_by_edge_conn(TO_EDGE_CONN(conn)),
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(circuit_get_by_edge_conn(TO_EDGE_CONN(conn)),
+            1, END_CIRC_REASON_INTERNAL);
+      }
+      else {
+        circuit_mark_for_close(circuit_get_by_edge_conn(TO_EDGE_CONN(conn)),
                              END_CIRC_REASON_INTERNAL);
+      }
     } else if (conn->type == CONN_TYPE_OR) {
       or_connection_t *orconn = TO_OR_CONN(conn);
       log_warn(LD_NET,

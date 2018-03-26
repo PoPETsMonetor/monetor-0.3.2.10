@@ -1532,4 +1532,3 @@ digestset_free(digestset_t *set)
   bitarray_free(set->ba);
   tor_free(set);
 }
-

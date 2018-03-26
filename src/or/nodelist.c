@@ -565,6 +565,7 @@ get_estimated_address_per_node, (void))
 void
 nodelist_set_consensus(networkstatus_t *ns)
 {
+  log_info(LD_GENERAL, "Setting new consensus");
   const or_options_t *options = get_options();
   int authdir = authdir_mode_v3(options);
 
@@ -608,6 +609,8 @@ nodelist_set_consensus(networkstatus_t *ns)
       node->is_valid = rs->is_valid;
       node->is_running = rs->is_flagged_running;
       node->is_fast = rs->is_fast;
+      node->is_intermediary = rs->is_intermediary;
+      node->is_ledger = rs->is_ledger;
       node->is_stable = rs->is_stable;
       node->is_possible_guard = rs->is_possible_guard;
       node->is_exit = rs->is_exit;
@@ -738,6 +741,8 @@ node_free(node_t *node)
     node->md->held_by_nodes--;
   tor_assert(node->nodelist_idx == -1);
   tor_free(node->hsdir_index);
+  if (node->desc)
+    tor_free(node->desc);
   tor_free(node);
 }
 
@@ -1912,21 +1917,37 @@ router_find_exact_exit_enclave(const char *address, uint16_t port)
   return NULL;
 }
 
+/** Find the ledger among our router list */
+
+const node_t *
+node_find_ledger(void)
+{
+  SMARTLIST_FOREACH(nodelist_get_list(), const node_t *, node, {
+    if (node->is_ledger)
+      return node;
+  });
+  return NULL;
+}
+
 /** Return 1 if <b>router</b> is not suitable for these parameters, else 0.
  * If <b>need_uptime</b> is non-zero, we require a minimum uptime.
  * If <b>need_capacity</b> is non-zero, we require a minimum advertised
  * bandwidth.
- * If <b>need_guard</b>, we require that the router is a possible entry guard.
+ * If <b>need_guard</b>, we require that the router is a possible entry guard
+ * but not an intermediary.
  */
 int
 node_is_unreliable(const node_t *node, int need_uptime,
-                   int need_capacity, int need_guard)
+                   int need_capacity, int need_guard,
+                   int need_intermediary)
 {
   if (need_uptime && !node->is_stable)
     return 1;
   if (need_capacity && !node->is_fast)
     return 1;
-  if (need_guard && !node->is_possible_guard)
+  if (need_guard && (!node->is_possible_guard || node->is_intermediary))
+    return 1;
+  if (need_intermediary && !node->is_intermediary)
     return 1;
   return 0;
 }
@@ -1941,7 +1962,7 @@ router_exit_policy_all_nodes_reject(const tor_addr_t *addr, uint16_t port,
 
   SMARTLIST_FOREACH_BEGIN(nodelist_get_list(), const node_t *, node) {
     if (node->is_running &&
-        !node_is_unreliable(node, need_uptime, 0, 0)) {
+        !node_is_unreliable(node, need_uptime, 0, 0, 0)) {
 
       r = compare_tor_addr_to_node_policy(addr, port, node);
 

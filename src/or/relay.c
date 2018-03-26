@@ -64,6 +64,9 @@
 #include "geoip.h"
 #include "hs_cache.h"
 #include "main.h"
+#include "mt_common.h"
+#include "mt_crelay.h"
+#include "mt_cclient.h"
 #include "networkstatus.h"
 #include "nodelist.h"
 #include "onion.h"
@@ -137,6 +140,9 @@ relay_set_digest(crypto_digest_t *digest, cell_t *cell)
 //    integrity[0], integrity[1], integrity[2], integrity[3]);
   relay_header_unpack(&rh, cell->payload);
   memcpy(rh.integrity, integrity, 4);
+  if (rh.command == RELAY_COMMAND_MT) {
+    log_debug(LD_MT, "MoneTor: set digest %u", (uint32_t)*integrity);
+  }
   relay_header_pack(cell->payload, &rh);
 }
 
@@ -168,8 +174,8 @@ relay_digest_matches(crypto_digest_t *digest, cell_t *cell)
   crypto_digest_get_digest(digest, (char*) &calculated_integrity, 4);
 
   if (calculated_integrity != received_integrity) {
-//    log_fn(LOG_INFO,"Recognized=0 but bad digest. Not recognizing.");
-// (%d vs %d).", received_integrity, calculated_integrity);
+    /*log_fn(LOG_PROTOCOL_WARN, LOG_INFO,*/
+        /*"Recognized=0 but bad digest. Not recognizing. (%u vs %u).", received_integrity, calculated_integrity);*/
     /* restore digest to its old form */
     crypto_digest_assign(digest, backup_digest);
     /* restore the relay header */
@@ -345,7 +351,6 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
     }
     return 0;
   }
-
   /* not recognized. pass it on. */
   if (cell_direction == CELL_DIRECTION_OUT) {
     cell->circ_id = circ->n_circ_id; /* switch it */
@@ -382,13 +387,18 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
         log_warn(LD_REND, "Error relaying cell across rendezvous; closing "
                  "circuits");
         /* XXXX Do this here, or just return -1? */
-        circuit_mark_for_close(circ, -reason);
+        if (get_options()->EnablePayment) {
+          circuit_mark_payment_channel_for_close(circ, 1, -reason);
+        }
+        else {
+          circuit_mark_for_close(circ, -reason);
+        }
         return reason;
       }
       return 0;
     }
     log_fn(LOG_PROTOCOL_WARN, LD_PROTOCOL,
-           "Didn't recognize cell, but circ stops here! Closing circ.");
+           "Didn't recognize cell, but circ stops here! Closing circ. command: %d", cell->command);
     return -END_CIRC_REASON_TORPROTOCOL;
   }
 
@@ -399,6 +409,8 @@ circuit_receive_relay_cell(cell_t *cell, circuit_t *circ,
                                   * the cells. */
 
   append_cell_to_circuit_queue(circ, chan, cell, cell_direction, 0);
+  // update payment window for middle and guard relay
+  mt_update_payment_window(circ);
   return 0;
 }
 
@@ -490,13 +502,17 @@ relay_crypt(circuit_t *circ, cell_t *cell, cell_direction_t cell_direction,
 static int
 circuit_package_relay_cell(cell_t *cell, circuit_t *circ,
                            cell_direction_t cell_direction,
-                           crypt_path_t *layer_hint, streamid_t on_stream,
+                           crypt_path_t *layer_hint, crypt_path_t *layer_stop,
+                           streamid_t on_stream,
                            const char *filename, int lineno)
 {
   channel_t *chan; /* where to send the cell */
-
+  /** XXX MoneTor: add && circ->) {ayment_channel_has_closed? */
   if (circ->marked_for_close) {
     /* Circuit is marked; send nothing. */
+    /* if circuit marked but not the channel is not closed,
+     * then we might be trying to close the channel right now
+     */
     return 0;
   }
 
@@ -534,7 +550,7 @@ circuit_package_relay_cell(cell_t *cell, circuit_t *circ,
       relay_crypt_one_payload(thishop->f_crypto, cell->payload);
 
       thishop = thishop->prev;
-    } while (thishop != TO_ORIGIN_CIRCUIT(circ)->cpath->prev);
+    } while (thishop != layer_stop);
 
   } else { /* incoming cell */
     or_circuit_t *or_circ;
@@ -674,15 +690,122 @@ relay_command_to_string(uint8_t command)
   }
 }
 
-/** Make a relay cell out of <b>relay_command</b> and <b>payload</b>, and send
- * it onto the open circuit <b>circ</b>. <b>stream_id</b> is the ID on
- * <b>circ</b> for the stream that's sending the relay cell, or 0 if it's a
- * control cell.  <b>cpath_layer</b> is NULL for OR->OP cells, or the
- * destination hop for OP->OR cells.
+/**
  *
- * If you can't send the cell, mark the circuit for close and return -1. Else
- * return 0.
+ * Payload may contain way more bytes than RELAY_PPAYLOAD_SIZE
+ * If this is true, then we send multiple cells
  */
+
+MOCK_IMPL(int,
+relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
+                                uint8_t relay_pcommand, crypt_path_t *layer_start,
+                                const char *payload, size_t payload_len,
+                                const char *filename, int lineno))
+{
+
+  cell_t cell;
+  relay_header_t rh;
+  relay_pheader_t rph;
+  crypt_path_t *cpath_layer; /* if we're origin => circ->cpath*/
+  cell_direction_t cell_direction;
+  memset(&cell, 0, sizeof(cell_t));
+  memset(&rh, 0, sizeof(relay_header_t));
+  memset(&rph, 0, sizeof(relay_pheader_t));
+  if (CIRCUIT_IS_ORIGIN(circ)) {
+    cell.circ_id = circ->n_circ_id;
+    cell_direction = CELL_DIRECTION_OUT;
+    cpath_layer = TO_ORIGIN_CIRCUIT(circ)->cpath->prev; //layer stop
+    log_info(LD_MT, "MoneTor: listing path:");
+    circuit_log_path(LOG_INFO, LD_MT, TO_ORIGIN_CIRCUIT(circ));
+  }
+  else {
+    cell.circ_id = TO_OR_CIRCUIT(circ)->p_circ_id;
+    cell_direction = CELL_DIRECTION_IN;
+    cpath_layer = NULL;
+  }
+  
+  if (cell_direction == CELL_DIRECTION_OUT && circ->n_chan) {
+    /* if we're using relaybandwidthrate, this conn wants priority */
+    channel_timestamp_client(circ->n_chan);
+  }
+  cell.command = CELL_RELAY;
+  rh.command = relay_command;
+  rh.stream_id = 0;  //useless
+  rh.recognized = 0; //useless
+  rph.pcommand = relay_pcommand;
+  /* If we have a payment cell with less than RELAY_PPAYLOAD_SIZE
+   * then we can package the cell*/
+  if (payload_len <= RELAY_PPAYLOAD_SIZE) {
+    rh.length = payload_len+RELAY_PHEADER_SIZE;
+    rph.length = payload_len;
+    relay_pheader_pack(cell.payload, &rh, &rph);
+    memcpy(cell.payload+RELAY_HEADER_SIZE+RELAY_PHEADER_SIZE, payload, rph.length);
+    if (cell_direction == CELL_DIRECTION_OUT && circ->n_chan) {
+      /* Update client timestamp to give priority */
+      channel_timestamp_client(circ->n_chan);
+    }
+    log_debug(LD_MT,"MoneTor: delivering RELAY cell %s type %s.",
+            cell_direction == CELL_DIRECTION_OUT ? "forward" : "backward",  mt_token_describe(relay_pcommand));
+
+    return circuit_package_relay_cell(&cell, circ, cell_direction,
+        layer_start, cpath_layer, 0, filename, lineno);
+  }
+  else {
+    int nbr_cells;
+    if (payload_len % RELAY_PPAYLOAD_SIZE == 0)
+      nbr_cells = payload_len/RELAY_PPAYLOAD_SIZE;
+    else
+      nbr_cells = payload_len/RELAY_PPAYLOAD_SIZE + 1;
+    log_info(LD_MT, "Payload is larger than RELAY_PPAYLOAD_SIZE,"
+        " we are about to send %d cells", nbr_cells);
+    int payload_remains = payload_len;
+    for (int i = 0; i < nbr_cells; i++) {
+      if (i == nbr_cells-1) {
+        rh.length = payload_remains+RELAY_PHEADER_SIZE;
+        rph.length = payload_remains;
+      }
+      else {
+        rh.length = RELAY_PAYLOAD_SIZE;
+        rph.length = RELAY_PPAYLOAD_SIZE;
+      }
+      relay_pheader_pack(cell.payload, &rh, &rph);
+      memcpy(cell.payload+RELAY_HEADER_SIZE+RELAY_PHEADER_SIZE,
+          payload+i*RELAY_PPAYLOAD_SIZE, rph.length);
+      if (circuit_package_relay_cell(&cell, circ, cell_direction,
+            layer_start, cpath_layer, 0, filename, lineno) < 0) {
+        log_info(LD_MT, "We are packaging several cells at once"
+            " and one packaging failed ...");
+        return -2;
+      }
+      /** resest cell memory and rh integrity */
+      memset(&cell, 0, sizeof(cell_t));
+      memset(&rh, 0, sizeof(relay_header_t));
+      rh.command = relay_command;
+      rh.stream_id = 0;
+      cell.command = CELL_RELAY;
+      if (CIRCUIT_IS_ORIGIN(circ)) {
+        cell.circ_id = circ->n_circ_id;
+      }
+      else {
+        cell.circ_id = TO_OR_CIRCUIT(circ)->p_circ_id;
+      }
+      /** payload remaining */
+      payload_remains -= rph.length;
+    }
+    tor_assert(payload_remains == 0);
+    return 0;
+  }
+}
+
+  /** Make a relay cell out of <b>relay_command</b> and <b>payload</b>, and send
+   * it onto the open circuit <b>circ</b>. <b>stream_id</b> is the ID on
+   * <b>circ</b> for the stream that's sending the relay cell, or 0 if it's a
+   * control cell.  <b>cpath_layer</b> is NULL for OR->OP cells, or the
+   * destination hop for OP->OR cells.
+   *
+   * If you can't send the cell, mark the circuit for close and return -1. Else
+   * return 0.
+   */
 MOCK_IMPL(int,
 relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
                                uint8_t relay_command, const char *payload,
@@ -692,6 +815,7 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
   cell_t cell;
   relay_header_t rh;
   cell_direction_t cell_direction;
+  crypt_path_t *layer_stop = NULL;
   /* XXXX NM Split this function into a separate versions per circuit type? */
 
   tor_assert(circ);
@@ -703,6 +827,7 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
     tor_assert(cpath_layer);
     cell.circ_id = circ->n_circ_id;
     cell_direction = CELL_DIRECTION_OUT;
+    layer_stop = TO_ORIGIN_CIRCUIT(circ)->cpath->prev;
   } else {
     tor_assert(! cpath_layer);
     cell.circ_id = TO_OR_CIRCUIT(circ)->p_circ_id;
@@ -773,9 +898,14 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
   }
 
   if (circuit_package_relay_cell(&cell, circ, cell_direction, cpath_layer,
-                                 stream_id, filename, lineno) < 0) {
+                                 layer_stop, stream_id, filename, lineno) < 0) {
     log_warn(LD_BUG,"circuit_package_relay_cell failed. Closing.");
-    circuit_mark_for_close(circ, END_CIRC_REASON_INTERNAL);
+    if (get_options()->EnablePayment) {
+      circuit_mark_payment_channel_for_close(circ, 0, END_CIRC_REASON_INTERNAL);
+    }
+    else {
+      circuit_mark_for_close(circ, END_CIRC_REASON_INTERNAL);
+    }
     return -1;
   }
   return 0;
@@ -1562,6 +1692,7 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
 {
   static int num_seen=0;
   relay_header_t rh;
+  relay_pheader_t rph;
   unsigned domain = layer_hint?LD_APP:LD_EXIT;
   int reason;
   int optimistic_data = 0; /* Set to 1 if we receive data on a stream
@@ -1623,7 +1754,7 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
   switch (rh.command) {
     case RELAY_COMMAND_DROP:
       rep_hist_padding_count_read(PADDING_TYPE_DROP);
-//      log_info(domain,"Got a relay-level padding cell. Dropping.");
+      /*log_info(domain,"Got a relay-level padding cell. Dropping.");*/
       return 0;
     case RELAY_COMMAND_BEGIN:
     case RELAY_COMMAND_BEGIN_DIR:
@@ -1658,6 +1789,8 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
 
       return connection_exit_begin_conn(cell, circ);
     case RELAY_COMMAND_DATA:
+      /** update moneTor */
+      mt_update_payment_window(circ);
       ++stats_n_data_cells_received;
       if (( layer_hint && --layer_hint->deliver_window < 0) ||
           (!layer_hint && --circ->deliver_window < 0)) {
@@ -1872,6 +2005,7 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
           layer_hint->package_window += CIRCWINDOW_INCREMENT;
           log_debug(LD_APP,"circ-level sendme at origin, packagewindow %d.",
                     layer_hint->package_window);
+          mt_cclient_update_payment_window(circ, 3);
           circuit_resume_edge_reading(circ, layer_hint);
         } else {
           if (circ->package_window + CIRCWINDOW_INCREMENT >
@@ -1909,6 +2043,9 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
         /* (We already sent an end cell if possible) */
         connection_mark_for_close(TO_CONN(conn));
         return 0;
+      }
+      if (CIRCUIT_IS_ORIGIN(circ)) {
+        mt_cclient_update_payment_window(circ, 3);
       }
       return 0;
     case RELAY_COMMAND_RESOLVE:
@@ -1949,6 +2086,14 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
       rend_process_relay_cell(circ, layer_hint,
                               rh.command, rh.length,
                               cell->payload+RELAY_HEADER_SIZE);
+      return 0;
+    case RELAY_COMMAND_MT:
+      circuit_consider_sending_sendme(circ, layer_hint);
+      log_info(LD_MT, "MoneTor: received a RELAY_COMMAND_MT, unpacking and calling"
+          " mt_proces_received_relaycell");
+      relay_pheader_unpack(&rph, cell->payload+RELAY_HEADER_SIZE);
+      mt_process_received_relaycell(circ, &rh, &rph, layer_hint,
+          cell->payload+RELAY_HEADER_SIZE+RELAY_PHEADER_SIZE);
       return 0;
   }
   log_fn(LOG_PROTOCOL_WARN, LD_PROTOCOL,
@@ -2087,6 +2232,8 @@ connection_edge_package_raw_inbuf(edge_connection_t *conn, int package_partial,
     /* circuit got marked for close, don't continue, don't need to mark conn */
     return 0;
 
+  mt_update_payment_window(circ);
+
   if (!cpath_layer) { /* non-rendezvous exit */
     tor_assert(circ->package_window > 0);
     circ->package_window--;
@@ -2145,6 +2292,9 @@ connection_edge_consider_sending_sendme(edge_connection_t *conn)
                                      NULL, 0) < 0) {
       log_warn(LD_APP,"connection_edge_send_command failed. Skipping.");
       return; /* the circuit's closed, don't continue */
+    }
+    if (CIRCUIT_IS_ORIGIN(circ)) {
+      mt_cclient_update_payment_window(circ, 3);
     }
   }
 }
@@ -2393,6 +2543,9 @@ circuit_consider_sending_sendme(circuit_t *circ, crypt_path_t *layer_hint)
       log_warn(LD_CIRC,
                "relay_send_command_from_edge failed. Circuit's closed.");
       return; /* the circuit's closed, don't continue */
+    }
+    if (CIRCUIT_IS_ORIGIN(circ)) {
+      mt_cclient_update_payment_window(circ, 3);
     }
   }
 }
@@ -3066,6 +3219,7 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
     }
   }
 #endif /* 0 */
+  
 
   cell_queue_append_packed_copy(circ, queue, exitward, cell,
                                 chan->wide_circ_ids, 1);
@@ -3095,6 +3249,7 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
 
   /* New way: mark this as having waiting cells for the scheduler */
   scheduler_channel_has_waiting_cells(chan);
+  
 }
 
 /** Append an encoded value of <b>addr</b> to <b>payload_out</b>, which must
@@ -3205,4 +3360,3 @@ circuit_queue_streams_are_blocked(circuit_t *circ)
     return circ->streams_blocked_on_p_chan;
   }
 }
-

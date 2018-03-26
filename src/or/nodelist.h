@@ -36,6 +36,8 @@ void nodelist_remove_routerinfo(routerinfo_t *ri);
 void nodelist_purge(void);
 smartlist_t *nodelist_find_nodes_with_microdesc(const microdesc_t *md);
 
+const node_t* node_find_ledger(void);
+
 void nodelist_recompute_all_hsdir_indices(void);
 
 void nodelist_free_all(void);
@@ -101,7 +103,8 @@ int nodes_in_same_family(const node_t *node1, const node_t *node2);
 const node_t *router_find_exact_exit_enclave(const char *address,
                                              uint16_t port);
 int node_is_unreliable(const node_t *router, int need_uptime,
-                         int need_capacity, int need_guard);
+                         int need_capacity, int need_guard,
+                         int need_intermediary);
 int router_exit_policy_all_nodes_reject(const tor_addr_t *addr, uint16_t port,
                                         int need_uptime);
 void router_set_status(const char *digest, int up);

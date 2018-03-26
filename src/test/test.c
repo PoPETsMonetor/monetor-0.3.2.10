@@ -52,6 +52,7 @@ double fabs(double x);
 #include "rendcache.h"
 #include "test.h"
 #include "main.h"
+#include "mt_crypto.h"
 #include "memarea.h"
 #include "onion.h"
 #include "onion_ntor.h"
@@ -1229,6 +1230,11 @@ struct testgroup_t testgroups[] = {
   { "introduce/", introduce_tests },
   { "keypin/", keypin_tests },
   { "link-handshake/", link_handshake_tests },
+  { "mt_common/", mt_common_tests },
+  { "mt_crypto/", mt_crypto_tests },
+  { "mt_lpay/", mt_lpay_tests },
+  { "mt_paymulti/", mt_paymulti_tests },
+  { "mt_tokens/", mt_tokens_tests },
   { "nodelist/", nodelist_tests },
   { "oom/", oom_tests },
   { "oos/", oos_tests },
@@ -1264,4 +1270,3 @@ struct testgroup_t testgroups[] = {
   { "dns/", dns_tests },
   END_OF_GROUPS
 };
-

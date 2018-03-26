@@ -80,6 +80,8 @@ STATIC int needs_hs_client_circuits(time_t now,
                                     int num_internal,
                                     int num_uptime_internal);
 
+STATIC int needs_mt_circuits(time_t now, int num_uptime_internal);
+
 STATIC int needs_circuits_for_build(int num);
 
 #endif /* defined(TOR_UNIT_TESTS) */

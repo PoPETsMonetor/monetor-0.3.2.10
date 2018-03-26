@@ -444,6 +444,8 @@ bandwidth_weight_rule_to_string(bandwidth_weight_rule_t rule)
       return "weight as guard";
     case WEIGHT_FOR_DIR:
       return "weight as directory";
+    case WEIGHT_FOR_INTERMEDIARY:
+      return "weight as intermediary";
     default:
       return "unknown rule";
   }

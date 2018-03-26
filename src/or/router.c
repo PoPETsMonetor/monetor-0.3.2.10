@@ -1335,6 +1335,21 @@ dir_server_mode(const or_options_t *options)
     (server_mode(options) && router_has_bandwidth_to_be_dirserver(options));
 }
 
+/** Return 1 if we are configured to be an intermediary, if not return 0
+ */
+int
+intermediary_mode(const or_options_t *options)
+{
+  return options->Intermediary && server_mode(options);
+}
+/** Return 1 if we are configure to be the ledger, if not return 0
+ */
+int
+ledger_mode(const or_options_t *options)
+{
+  return options->Ledger && server_mode(options);
+}
+
 /** Look at a variety of factors, and return 0 if we don't want to
  * advertise the fact that we have a DirPort open or begindir support, else
  * return 1.
@@ -2197,6 +2212,8 @@ router_build_fresh_descriptor(routerinfo_t **r, extrainfo_t **e)
   ri->addr = addr;
   ri->or_port = router_get_advertised_or_port(options);
   ri->dir_port = router_get_advertised_dir_port(options, 0);
+  ri->wants_to_be_intermediary = options->Intermediary;
+  ri->wants_to_be_ledger = options->Ledger;
   ri->supports_tunnelled_dir_requests =
     directory_permits_begindir_requests(options);
   ri->cache_info.published_on = time(NULL);
@@ -2924,7 +2941,7 @@ router_dump_router_to_string(routerinfo_t *router,
                     "onion-key\n%s"
                     "signing-key\n%s"
                     "%s%s"
-                    "%s%s%s",
+                    "%s%s%s%s%s",
     router->nickname,
     address,
     router->or_port,
@@ -2947,7 +2964,9 @@ router_dump_router_to_string(routerinfo_t *router,
     ntor_cc_line ? ntor_cc_line : "",
     family_line,
     we_are_hibernating() ? "hibernating 1\n" : "",
-    "hidden-service-dir\n");
+    "hidden-service-dir\n",
+    router->wants_to_be_intermediary ? "intermediary\n" : "",
+    router->wants_to_be_ledger ? "ledger\n" : "");
 
   if (options->ContactInfo && strlen(options->ContactInfo)) {
     const char *ci = options->ContactInfo;

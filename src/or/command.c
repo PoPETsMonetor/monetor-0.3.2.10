@@ -49,6 +49,7 @@
 #include "dos.h"
 #include "hibernate.h"
 #include "nodelist.h"
+#include "mt_common.h"
 #include "onion.h"
 #include "rephist.h"
 #include "relay.h"
@@ -73,6 +74,7 @@ static void command_process_create_cell(cell_t *cell, channel_t *chan);
 static void command_process_created_cell(cell_t *cell, channel_t *chan);
 static void command_process_relay_cell(cell_t *cell, channel_t *chan);
 static void command_process_destroy_cell(cell_t *cell, channel_t *chan);
+static void command_process_dpayment_cell(cell_t *cell, channel_t *chan);
 
 /** Convert the cell <b>command</b> into a lower-case, human-readable
  * string. */
@@ -177,7 +179,7 @@ command_process_cell(channel_t *chan, cell_t *cell)
 #else /* !(defined(KEEP_TIMING_STATS)) */
 #define PROCESS_CELL(tp, cl, cn) command_process_ ## tp ## _cell(cl, cn)
 #endif /* defined(KEEP_TIMING_STATS) */
-
+  /* XXX MoneTor - todo add direct payment cells */
   switch (cell->command) {
     case CELL_CREATE:
     case CELL_CREATE_FAST:
@@ -199,6 +201,9 @@ command_process_cell(channel_t *chan, cell_t *cell)
     case CELL_DESTROY:
       ++stats_n_destroy_cells_processed;
       PROCESS_CELL(destroy, cell, chan);
+      break;
+    case CELL_PAYMENT:
+      PROCESS_CELL(dpayment, cell, chan);
       break;
     default:
       log_fn(LOG_INFO, LD_PROTOCOL,
@@ -388,6 +393,46 @@ command_process_create_cell(cell_t *cell, channel_t *chan)
   }
 }
 
+/**
+ * XXX MoneTor todo
+ */
+static void
+command_process_dpayment_cell(cell_t *cell, channel_t *chan)
+{
+  circuit_t *circ;
+
+  circ = circuit_get_by_circid_channel(cell->circ_id, chan);
+  log_info(LD_MT, "MoneTor: Processing a direct payment cell");
+
+  if (!circ) {
+    log_info(LD_OR,
+             "(circID %u) unknown circ (probably got a destroy earlier). "
+             "Dropping.", (unsigned)cell->circ_id);
+    return;
+  }
+  
+  /*if (circ->n_circ_id != cell->circ_id || circ->n_chan != chan) {*/
+    /*log_fn(LOG_PROTOCOL_WARN,LD_PROTOCOL,*/
+           /*"got payment cell from Tor client? Closing.");*/
+    /*circuit_mark_for_close(circ, END_CIRC_REASON_TORPROTOCOL);*/
+    /*return;*/
+  /*}*/
+  /* Can be received on a origin circuit (client)
+   * or a non-origin circuit (guard relay) */
+  if (mt_process_received_directpaymentcell(circ, cell) < 0) {
+    if (CIRCUIT_IS_ORIGIN(circ)) {
+      log_warn(LD_MT, "MoneTor: Failed to process received direct payment cell"
+          " on origin circuit => should we rotate guard?");
+    }
+    else {
+      log_warn(LD_MT, "MoneTor: failed to process received direct payment cell"
+          " mark this circuit for close and let's cry on the ledger");
+      circuit_mark_payment_channel_for_close(circ, 0, END_CIRC_REASON_TORPROTOCOL);
+      /* not implemented - Cry on the ledger */
+    }
+  }
+}
+
 /** Process a 'created' <b>cell</b> that just arrived from <b>chan</b>.
  * Find the circuit
  * that it's intended for. If we're not the origin of the circuit, package
@@ -520,7 +565,12 @@ command_process_relay_cell(cell_t *cell, channel_t *chan)
         log_warn(LD_OR, " upstream=%s",
                  channel_get_actual_remote_descr(circ->n_chan));
       }
-      circuit_mark_for_close(circ, END_CIRC_REASON_TORPROTOCOL);
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(circ,0, END_CIRC_REASON_TORPROTOCOL);
+      }
+      else {
+        circuit_mark_for_close(circ, END_CIRC_REASON_TORPROTOCOL);
+      }
       return;
     } else {
       or_circuit_t *or_circ = TO_OR_CIRCUIT(circ);
@@ -530,7 +580,12 @@ command_process_relay_cell(cell_t *cell, channel_t *chan)
                "  Closing circuit.",
                (unsigned)cell->circ_id,
                safe_str(channel_get_canonical_remote_descr(chan)));
-        circuit_mark_for_close(circ, END_CIRC_REASON_TORPROTOCOL);
+        if (get_options()->EnablePayment) {
+          circuit_mark_payment_channel_for_close(circ,0, END_CIRC_REASON_TORPROTOCOL);
+        }
+        else {
+          circuit_mark_for_close(circ, END_CIRC_REASON_TORPROTOCOL);
+        }
         return;
       }
       --or_circ->remaining_relay_early_cells;
@@ -541,7 +596,12 @@ command_process_relay_cell(cell_t *cell, channel_t *chan)
     log_fn(LOG_PROTOCOL_WARN,LD_PROTOCOL,"circuit_receive_relay_cell "
            "(%s) failed. Closing.",
            direction==CELL_DIRECTION_OUT?"forward":"backward");
-    circuit_mark_for_close(circ, -reason);
+    if (get_options()->EnablePayment) {
+      circuit_mark_payment_channel_for_close(circ, 1, -reason);
+    }
+    else {
+      circuit_mark_for_close(circ, -reason);
+    }
   }
 
   /* If this is a cell in an RP circuit, count it as part of the
@@ -589,11 +649,22 @@ command_process_destroy_cell(cell_t *cell, channel_t *chan)
       cell->circ_id == TO_OR_CIRCUIT(circ)->p_circ_id) {
     /* the destroy came from behind */
     circuit_set_p_circid_chan(TO_OR_CIRCUIT(circ), 0, NULL);
-    circuit_mark_for_close(circ, reason|END_CIRC_REASON_FLAG_REMOTE);
+    if (get_options()->EnablePayment) {
+      /** Careful, might be already closed :) */
+      circuit_mark_payment_channel_for_close(circ, 1, reason|END_CIRC_REASON_FLAG_REMOTE);
+    }
+    else {
+      circuit_mark_for_close(circ, reason|END_CIRC_REASON_FLAG_REMOTE);
+    }
   } else { /* the destroy came from ahead */
     circuit_set_n_circid_chan(circ, 0, NULL);
     if (CIRCUIT_IS_ORIGIN(circ)) {
-      circuit_mark_for_close(circ, reason|END_CIRC_REASON_FLAG_REMOTE);
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(circ, 1, reason|END_CIRC_REASON_FLAG_REMOTE);
+      }
+      else {
+        circuit_mark_for_close(circ, reason|END_CIRC_REASON_FLAG_REMOTE);
+      }
     } else {
       char payload[1];
       log_debug(LD_OR, "Delivering 'truncated' back.");

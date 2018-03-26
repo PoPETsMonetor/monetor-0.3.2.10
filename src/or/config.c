@@ -211,6 +211,13 @@ DUMMY_TYPECHECK_INSTANCE(or_options_t);
  * be chosen first.
  */
 static config_var_t option_vars_[] = {
+
+  V(MoneTorPublicMint,           BOOL,     "0"),
+  V(MoneTorSingleThread,         BOOL,     "0"),
+  V(MoneTorSingleCore,           BOOL,     "0"),
+  V(MoneTorPriorityMod,          DOUBLE,   "1.0"),
+  V(MoneTorInitialWindow,        INT,     "3000"),
+  V(MoneTorPaymentRate,          INT,     "2000"),
   V(AccountingMax,               MEMUNIT,  "0 bytes"),
   VAR("AccountingRule",          STRING,   AccountingRule_option,  "max"),
   V(AccountingStart,             STRING,   NULL),
@@ -298,6 +305,7 @@ static config_var_t option_vars_[] = {
   V(DirPortFrontPage,            FILENAME, NULL),
   VAR("DirReqStatistics",        BOOL,     DirReqStatistics_option, "1"),
   VAR("DirAuthority",            LINELIST, DirAuthorities, NULL),
+  V(Ledger,                      BOOL,     "0"),
   V(DirCache,                    BOOL,     "1"),
   /* A DirAuthorityFallbackRate of 0.1 means that 0.5% of clients try an
    * authority when all fallbacks are up, and 2% try an authority when 25% of
@@ -404,6 +412,8 @@ static config_var_t option_vars_[] = {
   V(HTTPSProxyAuthenticator,     STRING,   NULL),
   VPORT(HTTPTunnelPort),
   V(IPv6Exit,                    BOOL,     "0"),
+  V(Intermediary,                BOOL,     "0"),
+  V(EnablePayment,               BOOL,     "0"),
   VAR("ServerTransportPlugin",   LINELIST, ServerTransportPlugin,  NULL),
   V(ServerTransportListenAddr,   LINELIST, NULL),
   V(ServerTransportOptions,      LINELIST, NULL),
@@ -429,7 +439,7 @@ static config_var_t option_vars_[] = {
   VAR("MaxMemInQueues",          MEMUNIT,   MaxMemInQueues_raw, "0"),
   OBSOLETE("MaxOnionsPending"),
   V(MaxOnionQueueDelay,          MSEC_INTERVAL, "1750 msec"),
-  V(MaxUnparseableDescSizeToLog, MEMUNIT, "10 MB"),
+  V(MaxUnparseableDescSizeToLog, MEMUNIT,  "10 MB"),
   V(MinMeasuredBWsForAuthToIgnoreAdvertised, INT, "500"),
   VAR("MyFamily",                LINELIST, MyFamily_lines,       NULL),
   V(NewCircuitPeriod,            INTERVAL, "30 seconds"),
@@ -4738,7 +4748,8 @@ options_transition_affects_descriptor(const or_options_t *old_options,
       old_options->AccountingRule != new_options->AccountingRule ||
       public_server_mode(old_options) != public_server_mode(new_options) ||
       old_options->DirCache != new_options->DirCache ||
-      old_options->AssumeReachable != new_options->AssumeReachable)
+      old_options->AssumeReachable != new_options->AssumeReachable ||
+      old_options->Intermediary != new_options->Intermediary)
     return 1;
 
   return 0;
@@ -8129,7 +8140,7 @@ verify_and_store_outbound_address(sa_family_t family, tor_addr_t *addr,
 /* Parse a list of address lines for a specific destination type.
  * Will store them into the options if not validate_only. If a
  * problem occurs, a suitable error message is store in msg.
- * Returns 0 on success or -1 if any address is already set.
+ * Returns 0 on sucess or -1 if any address is already set.
  */
 static int
 parse_outbound_address_lines(const config_line_t *lines, outbound_addr_t type,
@@ -8302,4 +8313,3 @@ init_cookie_authentication(const char *fname, const char *header,
   tor_free(cookie_file_str);
   return retval;
 }
-

@@ -44,8 +44,9 @@ int circuit_id_in_use_on_channel(circid_t circ_id, channel_t *chan);
 circuit_t *circuit_get_by_edge_conn(edge_connection_t *conn);
 void circuit_unlink_all_from_channel(channel_t *chan, int reason);
 origin_circuit_t *circuit_get_by_global_id(uint32_t id);
-origin_circuit_t *circuit_get_ready_rend_circ_by_rend_data(
-  const rend_data_t *rend_data);
+origin_circuit_t *circuit_get_by_mt_desc(mt_desc_t* desc);
+origin_circuit_t *circuit_get_by_intermediary_ident(intermediary_identity_t* ident);
+origin_circuit_t *circuit_get_ready_rend_circ_by_rend_data(const rend_data_t *rend_data);
 origin_circuit_t *circuit_get_next_by_pk_and_purpose(origin_circuit_t *start,
                                      const uint8_t *digest, uint8_t purpose);
 origin_circuit_t *circuit_get_next_service_intro_circ(origin_circuit_t *start);

@@ -68,6 +68,11 @@
 #include "hs_circuit.h"
 #include "hs_circuitmap.h"
 #include "hs_ident.h"
+#include "mt_common.h"
+#include "mt_cclient.h"
+#include "mt_cintermediary.h"
+#include "mt_crelay.h"
+#include "mt_cledger.h"
 #include "networkstatus.h"
 #include "nodelist.h"
 #include "onion.h"
@@ -77,6 +82,7 @@
 #include "rendclient.h"
 #include "rendcommon.h"
 #include "rephist.h"
+#include "router.h"
 #include "routerlist.h"
 #include "routerset.h"
 #include "channelpadding.h"
@@ -534,7 +540,8 @@ circuit_remove_from_origin_circuit_list(origin_circuit_t *origin_circ)
 }
 
 /** Add <b>origin_circ</b> to the global list of origin circuits. Called
- * when creating the circuit. */
+ * when creating the circuit. 
+ * */
 static void
 circuit_add_to_origin_circuit_list(origin_circuit_t *origin_circ)
 {
@@ -546,6 +553,14 @@ circuit_add_to_origin_circuit_list(origin_circuit_t *origin_circ)
 
 /** Detach from the global circuit list, and deallocate, all
  * circuits that have been marked for close.
+ *
+ * MoneTor: hack this function with following logic: When a circuit is marked
+ * for close but the payment channel did not closed yet, then ensure that we
+ * close properly the payment channel and wait for a close_success or a 
+ * close_failure before calling about_to_free and free.µ
+ *
+ * If we're here because we received a destroy cell, close the circuit 
+ * anyway
  */
 void
 circuit_close_all_marked(void)
@@ -657,7 +672,18 @@ circuit_purpose_to_controller_string(uint8_t purpose)
       return "CONTROLLER";
     case CIRCUIT_PURPOSE_PATH_BIAS_TESTING:
       return "PATH_BIAS_TESTING";
-
+    case CIRCUIT_PURPOSE_C_INTERMEDIARY:
+      return "MT_CLIENT_INTER";
+    case CIRCUIT_PURPOSE_C_LEDGER:
+      return "MT_CLIENT_LEDGER";
+    case CIRCUIT_PURPOSE_R_INTERMEDIARY:
+      return "MT_RELAY_INTERMEDIARY";
+    case CIRCUIT_PURPOSE_R_LEDGER:
+      return "MT_RELAY_LEDGER";
+    case CIRCUIT_PURPOSE_INTERMEDIARY:
+      return "MT_INTERMEDIARY";
+    case CIRCUIT_PURPOSE_LEDGER:
+      return "MT_LEDGER";
     default:
       tor_snprintf(buf, sizeof(buf), "UNKNOWN_%d", (int)purpose);
       return buf;
@@ -685,6 +711,13 @@ circuit_purpose_to_controller_hs_state_string(uint8_t purpose)
     case CIRCUIT_PURPOSE_TESTING:
     case CIRCUIT_PURPOSE_CONTROLLER:
     case CIRCUIT_PURPOSE_PATH_BIAS_TESTING:
+    case CIRCUIT_PURPOSE_C_INTERMEDIARY:
+    case CIRCUIT_PURPOSE_C_LEDGER:
+    case CIRCUIT_PURPOSE_INTERMEDIARY:
+    case CIRCUIT_PURPOSE_LEDGER:
+    case CIRCUIT_PURPOSE_R_LEDGER:
+    case CIRCUIT_PURPOSE_R_INTERMEDIARY:
+    case CIRCUIT_PURPOSE_I_LEDGER:
       return NULL;
 
     case CIRCUIT_PURPOSE_INTRO_POINT:
@@ -756,7 +789,20 @@ circuit_purpose_to_string(uint8_t purpose)
       return "Hidden service client: Active rendezvous point";
     case CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT:
       return "Measuring circuit timeout";
-
+    case CIRCUIT_PURPOSE_C_INTERMEDIARY:
+      return "Payment client controller: circuit toward the intermediary";
+    case CIRCUIT_PURPOSE_C_LEDGER:
+      return "Payment client controller: circuit toward the ledger";
+    case CIRCUIT_PURPOSE_R_INTERMEDIARY:
+      return "Payment relay controller: circuit toward the intermediary";
+    case CIRCUIT_PURPOSE_R_LEDGER:
+      return "Payment relay controller: circuit toward the ledger";
+    case CIRCUIT_PURPOSE_INTERMEDIARY:
+      return "Payment intermediary controller: payment circuit at the intermediary";
+    case CIRCUIT_PURPOSE_I_LEDGER:
+      return "Intermediary controller: circuit toward the ledger";
+    case CIRCUIT_PURPOSE_LEDGER:
+      return "Payment ledger controller: payment circuit at the ledger";
     case CIRCUIT_PURPOSE_S_ESTABLISH_INTRO:
       return "Hidden service: Establishing introduction point";
     case CIRCUIT_PURPOSE_S_INTRO:
@@ -984,6 +1030,16 @@ circuit_free(circuit_t *circ)
       tor_free(ocirc->socks_password);
     }
     addr_policy_list_free(ocirc->prepend_policy);
+
+    if (ocirc->ppath) {
+      mt_cclient_general_circuit_free(ocirc);
+    }
+    else if (ocirc->inter_ident) {
+      mt_cclient_intermediary_circuit_free(ocirc);
+    }
+    else if (ocirc->desci) {
+      mt_crelay_intermediary_circuit_free(ocirc);
+    }
   } else {
     or_circuit_t *ocirc = TO_OR_CIRCUIT(circ);
     /* Remember cell statistics for this circuit before deallocating. */
@@ -1004,6 +1060,18 @@ circuit_free(circuit_t *circ)
       or_circuit_t *other = ocirc->rend_splice;
       tor_assert(other->base_.magic == OR_CIRCUIT_MAGIC);
       other->rend_splice = NULL;
+    }
+    
+    if (get_options()->EnablePayment) {
+      if (ledger_mode(get_options())) {
+        mt_cledger_orcirc_free(ocirc);
+      }
+      else if (intermediary_mode(get_options())) {
+        mt_cintermediary_orcirc_free(ocirc);
+      }
+      else if (server_mode(get_options())) {
+        mt_crelay_orcirc_free(ocirc);
+      }
     }
 
     /* remove from map. */
@@ -1243,6 +1311,7 @@ circuit_get_by_global_id(uint32_t id)
   return NULL;
 }
 
+
 /** Return a circ such that:
  *  - circ-\>n_circ_id or circ-\>p_circ_id is equal to <b>circ_id</b>, and
  *  - circ is attached to <b>chan</b>, either as p_chan or n_chan.
@@ -1473,8 +1542,14 @@ circuit_unlink_all_from_channel(channel_t *chan, int reason)
           "to mark");
       continue;
     }
-    if (!circ->marked_for_close)
-      circuit_mark_for_close(circ, reason);
+    if (!circ->marked_for_close) {
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(circ, 1, reason);
+      }
+      else {
+        circuit_mark_for_close(circ, reason);
+      }
+    }
   } SMARTLIST_FOREACH_END(circ);
 
   smartlist_free(detached);
@@ -1508,6 +1583,33 @@ circuit_get_ready_rend_circ_by_rend_data(const rend_data_t *rend_data)
     }
   }
   SMARTLIST_FOREACH_END(circ);
+  return NULL;
+}
+
+/** Returns the circuit where one of the pay_path_t in the
+ * linked list contains a desc that matches the one received
+ * in parameter.
+ */
+origin_circuit_t *
+circuit_get_by_mt_desc(mt_desc_t *desc) {
+  (void) desc;
+  return NULL;
+}
+
+/** Return the circuit whose intermediary_identity_t matches 
+ *  or NULL if no such circuit exists */
+
+origin_circuit_t *
+circuit_get_by_intermediary_ident(intermediary_identity_t* inter_identity) {
+  SMARTLIST_FOREACH_BEGIN(circuit_get_global_list(), circuit_t *, circ) {
+    if (!circ->marked_for_close &&
+        (circ->purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY ||
+         circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY)) {
+      origin_circuit_t *ocirc = TO_ORIGIN_CIRCUIT(circ);
+      if (tor_memeq(ocirc->inter_ident->identity, inter_identity->identity, DIGEST_LEN))
+        return ocirc;
+    }
+  } SMARTLIST_FOREACH_END(circ);
   return NULL;
 }
 
@@ -1660,7 +1762,7 @@ circuit_can_be_cannibalized_for_v3_rp(const origin_circuit_t *circ)
  * To "cannibalize" a circuit means to extend it an extra hop, and use it
  * for some other purpose than we had originally intended.  We do this when
  * we want to perform some low-bandwidth task at a specific relay, and we
- * would like the circuit to complete as soon as possible.  (If we were going
+ * woulad like the circuit to complete as soon as possible.  (If we were going
  * to use a lot of bandwidth, we wouldn't want a circuit with an extra hop.
  * If we didn't care about circuit completion latency, we would just build
  * a new circuit.)
@@ -1708,9 +1810,11 @@ circuit_find_to_cannibalize(uint8_t purpose, extend_info_t *info,
             if (tor_memeq(hop->extend_info->identity_digest,
                           info->identity_digest, DIGEST_LEN))
               goto next;
-            if (ri1 &&
-                (ri2 = node_get_by_id(hop->extend_info->identity_digest))
-                && nodes_in_same_family(ri1, ri2))
+            ri2 = node_get_by_id(hop->extend_info->identity_digest);
+            if (ri1 && ri2 && nodes_in_same_family(ri1, ri2))
+              goto next;
+            /** we don't want interemdiary in our paths, never. */
+            if (ri2 && ri2->is_intermediary)
               goto next;
             hop=hop->next;
           } while (hop!=circ->cpath);
@@ -2003,6 +2107,47 @@ circuit_about_to_free(circuit_t *circ)
                                  CIRC_EVENT_CLOSED:CIRC_EVENT_FAILED,
      orig_reason);
   }
+  
+  /* Notify the payment controller */
+  log_info(LD_MT, "MoneTor: Notify payment controller about circ with purpose %s has closed",
+      circuit_purpose_to_string(circ->purpose));
+  if (circ->purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY) {
+    mt_cclient_intermediary_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY) {
+    mt_crelay_intermediary_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_I_LEDGER) {
+    mt_cintermediary_ledger_circ_has_closed(circ);
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_R_LEDGER) {
+    mt_crelay_ledger_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
+  }
+  /* Notify payment controller when a general circuit has closed */
+  else if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
+    if (!authdir_mode(get_options()) && !intermediary_mode(get_options()) &&
+        !server_mode(get_options())) {
+      mt_cclient_general_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
+    }
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_C_LEDGER) {
+    mt_cclient_ledger_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_INTERMEDIARY) {
+    mt_cintermediary_orcirc_has_closed(TO_OR_CIRCUIT(circ));
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_LEDGER) {
+    mt_cledger_orcirc_has_closed(TO_OR_CIRCUIT(circ));
+  }
+  else if (circ->purpose == CIRCUIT_PURPOSE_OR && 
+      TO_OR_CIRCUIT(circ)->circuit_received_first_payment_cell) {
+    if (server_mode(get_options())) {
+      mt_crelay_orcirc_has_closed(TO_OR_CIRCUIT(circ));
+    }
+  }
+ 
+
+  
 
   if (circ->purpose == CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT) {
     origin_circuit_t *ocirc = TO_ORIGIN_CIRCUIT(circ);
@@ -2399,7 +2544,12 @@ circuits_handle_oom(size_t current_allocation)
     /* Now, kill the circuit. */
     n = n_cells_in_circ_queues(circ);
     if (! circ->marked_for_close) {
-      circuit_mark_for_close(circ, END_CIRC_REASON_RESOURCELIMIT);
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(circ, 1, END_CIRC_REASON_RESOURCELIMIT);
+      }
+      else {
+        circuit_mark_for_close(circ, END_CIRC_REASON_RESOURCELIMIT);
+      }
     }
     marked_circuit_free_cells(circ);
     freed = marked_circuit_free_stream_bytes(circ);

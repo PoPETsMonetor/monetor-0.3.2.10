@@ -25,6 +25,12 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
                                uint8_t relay_command, const char *payload,
                                size_t payload_len, crypt_path_t *cpath_layer,
                                const char *filename, int lineno));
+MOCK_DECL(int,
+relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
+                                uint8_t relay_pcommand, crypt_path_t *layer_start,
+                                const char *payload, size_t payload_len,
+                                const char *filename, int lineno));
+
 /* Indicates to relay_send_command_from_edge() that it is a control cell. */
 #define CONTROL_CELL_ID 0
 #define relay_send_command_from_edge(stream_id, circ, relay_command, payload, \
@@ -32,6 +38,11 @@ relay_send_command_from_edge_,(streamid_t stream_id, circuit_t *circ,
   relay_send_command_from_edge_((stream_id), (circ), (relay_command),   \
                                 (payload), (payload_len), (cpath_layer), \
                                 __FILE__, __LINE__)
+#define relay_send_pcommand_from_edge(circ, relay_command, relay_pcommand, layer_start, payload, \
+                                      payload_len)     \
+  relay_send_pcommand_from_edge_((circ), (relay_command), (relay_pcommand), (layer_start), (payload),     \
+                                 (payload_len), __FILE__, __LINE__)
+
 int connection_edge_send_command(edge_connection_t *fromconn,
                                  uint8_t relay_command, const char *payload,
                                  size_t payload_len);

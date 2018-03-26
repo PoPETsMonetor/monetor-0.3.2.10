@@ -46,6 +46,10 @@
 #include "hs_circuit.h"
 #include "hs_ident.h"
 #include "nodelist.h"
+#include "mt_common.h"
+#include "mt_cclient.h"
+#include "mt_cintermediary.h"
+#include "mt_crelay.h"
 #include "networkstatus.h"
 #include "policies.h"
 #include "rendclient.h"
@@ -86,6 +90,19 @@ circuit_matches_with_rend_stream(const edge_connection_t *edge_conn,
   }
 
   return 1;
+}
+
+static int
+circuit_has_intermediary_or_ledger(const origin_circuit_t *circ) {
+  crypt_path_t *cpath_tmp = circ->cpath;
+  const char *id;
+  do {
+    id = cpath_tmp->extend_info->identity_digest;
+    if (mt_cclient_is_intermediary(id) || mt_cclient_is_ledger(id))
+      return 1;
+    cpath_tmp = cpath_tmp->next;
+  } while (cpath_tmp != circ->cpath);
+  return 0;
 }
 
 /** Return 1 if <b>circ</b> could be returned by circuit_get_best().
@@ -200,6 +217,12 @@ circuit_is_acceptable(const origin_circuit_t *origin_circ,
     }
     if (exitnode && !connection_ap_can_use_exit(conn, exitnode)) {
       /* can't exit from this router */
+      return 0;
+    }
+    /** If there is an intermediary in the path or a ledger; don't take this*/
+    /** This shitty bug might happen with preemptive built circuits, when the information
+     * is not yet up to date :/ */
+    if (circuit_has_intermediary_or_ledger(origin_circ)) {
       return 0;
     }
   } else { /* not general: this might be a rend circuit */
@@ -1146,6 +1169,39 @@ needs_hs_server_circuits(time_t now, int num_uptime_internal)
   return 0;
 }
 
+/* MoneTor needs at least one circuit for each intermediary (1 for middle,
+ * 1 for exit node) + one circuit to the ledger*/
+#define SUFFICIENT_UPTIME_INTERNAL_MT_CIRCUITS 3
+
+STATIC int
+needs_mt_circuits(time_t now, int num_uptime_internal) {
+
+  if (!get_options()->EnablePayment || !mt_check_enough_fund()) {
+    goto no_need;
+  }
+
+  if (num_uptime_internal >= SUFFICIENT_UPTIME_INTERNAL_MT_CIRCUITS) {
+    goto no_need;
+  }
+  
+  if (router_have_consensus_path() == CONSENSUS_PATH_UNKNOWN) {
+    /* Consensus hasn't been checked or might be invalid so requesting
+     * internal circuits is not wise. */
+    goto no_need;
+  }
+  /*
+   * We are going to need this circuit anyway
+   *
+   * No need for high-capacity circuit, we just need
+   * one reliable circuit.
+   * */
+  rep_hist_note_used_internal(now, 1, 0);
+
+  return 1;
+ no_need:
+  return 0;
+}
+
 /* We need at least this many internal circuits for hidden service clients */
 #define SUFFICIENT_INTERNAL_HS_CLIENTS 3
 
@@ -1283,6 +1339,15 @@ circuit_predict_and_launch_new(void)
                "Have %d clean circs need another buildtime test circ.", num);
       circuit_launch(CIRCUIT_PURPOSE_C_GENERAL, flags);
       return;
+  }
+
+  if (needs_mt_circuits(now, num_uptime_internal)) {
+    flags = CIRCLAUNCH_NEED_UPTIME;
+    flags |= CIRCLAUNCH_IS_INTERNAL;
+    log_info(LD_CIRC|LD_MT,
+        "Have %d clean uptime-internal clean circs, need"
+        " another MoneTor circuit.", num_uptime_internal);
+    circuit_launch(CIRCUIT_PURPOSE_C_GENERAL, flags);
   }
 }
 
@@ -1458,8 +1523,14 @@ circuit_expire_old_circuits_clientside(void)
                 circ->purpose);
       /* Don't do this magic for testing circuits. Their death is governed
        * by circuit_expire_building */
-      if (circ->purpose != CIRCUIT_PURPOSE_PATH_BIAS_TESTING)
-        circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+      if (circ->purpose != CIRCUIT_PURPOSE_PATH_BIAS_TESTING) {
+        if (get_options()->EnablePayment) {
+          circuit_mark_payment_channel_for_close(circ, 0, END_CIRC_REASON_FINISHED);
+        }
+        else {
+          circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+        }
+      }
     } else if (!circ->timestamp_dirty && circ->state == CIRCUIT_STATE_OPEN) {
       if (timercmp(&circ->timestamp_began, &cutoff, OP_LT)) {
         if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL ||
@@ -1474,7 +1545,12 @@ circuit_expire_old_circuits_clientside(void)
                     " that has been unused for %ld msec.",
                     U64_PRINTF_ARG(TO_ORIGIN_CIRCUIT(circ)->global_identifier),
                     tv_mdiff(&circ->timestamp_began, &now));
-          circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+          if (get_options()->EnablePayment) {
+            circuit_mark_payment_channel_for_close(circ, 0, END_CIRC_REASON_FINISHED);
+          }
+          else {
+            circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+          }
         } else if (!TO_ORIGIN_CIRCUIT(circ)->is_ancient) {
           /* Server-side rend joined circuits can end up really old, because
            * they are reused by clients for longer than normal. The client
@@ -1539,7 +1615,12 @@ circuit_expire_old_circuits_serverside(time_t now)
       log_info(LD_CIRC, "Closing circ_id %u (empty %d secs ago)",
                (unsigned)or_circ->p_circ_id,
                (int)(now - channel_when_last_xmit(or_circ->p_chan)));
-      circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+      if (get_options()->EnablePayment) {
+        circuit_mark_payment_channel_for_close(circ, 0, END_CIRC_REASON_FINISHED);
+      }
+      else {
+        circuit_mark_for_close(circ, END_CIRC_REASON_FINISHED);
+      }
     }
   }
   SMARTLIST_FOREACH_END(circ);
@@ -1653,6 +1734,21 @@ circuit_has_opened(origin_circuit_t *circ)
       break;
     case CIRCUIT_PURPOSE_C_INTRODUCING:
       hs_client_circuit_has_opened(circ);
+      break;
+    case CIRCUIT_PURPOSE_C_INTERMEDIARY:
+      mt_cclient_intermediary_circ_has_opened(circ);
+      break;
+    case CIRCUIT_PURPOSE_C_LEDGER:
+      mt_cclient_ledger_circ_has_opened(circ);
+      break;
+    case CIRCUIT_PURPOSE_I_LEDGER:
+      mt_cintermediary_ledger_circ_has_opened(circ);
+      break;
+    case CIRCUIT_PURPOSE_R_INTERMEDIARY:
+      mt_crelay_intermediary_circ_has_opened(circ);
+      break;
+    case CIRCUIT_PURPOSE_R_LEDGER:
+      mt_crelay_ledger_circ_has_opened(circ);
       break;
     case CIRCUIT_PURPOSE_C_GENERAL:
       /* Tell any AP connections that have been waiting for a new
@@ -1953,6 +2049,11 @@ circuit_launch_by_extend_info(uint8_t purpose,
         case CIRCUIT_PURPOSE_S_CONNECT_REND:
         case CIRCUIT_PURPOSE_C_GENERAL:
         case CIRCUIT_PURPOSE_S_ESTABLISH_INTRO:
+        case CIRCUIT_PURPOSE_C_INTERMEDIARY:
+        case CIRCUIT_PURPOSE_R_INTERMEDIARY:
+        case CIRCUIT_PURPOSE_C_LEDGER:
+        case CIRCUIT_PURPOSE_R_LEDGER:
+        case CIRCUIT_PURPOSE_I_LEDGER:
           /* need to add a new hop */
           tor_assert(extend_info);
           if (circuit_extend_to_new_exit(circ, extend_info) < 0)
@@ -2212,7 +2313,22 @@ circuit_get_open_circ_or_launch(entry_connection_t *conn,
                safe_str_client(rend_data_get_address(edge_conn->rend_data)) :
                "service");
     }
+    
+    /*XXX MoneTor*/
+    /*If this is an Intermediary circuit, handle that case*/
+    if (desired_circuit_purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY) {
+      // pick the intermediary node
+      /**
+       * Need to implement intermediary choice abstraction; how to remember
+       * the choice (state file), etc. Then the function to here basically
+       * returns the intermediary on which we have a payment channel linked
+       * or a random one matching our policies
+       */
+    }
 
+    /*XXX MoneTor*/
+    /**Do the same as above for ledger circuit
+     */
     /* If we have specified a particular exit node for our
      * connection, then be sure to open a circuit to that exit node.
      */
@@ -2581,6 +2697,12 @@ connection_ap_handshake_attach_chosen_circuit(entry_connection_t *conn,
  */
 /* XXXX this function should mark for close whenever it returns -1;
  * its callers shouldn't have to worry about that. */
+
+/*
+ * XXX MoneTor - link or launch an intermediary circuit if payment
+ * is enabled and that the stream attached to that particular circuit
+ * does not already has a payment channel established.
+ */
 int
 connection_ap_handshake_attach_circuit(entry_connection_t *conn)
 {
@@ -2606,7 +2728,7 @@ connection_ap_handshake_attach_circuit(entry_connection_t *conn)
            conn->socks_request->port);
     return -1;
   }
-
+ 
   /* We handle "general" (non-onion) connections much more straightforwardly.
    */
   if (!connection_edge_is_rendezvous_stream(ENTRY_TO_EDGE_CONN(conn))) {
@@ -2689,6 +2811,21 @@ connection_ap_handshake_attach_circuit(entry_connection_t *conn)
 
     /* We have found a suitable circuit for our conn. Hurray.  Do
      * the attachment. */
+
+    /*
+     * Should launch payment on general circs and avoid begindir circs
+     */
+    if (get_options()->EnablePayment && !conn->use_begindir && !conn->want_onehop) {
+      if (!circ->ppath) {
+          circ->ppath = circuit_init_ppath(NULL);
+          circ->ppath->next = circuit_init_ppath(circ->ppath);
+          circ->ppath->next->position = MIDDLE;
+          circ->ppath->next->next = circuit_init_ppath(circ->ppath->next);
+          circ->ppath->next->next->position = EXIT;
+          mt_cclient_launch_payment(circ);
+      }
+    }
+
     return connection_ap_handshake_attach_chosen_circuit(conn, circ, NULL);
 
   } else { /* we're a rendezvous conn */

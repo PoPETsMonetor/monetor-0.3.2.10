@@ -105,8 +105,10 @@
 #define LD_CONSDIFF  (1u<<24)
 /** Denial of Service mitigation. */
 #define LD_DOS       (1u<<25)
+/** information about MoneTor */
+#define LD_MT        (1u<<26)
 /** Number of logging domains in the code. */
-#define N_LOGGING_DOMAINS 26
+#define N_LOGGING_DOMAINS 27
 
 /** This log message is not safe to send to a callback-based logger
  * immediately.  Used as a flag, not a log domain. */

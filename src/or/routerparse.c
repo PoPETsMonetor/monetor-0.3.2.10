@@ -105,6 +105,8 @@ static token_rule_t routerdesc_token_table[] = {
   T01("write-history",       K_WRITE_HISTORY,       ARGS,    NO_OBJ ),
   T01("extra-info-digest",   K_EXTRA_INFO_DIGEST,   GE(1),   NO_OBJ ),
   T01("hidden-service-dir",  K_HIDDEN_SERVICE_DIR,  NO_ARGS, NO_OBJ ),
+  T01("intermediary",        K_INTERMEDIARY,        NO_ARGS, NO_OBJ ),
+  T01("ledger",              K_LEDGER,              NO_ARGS, NO_OBJ ),
   T01("identity-ed25519",    K_IDENTITY_ED25519,    NO_ARGS, NEED_OBJ ),
   T01("master-key-ed25519",  K_MASTER_KEY_ED25519,  GE(1),   NO_OBJ ),
   T01("router-sig-ed25519",  K_ROUTER_SIG_ED25519,  GE(1),   NO_OBJ ),
@@ -1988,6 +1990,12 @@ router_parse_entry_from_string(const char *s, const char *end,
   if (find_opt_by_keyword(tokens, K_HIDDEN_SERVICE_DIR)) {
     router->wants_to_be_hs_dir = 1;
   }
+  if (find_opt_by_keyword(tokens, K_LEDGER)) {
+    router->wants_to_be_ledger = 1;
+  }
+  if (find_opt_by_keyword(tokens, K_INTERMEDIARY)) {
+    router->wants_to_be_intermediary = 1;
+  }
 
   /* This router accepts tunnelled directory requests via begindir if it has
    * an open dirport or it included "tunnelled-dir-server". */
@@ -2019,6 +2027,7 @@ router_parse_entry_from_string(const char *s, const char *end,
   goto done;
 
  err:
+  log_warn(LD_GENERAL, "Parser error when parsing router");
   dump_desc(s_dup, "router descriptor");
   routerinfo_free(router);
   router = NULL;
@@ -2667,6 +2676,10 @@ routerstatus_parse_entry_from_string(memarea_t *area,
         rs->is_stable = 1;
       else if (!strcmp(tok->args[i], "Fast"))
         rs->is_fast = 1;
+      else if (!strcmp(tok->args[i], "Inter"))
+        rs->is_intermediary = 1;
+      else if (!strcmp(tok->args[i], "Ledger"))
+        rs->is_ledger = 1;
       else if (!strcmp(tok->args[i], "Running"))
         rs->is_flagged_running = 1;
       else if (!strcmp(tok->args[i], "Named"))
@@ -3986,6 +3999,7 @@ networkstatus_parse_vote_from_string(const char *s, const char **eos_out,
 
   goto done;
  err:
+  log_warn(LD_GENERAL, "Parse error");
   dump_desc(s_dup, "v3 networkstatus");
   networkstatus_vote_free(ns);
   ns = NULL;

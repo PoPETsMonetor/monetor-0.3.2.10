@@ -1437,6 +1437,28 @@ dirserv_thinks_router_is_hs_dir(const routerinfo_t *router,
           router_is_active(router, node, now));
 }
 
+/** Return true iff <b>router</b< should be assigneed the "Inter" flag.
+ * 
+ * Right now it just means that the relay claims supporting the protocol
+ * is stable and fast and that the router is active
+ */
+
+static int
+dirserv_thinks_router_is_intermediary(const routerinfo_t *router,
+                                      const node_t *node, time_t now)
+{
+  return (router->wants_to_be_intermediary && router_is_active(router, node, now));
+}
+
+/** Return true iff <b>router</b> should be assigned the "Ledger" flag.
+ *
+ */
+static int
+dirserv_thinks_router_is_ledger(const routerinfo_t *router)
+{
+  return (router->wants_to_be_ledger && 
+      router_digest_is_trusted_dir(router->cache_info.identity_digest));
+}
 /** Don't consider routers with less bandwidth than this when computing
  * thresholds. */
 #define ABSOLUTE_MIN_BW_VALUE_TO_CONSIDER_KB 4
@@ -1962,7 +1984,7 @@ routerstatus_format_entry(const routerstatus_t *rs, const char *version,
     goto done;
 
   smartlist_add_asprintf(chunks,
-                   "s%s%s%s%s%s%s%s%s%s%s\n",
+                   "s%s%s%s%s%s%s%s%s%s%s%s%s\n",
                   /* These must stay in alphabetical order. */
                    rs->is_authority?" Authority":"",
                    rs->is_bad_exit?" BadExit":"",
@@ -1970,6 +1992,8 @@ routerstatus_format_entry(const routerstatus_t *rs, const char *version,
                    rs->is_fast?" Fast":"",
                    rs->is_possible_guard?" Guard":"",
                    rs->is_hs_dir?" HSDir":"",
+                   rs->is_intermediary?" Inter":"",
+                   rs->is_ledger?" Ledger":"",
                    rs->is_flagged_running?" Running":"",
                    rs->is_stable?" Stable":"",
                    rs->is_v2_dir?" V2Dir":"",
@@ -2238,7 +2262,8 @@ set_routerstatus_from_routerinfo(routerstatus_t *rs,
 
   rs->is_authority =
     router_digest_is_trusted_dir(ri->cache_info.identity_digest);
-
+  rs->is_ledger = node->is_ledger = 
+    dirserv_thinks_router_is_ledger(ri);
   /* Already set by compute_performance_thresholds. */
   rs->is_exit = node->is_exit;
   rs->is_stable = node->is_stable =
@@ -2266,6 +2291,9 @@ set_routerstatus_from_routerinfo(routerstatus_t *rs,
   rs->is_bad_exit = listbadexits && node->is_bad_exit;
   rs->is_hs_dir = node->is_hs_dir =
     dirserv_thinks_router_is_hs_dir(ri, node, now);
+
+  rs->is_intermediary = node->is_intermediary =
+    dirserv_thinks_router_is_intermediary(ri, node, now);
 
   rs->is_named = rs->is_unnamed = 0;
 
@@ -3073,7 +3101,7 @@ dirserv_generate_networkstatus_vote_obj(crypto_pk_t *private_key,
 
   v3_out->known_flags = smartlist_new();
   smartlist_split_string(v3_out->known_flags,
-                "Authority Exit Fast Guard Stable V2Dir Valid HSDir",
+                "Authority Exit Fast Guard Stable V2Dir Valid HSDir Inter Ledger",
                 0, SPLIT_SKIP_SPACE|SPLIT_IGNORE_BLANK, 0);
   if (vote_on_reachability)
     smartlist_add_strdup(v3_out->known_flags, "Running");

@@ -266,7 +266,7 @@ typedef enum {
 #define PROXY_CONNECTED 8
 
 /** True iff <b>x</b> is an edge connection. */
-#define CONN_IS_EDGE(x) \
+#define CONN_IS_EDGE(x)						\
   ((x)->type == CONN_TYPE_EXIT || (x)->type == CONN_TYPE_AP)
 
 /** State for any listener connection. */
@@ -356,7 +356,7 @@ typedef enum {
 
 /** True iff the AP_CONN_STATE_* value <b>s</b> means that the corresponding
  * edge connection is not attached to any circuit. */
-#define AP_CONN_STATE_IS_UNATTACHED(s) \
+#define AP_CONN_STATE_IS_UNATTACHED(s)					\
   ((s) <= AP_CONN_STATE_CIRCUIT_WAIT || (s) == AP_CONN_STATE_NATD_WAIT)
 
 #define DIR_CONN_STATE_MIN_ 1
@@ -481,7 +481,12 @@ typedef enum {
 #define CIRCUIT_PURPOSE_REND_POINT_WAITING 3
 /** OR-side circuit purpose: At OR, both circuits have this purpose. */
 #define CIRCUIT_PURPOSE_REND_ESTABLISHED 4
-#define CIRCUIT_PURPOSE_OR_MAX_ 4
+/** OR-side circuit on a intermerdiary */
+#define CIRCUIT_PURPOSE_INTERMEDIARY 5
+/** OR-side circuit on a ledger */
+#define CIRCUIT_PURPOSE_LEDGER 6
+
+#define CIRCUIT_PURPOSE_OR_MAX_ 6
 
 /* these circuits originate at this node */
 
@@ -505,46 +510,59 @@ typedef enum {
  *     the service, and are talking to it.
  */
 /** Client-side circuit purpose: Normal circuit, with cpath. */
-#define CIRCUIT_PURPOSE_C_GENERAL 5
+#define CIRCUIT_PURPOSE_C_GENERAL 7
 /** Client-side circuit purpose: at the client, connecting to intro point. */
-#define CIRCUIT_PURPOSE_C_INTRODUCING 6
+#define CIRCUIT_PURPOSE_C_INTRODUCING 8
 /** Client-side circuit purpose: at the client, sent INTRODUCE1 to intro point,
  * waiting for ACK/NAK. */
-#define CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT 7
+#define CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT 9
 /** Client-side circuit purpose: at the client, introduced and acked, closing.
  */
-#define CIRCUIT_PURPOSE_C_INTRODUCE_ACKED 8
+#define CIRCUIT_PURPOSE_C_INTRODUCE_ACKED 10
 /** Client-side circuit purpose: at the client, waiting for ack. */
-#define CIRCUIT_PURPOSE_C_ESTABLISH_REND 9
+#define CIRCUIT_PURPOSE_C_ESTABLISH_REND 11
 /** Client-side circuit purpose: at the client, waiting for the service. */
-#define CIRCUIT_PURPOSE_C_REND_READY 10
+#define CIRCUIT_PURPOSE_C_REND_READY 12
 /** Client-side circuit purpose: at the client, waiting for the service,
  * INTRODUCE has been acknowledged. */
-#define CIRCUIT_PURPOSE_C_REND_READY_INTRO_ACKED 11
+#define CIRCUIT_PURPOSE_C_REND_READY_INTRO_ACKED 13
 /** Client-side circuit purpose: at the client, rendezvous established. */
-#define CIRCUIT_PURPOSE_C_REND_JOINED 12
+#define CIRCUIT_PURPOSE_C_REND_JOINED 14
 /** This circuit is used for build time measurement only */
-#define CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT 13
-#define CIRCUIT_PURPOSE_C_MAX_ 13
+#define CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT 15
+/** This circuit is used for whatever interaction with the ledger from
+ * client, intermediary or relay (no need to divide at first glance)*/
+#define CIRCUIT_PURPOSE_C_LEDGER 16
+#define CIRCUIT_PURPOSE_C_INTERMEDIARY 17
+
+#define CIRCUIT_PURPOSE_C_MAX_ 17
 /** Hidden-service-side circuit purpose: at the service, waiting for
  * introductions. */
-#define CIRCUIT_PURPOSE_S_ESTABLISH_INTRO 14
+#define CIRCUIT_PURPOSE_S_ESTABLISH_INTRO 18
 /** Hidden-service-side circuit purpose: at the service, successfully
  * established intro. */
-#define CIRCUIT_PURPOSE_S_INTRO 15
+#define CIRCUIT_PURPOSE_S_INTRO 19
 /** Hidden-service-side circuit purpose: at the service, connecting to rend
  * point. */
-#define CIRCUIT_PURPOSE_S_CONNECT_REND 16
+#define CIRCUIT_PURPOSE_S_CONNECT_REND 20
 /** Hidden-service-side circuit purpose: at the service, rendezvous
  * established. */
-#define CIRCUIT_PURPOSE_S_REND_JOINED 17
+#define CIRCUIT_PURPOSE_S_REND_JOINED 21
 /** A testing circuit; not meant to be used for actual traffic. */
-#define CIRCUIT_PURPOSE_TESTING 18
+#define CIRCUIT_PURPOSE_TESTING 22
 /** A controller made this circuit and Tor should not use it. */
-#define CIRCUIT_PURPOSE_CONTROLLER 19
+#define CIRCUIT_PURPOSE_CONTROLLER 23
 /** This circuit is used for path bias probing only */
-#define CIRCUIT_PURPOSE_PATH_BIAS_TESTING 20
-#define CIRCUIT_PURPOSE_MAX_ 20
+#define CIRCUIT_PURPOSE_PATH_BIAS_TESTING 24
+
+
+#define CIRCUIT_PURPOSE_R_INTERMEDIARY 25
+
+#define CIRCUIT_PURPOSE_I_LEDGER 26
+/** ledger circuit on a relay */
+#define CIRCUIT_PURPOSE_R_LEDGER 27
+
+#define CIRCUIT_PURPOSE_MAX_ 27
 /** A catch-all for unrecognized purposes. Currently we don't expect
  * to make or see any circuits with this purpose. */
 #define CIRCUIT_PURPOSE_UNKNOWN 255
@@ -554,15 +572,15 @@ typedef enum {
 #define CIRCUIT_PURPOSE_IS_ORIGIN(p) ((p)>CIRCUIT_PURPOSE_OR_MAX_)
 /** True iff the circuit purpose <b>p</b> is for a circuit that originated
  * here to serve as a client.  (Hidden services don't count here.) */
-#define CIRCUIT_PURPOSE_IS_CLIENT(p)  \
-  ((p)> CIRCUIT_PURPOSE_OR_MAX_ &&    \
+#define CIRCUIT_PURPOSE_IS_CLIENT(p)		\
+  ((p)> CIRCUIT_PURPOSE_OR_MAX_ &&		\
    (p)<=CIRCUIT_PURPOSE_C_MAX_)
 /** True iff the circuit_t <b>c</b> is actually an origin_circuit_t. */
 #define CIRCUIT_IS_ORIGIN(c) (CIRCUIT_PURPOSE_IS_ORIGIN((c)->purpose))
 /** True iff the circuit purpose <b>p</b> is for an established rendezvous
  * circuit. */
-#define CIRCUIT_PURPOSE_IS_ESTABLISHED_REND(p) \
-  ((p) == CIRCUIT_PURPOSE_C_REND_JOINED ||     \
+#define CIRCUIT_PURPOSE_IS_ESTABLISHED_REND(p)	\
+  ((p) == CIRCUIT_PURPOSE_C_REND_JOINED ||	\
    (p) == CIRCUIT_PURPOSE_S_REND_JOINED)
 /** True iff the circuit_t c is actually an or_circuit_t */
 #define CIRCUIT_IS_ORCIRC(c) (((circuit_t *)(c))->magic == OR_CIRCUIT_MAGIC)
@@ -571,8 +589,8 @@ typedef enum {
  * a given stream? */
 #define MIN_CIRCUITS_HANDLING_STREAM 2
 
-/* These RELAY_COMMAND constants define values for relay cell commands, and
-* must match those defined in tor-spec.txt. */
+  /* These RELAY_COMMAND constants define values for relay cell commands, and
+   * must match those defined in tor-spec.txt. */
 #define RELAY_COMMAND_BEGIN 1
 #define RELAY_COMMAND_DATA 2
 #define RELAY_COMMAND_END 3
@@ -598,6 +616,7 @@ typedef enum {
 #define RELAY_COMMAND_INTRO_ESTABLISHED 38
 #define RELAY_COMMAND_RENDEZVOUS_ESTABLISHED 39
 #define RELAY_COMMAND_INTRODUCE_ACK 40
+#define RELAY_COMMAND_MT 41 /*MoneTor payment*/
 
 /* Reasons why an OR connection is closed. */
 #define END_OR_CONN_REASON_DONE           1
@@ -784,7 +803,7 @@ typedef enum {
 
 /** Legal characters for use in authorized client names for a hidden
  * service. */
-#define REND_LEGAL_CLIENTNAME_CHARACTERS \
+#define REND_LEGAL_CLIENTNAME_CHARACTERS				\
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-_"
 
 /** Maximum length of authorized client names for a hidden service. */
@@ -793,6 +812,28 @@ typedef enum {
 /** Length of the rendezvous cookie that is used to connect circuits at the
  * rendezvous point. */
 #define REND_COOKIE_LEN DIGEST_LEN
+
+
+/* identity definition for an intermediary - origin_circuit_t is
+ * going to need it*/
+typedef struct intermediary_identity_t {
+  char identity[DIGEST_LEN];
+} intermediary_identity_t;
+
+typedef enum {
+  MT_PARTY_CLI,
+  MT_PARTY_REL,
+  MT_PARTY_INT,
+  MT_PARTY_AUT,
+  MT_PARTY_LED,
+  MT_PARTY_IDK, /** Style used for _ANY_ messages */
+  MT_PARTY_END,
+} mt_party_t;
+
+typedef struct {
+  uint64_t id[2]; //simulate a 128 bit counter
+  mt_party_t party;
+} mt_desc_t;
 
 /** Client authorization type that a hidden service performs. */
 typedef enum rend_auth_type_t {
@@ -920,6 +961,7 @@ typedef enum {
 #define CELL_CREATE2 10
 #define CELL_CREATED2 11
 #define CELL_PADDING_NEGOTIATE 12
+#define CELL_PAYMENT 13
 
 #define CELL_VPADDING 128
 #define CELL_CERTS 129
@@ -932,7 +974,7 @@ typedef enum {
 #define TIMEOUT_UNTIL_UNREACHABILITY_COMPLAINT (20*60)
 
 /** Legal characters in a nickname. */
-#define LEGAL_NICKNAME_CHARACTERS \
+#define LEGAL_NICKNAME_CHARACTERS					\
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 /** Name to use in client TLS certificates if no nickname is given. Once
@@ -957,6 +999,8 @@ typedef enum {
 
 /** Number of bytes in a cell, minus cell header. */
 #define CELL_PAYLOAD_SIZE 509
+/** Number of bytes in a direct payment cells, minus headers */
+#define CELL_PPAYLOAD_SIZE 506
 /** Number of bytes in a cell transmitted over the network, in the longest
  * form */
 #define CELL_MAX_NETWORK_SIZE 514
@@ -986,6 +1030,10 @@ static inline int get_circ_id_size(int wide_circ_ids)
 #define RELAY_HEADER_SIZE (1+2+2+4+2)
 /** Largest number of bytes that can fit in a relay cell payload. */
 #define RELAY_PAYLOAD_SIZE (CELL_PAYLOAD_SIZE-RELAY_HEADER_SIZE)
+/* Number of bytes in the payment's header */
+#define RELAY_PHEADER_SIZE (1+2)
+/* Largest number of bytes that can fit in a payment cell */
+#define RELAY_PPAYLOAD_SIZE (CELL_PAYLOAD_SIZE-RELAY_PHEADER_SIZE-RELAY_HEADER_SIZE)
 
 /** Identifies a circuit on an or_connection */
 typedef uint32_t circid_t;
@@ -1202,6 +1250,13 @@ typedef struct {
   uint16_t length; /**< How long is the payload body? */
 } relay_header_t;
 
+/** Beginning of a RELAY_PAYMENT cell payload. */
+
+typedef struct {
+  uint8_t pcommand; /** Payment command */
+  uint16_t length; /** How long is the payload */
+} relay_pheader_t;
+
 typedef struct socks_request_t socks_request_t;
 
 typedef struct entry_port_cfg_t {
@@ -1254,7 +1309,7 @@ typedef struct server_port_cfg_t {
 } server_port_cfg_t;
 
 /* Values for connection_t.magic: used to make sure that downcasts (casts from
-* connection_t to foo_connection_t) are safe. */
+ * connection_t to foo_connection_t) are safe. */
 #define BASE_CONNECTION_MAGIC 0x7C3C304Eu
 #define OR_CONNECTION_MAGIC 0x7D31FF03u
 #define EDGE_CONNECTION_MAGIC 0xF0374013u
@@ -1295,13 +1350,13 @@ typedef struct connection_t {
    * connection subtypes, but we hold them here anyway, to save space.
    */
   unsigned int read_blocked_on_bw:1; /**< Boolean: should we start reading
-                            * again once the bandwidth throttler allows it? */
+				      * again once the bandwidth throttler allows it? */
   unsigned int write_blocked_on_bw:1; /**< Boolean: should we start writing
-                             * again once the bandwidth throttler allows
-                             * writes? */
+				       * again once the bandwidth throttler allows
+				       * writes? */
   unsigned int hold_open_until_flushed:1; /**< Despite this connection's being
-                                      * marked for close, do we flush it
-                                      * before closing it? */
+					   * marked for close, do we flush it
+					   * before closing it? */
   unsigned int inbuf_reached_eof:1; /**< Boolean: did read() return 0 on this
                                      * conn? */
   /** Set to 1 when we're inside connection_flushed_some to keep us from
@@ -1384,7 +1439,7 @@ typedef struct connection_t {
   uint32_t n_written_conn_bw;
 } connection_t;
 
-/** Subtype of connection_t; used for a listener socket. */
+  /** Subtype of connection_t; used for a listener socket. */
 typedef struct listener_connection_t {
   connection_t base_;
 
@@ -1598,9 +1653,9 @@ typedef struct or_connection_t {
   channel_tls_t *chan;
 
   tor_addr_t real_addr; /**< The actual address that this connection came from
-                       * or went to.  The <b>addr</b> field is prone to
-                       * getting overridden by the address from the router
-                       * descriptor matching <b>identity_digest</b>. */
+			 * or went to.  The <b>addr</b> field is prone to
+			 * getting overridden by the address from the router
+			 * descriptor matching <b>identity_digest</b>. */
 
   /** Should this connection be used for extending circuits to the server
    * matching the <b>identity_digest</b> field?  Set to true if we're pretty
@@ -1703,9 +1758,9 @@ typedef struct edge_connection_t {
   unsigned int is_reverse_dns_lookup:1;
 
   unsigned int edge_has_sent_end:1; /**< For debugging; only used on edge
-                         * connections.  Set once we've set the stream end,
-                         * and check in connection_about_to_close_connection().
-                         */
+				     * connections.  Set once we've set the stream end,
+				     * and check in connection_about_to_close_connection().
+				     */
   /** True iff we've blocked reading until the circuit has fewer queued
    * cells. */
   unsigned int edge_blocked_on_circ:1;
@@ -1751,8 +1806,8 @@ typedef struct entry_connection_t {
    * retry this connection. */
   struct buf_t *pending_optimistic_data;
   /* For AP connections only: buffer for data that we previously sent
-  * optimistically which we are currently re-sending as we retry this
-  * connection. */
+   * optimistically which we are currently re-sending as we retry this
+   * connection. */
   struct buf_t *sending_optimistic_data;
 
   /** If this is a DNSPort connection, this field holds the pending DNS
@@ -1768,9 +1823,9 @@ typedef struct entry_connection_t {
 
 #define NUM_CIRCUITS_LAUNCHED_THRESHOLD 10
   /** Number of times we've launched a circuit to handle this stream. If
-    * it gets too high, that could indicate an inconsistency between our
-    * "launch a circuit to handle this stream" logic and our "attach our
-    * stream to one of the available circuits" logic. */
+   * it gets too high, that could indicate an inconsistency between our
+   * "launch a circuit to handle this stream" logic and our "attach our
+   * stream to one of the available circuits" logic. */
   unsigned int num_circuits_launched:4;
 
   /** True iff this stream must attach to a one-hop circuit (e.g. for
@@ -1808,12 +1863,12 @@ typedef struct entry_connection_t {
 typedef struct dir_connection_t {
   connection_t base_;
 
- /** Which 'resource' did we ask the directory for? This is typically the part
-  * of the URL string that defines, relative to the directory conn purpose,
-  * what thing we want.  For example, in router descriptor downloads by
-  * descriptor digest, it contains "d/", then one or more +-separated
-  * fingerprints.
-  **/
+  /** Which 'resource' did we ask the directory for? This is typically the part
+   * of the URL string that defines, relative to the directory conn purpose,
+   * what thing we want.  For example, in router descriptor downloads by
+   * descriptor digest, it contains "d/", then one or more +-separated
+   * fingerprints.
+   **/
   char *requested_resource;
   unsigned int dirconn_direct:1; /**< Is this dirconn direct, or via Tor? */
 
@@ -1973,8 +2028,8 @@ typedef struct addr_policy_t {
                                 * copy (stored in a hash table to avoid
                                 * duplication of common policies) */
   maskbits_t maskbits; /**< Accept/reject all addresses <b>a</b> such that the
-                 * first <b>maskbits</b> bits of <b>a</b> match
-                 * <b>addr</b>. */
+			* first <b>maskbits</b> bits of <b>a</b> match
+			* <b>addr</b>. */
   /** Base address to accept or reject.
    *
    * Note that wildcards are treated
@@ -1982,7 +2037,7 @@ typedef struct addr_policy_t {
    * "All addresses, IPv4 or IPv6." An AF_INET address with maskbits==0 means
    * "All IPv4 addresses" and an AF_INET6 address with maskbits == 0 means
    * "All IPv6 addresses".
-  **/
+   **/
   tor_addr_t addr;
   uint16_t prt_min; /**< Lowest port number to accept/reject. */
   uint16_t prt_max; /**< Highest port number to accept/reject. */
@@ -2040,8 +2095,8 @@ typedef enum {
   DL_WANT_ANY_DIRSERVER = 0,
   DL_WANT_AUTHORITY = 1,
 } download_want_authority_t;
-#define download_want_authority_bitfield_t \
-                                        ENUM_BF(download_want_authority_t)
+#define download_want_authority_bitfield_t	\
+  ENUM_BF(download_want_authority_t)
 
 /** Enumeration: do we want to increment the schedule position each time a
  * connection is attempted (these attempts can be concurrent), or do we want
@@ -2050,8 +2105,8 @@ typedef enum {
   DL_SCHED_INCREMENT_FAILURE = 0,
   DL_SCHED_INCREMENT_ATTEMPT = 1,
 } download_schedule_increment_t;
-#define download_schedule_increment_bitfield_t \
-                                        ENUM_BF(download_schedule_increment_t)
+#define download_schedule_increment_bitfield_t	\
+  ENUM_BF(download_schedule_increment_t)
 
 /** Enumeration: do we want to use the random exponential backoff
  * mechanism? */
@@ -2059,8 +2114,8 @@ typedef enum {
   DL_SCHED_DETERMINISTIC = 0,
   DL_SCHED_RANDOM_EXPONENTIAL = 1,
 } download_schedule_backoff_t;
-#define download_schedule_backoff_bitfield_t \
-                                        ENUM_BF(download_schedule_backoff_t)
+#define download_schedule_backoff_bitfield_t	\
+  ENUM_BF(download_schedule_backoff_t)
 
 /** Information about our plans for retrying downloads for a downloadable
  * directory object.
@@ -2101,18 +2156,18 @@ typedef struct download_status_t {
                                               * schedule used for the download.
                                               */
   download_want_authority_bitfield_t want_authority : 1; /**< Is the download
-                                              * happening from an authority
-                                              * or a mirror? This determines
-                                              * the schedule used for the
-                                              * download. */
+							  * happening from an authority
+							  * or a mirror? This determines
+							  * the schedule used for the
+							  * download. */
   download_schedule_increment_bitfield_t increment_on : 1; /**< does this
-                                        * schedule increment on each attempt,
-                                        * or after each failure? */
+							    * schedule increment on each attempt,
+							    * or after each failure? */
   download_schedule_backoff_bitfield_t backoff : 1; /**< do we use the
-                                        * deterministic schedule, or random
-                                        * exponential backoffs?
-                                        * Increment on failure schedules
-                                        * always use exponential backoff. */
+						     * deterministic schedule, or random
+						     * exponential backoffs?
+						     * Increment on failure schedules
+						     * always use exponential backoff. */
   uint8_t last_backoff_position; /**< number of attempts/failures, depending
                                   * on increment_on, when we last recalculated
                                   * the delay.  Only updated if backoff
@@ -2233,6 +2288,10 @@ typedef struct {
 
   unsigned int wants_to_be_hs_dir:1; /**< True iff this router claims to be
                                       * a hidden service directory. */
+  unsigned int wants_to_be_intermediary:1; /** < True iff this router claims
+					       to be an intermediary. */
+  unsigned int wants_to_be_ledger:1;
+
   unsigned int policy_is_reject_star:1; /**< True iff the exit policy for this
                                          * router rejects everything. */
   /** True if, after we have added this router, we should re-launch
@@ -2248,20 +2307,20 @@ typedef struct {
    * this routerinfo. Used only during voting. */
   unsigned int omit_from_vote:1;
 
-/** Tor can use this router for general positions in circuits; we got it
- * from a directory server as usual, or we're an authority and a server
- * uploaded it. */
+  /** Tor can use this router for general positions in circuits; we got it
+   * from a directory server as usual, or we're an authority and a server
+   * uploaded it. */
 #define ROUTER_PURPOSE_GENERAL 0
-/** Tor should avoid using this router for circuit-building: we got it
- * from a crontroller.  If the controller wants to use it, it'll have to
- * ask for it by identity. */
+  /** Tor should avoid using this router for circuit-building: we got it
+   * from a crontroller.  If the controller wants to use it, it'll have to
+   * ask for it by identity. */
 #define ROUTER_PURPOSE_CONTROLLER 1
-/** Tor should use this router only for bridge positions in circuits: we got
- * it via a directory request from the bridge itself, or a bridge
- * authority. x*/
+  /** Tor should use this router only for bridge positions in circuits: we got
+   * it via a directory request from the bridge itself, or a bridge
+   * authority. x*/
 #define ROUTER_PURPOSE_BRIDGE 2
-/** Tor should not use this router; it was marked in cached-descriptors with
- * a purpose we didn't recognize. */
+  /** Tor should not use this router; it was marked in cached-descriptors with
+   * a purpose we didn't recognize. */
 #define ROUTER_PURPOSE_UNKNOWN 255
 
   /* In what way did we find out about this router?  One of ROUTER_PURPOSE_*.
@@ -2305,6 +2364,7 @@ typedef struct routerstatus_t {
   tor_addr_t ipv6_addr; /**< IPv6 address for this router. */
   uint16_t ipv6_orport; /**<IPV6 OR port for this router. */
   unsigned int is_authority:1; /**< True iff this router is an authority. */
+  unsigned int is_ledger:1;
   unsigned int is_exit:1; /**< True iff this router is a good exit. */
   unsigned int is_stable:1; /**< True iff this router stays up a long time. */
   unsigned int is_fast:1; /**< True iff this router has good bandwidth. */
@@ -2312,6 +2372,7 @@ typedef struct routerstatus_t {
    * this funny name so that we don't accidentally use this bit as a view of
    * whether we think the router is *currently* running.  If that's what you
    * want to know, look at is_running in node_t. */
+  unsigned int is_intermediary:1; /**< True iff this router is an intermediary. */
   unsigned int is_flagged_running:1;
   unsigned int is_named:1; /**< True iff "nickname" belongs to this router. */
   unsigned int is_unnamed:1; /**< True iff "nickname" belongs to another
@@ -2359,7 +2420,7 @@ typedef struct routerstatus_t {
                                     * the Unmeasured flag set. */
 
   uint32_t bandwidth_kb; /**< Bandwidth (capacity) of the router as reported in
-                       * the vote/consensus, in kilobytes/sec. */
+			  * the vote/consensus, in kilobytes/sec. */
 
   /** The consensus has guardfraction information for this router. */
   unsigned int has_guardfraction:1;
@@ -2507,6 +2568,8 @@ typedef struct node_t {
   unsigned int is_valid:1; /**< Has a trusted dirserver validated this OR?
                             *  (For Authdir: Have we validated this OR?) */
   unsigned int is_fast:1; /** Do we think this is a fast OR? */
+  unsigned int is_intermediary:1; /** Do we think this is an intermediary? */
+  unsigned int is_ledger:1;
   unsigned int is_stable:1; /** Do we think this is a stable OR? */
   unsigned int is_possible_guard:1; /**< Do we think this is an OK guard? */
   unsigned int is_exit:1; /**< Do we think this is an OK exit? */
@@ -2545,6 +2608,10 @@ typedef struct node_t {
    * in order to know what's the hs directory index for this node at the time
    * the consensus is set. */
   struct hsdir_index_t *hsdir_index;
+  /** Hold a pointer to a valid desc for the guard node*/
+  /* This pointer is NULL for none-used node at the guard position */
+  mt_desc_t* desc;
+
 } node_t;
 
 /** Linked list of microdesc hash lines for a single router in a directory
@@ -2601,7 +2668,7 @@ typedef struct document_signature_t {
   unsigned int bad_signature : 1; /**< Set to true if we've tried to verify
                                    * the sig, and we know it's bad. */
   unsigned int good_signature : 1; /**< Set to true if we've verified the sig
-                                     * as good. */
+				    * as good. */
 } document_signature_t;
 
 /** Information about a single voter in a vote or a consensus. */
@@ -2818,6 +2885,7 @@ typedef struct extend_info_t {
   tor_addr_t addr; /**< IP address. */
   crypto_pk_t *onion_key; /**< Current onionskin key. */
   curve25519_public_key_t curve25519_onion_key;
+  int retries;
 } extend_info_t;
 
 /** Certificate for v3 directory protocol: binds long-term authority identity
@@ -2878,6 +2946,61 @@ typedef struct {
     struct ntor_handshake_state_t *ntor;
   } u;
 } onion_handshake_state_t;
+
+
+typedef enum {
+  MIDDLE,
+  EXIT,
+  ALLPOS,
+} position_t;
+
+/** Holds information for payment to perform on circuit
+ *  Define also a double linked-list for all nodes within
+ *  the circuit
+ *  Each origin_circuit_t* should own such a structure */
+
+typedef struct pay_path_t {
+
+  /* Intermediary handling current hop */
+  intermediary_identity_t *inter_ident;
+
+  /* payment marked for close
+   * This may happen if :
+   *  - something went wrong with the establishement
+   *  - if the intermediary inter_ident is not reachable
+   *    anymore
+   * */
+  unsigned int p_marked_for_close : 1;
+
+  unsigned int p_has_closed : 1;
+
+  unsigned int last_mt_cpay_succeeded : 1;
+
+  unsigned int first_payment_succeeded : 1;
+  /** Tell whether we already called a mt_cpay_pay */
+  unsigned int payment_is_processing : 1;
+  /* Position type of the current hop */
+  position_t position;
+  /* Used to keep track of number of cells we can send/receive
+   * before launching a next nano-payment*/
+  int window;
+
+  /*Whether or not the payment channel has been established*/
+  unsigned int is_microchannel_established : 1;
+  /*How many times we retry to establish the channel */
+  uint32_t channel_retries;
+
+  /* Payment descriptor for the relay at that hop*/
+  mt_desc_t desc;
+
+  /*buf containing cell payloads if we need multiple
+   * cells for a mt_type_t */
+  struct buf_t *buf;
+
+  struct pay_path_t *next;
+  struct pay_path_t *prev;
+} pay_path_t;
+
 
 /** Holds accounting information for a single step in the layered encryption
  * performed by a circuit.  Used only at the client edge of a circuit. */
@@ -3081,6 +3204,13 @@ typedef struct circuit_t {
    * circuit-level sendme cells to indicate that we're willing to accept
    * more. */
   int deliver_window;
+  /** Used on relay side to keep track of
+   *  payment */
+  int payment_window;
+  /**
+   * Set to 1 when we prioritize this circuit
+   */
+  uint32_t mt_priority;
 
   /** Temporary field used during circuits_handle_oom. */
   uint32_t age_tmp;
@@ -3184,44 +3314,44 @@ typedef struct circuit_t {
  * #6475 and #7802.
  */
 typedef enum {
-    /** This circuit is "new". It has not yet completed a first hop
-     * or been counted by the path bias code. */
-    PATH_STATE_NEW_CIRC = 0,
-    /** This circuit has completed one/two hops, and has been counted by
-     * the path bias logic. */
-    PATH_STATE_BUILD_ATTEMPTED = 1,
-    /** This circuit has been completely built */
-    PATH_STATE_BUILD_SUCCEEDED = 2,
-    /** Did we try to attach any SOCKS streams or hidserv introductions to
-      * this circuit?
-      *
-      * Note: If we ever implement end-to-end stream timing through test
-      * stream probes (#5707), we must *not* set this for those probes
-      * (or any other automatic streams) because the adversary could
-      * just tag at a later point.
-      */
-    PATH_STATE_USE_ATTEMPTED = 3,
-    /** Did any SOCKS streams or hidserv introductions actually succeed on
-      * this circuit?
-      *
-      * If any streams detatch/fail from this circuit, the code transitions
-      * the circuit back to PATH_STATE_USE_ATTEMPTED to ensure we probe. See
-      * pathbias_mark_use_rollback() for that.
-      */
-    PATH_STATE_USE_SUCCEEDED = 4,
+  /** This circuit is "new". It has not yet completed a first hop
+   * or been counted by the path bias code. */
+  PATH_STATE_NEW_CIRC = 0,
+  /** This circuit has completed one/two hops, and has been counted by
+   * the path bias logic. */
+  PATH_STATE_BUILD_ATTEMPTED = 1,
+  /** This circuit has been completely built */
+  PATH_STATE_BUILD_SUCCEEDED = 2,
+  /** Did we try to attach any SOCKS streams or hidserv introductions to
+   * this circuit?
+   *
+   * Note: If we ever implement end-to-end stream timing through test
+   * stream probes (#5707), we must *not* set this for those probes
+   * (or any other automatic streams) because the adversary could
+   * just tag at a later point.
+   */
+  PATH_STATE_USE_ATTEMPTED = 3,
+  /** Did any SOCKS streams or hidserv introductions actually succeed on
+   * this circuit?
+   *
+   * If any streams detatch/fail from this circuit, the code transitions
+   * the circuit back to PATH_STATE_USE_ATTEMPTED to ensure we probe. See
+   * pathbias_mark_use_rollback() for that.
+   */
+  PATH_STATE_USE_SUCCEEDED = 4,
 
-    /**
-     * This is a special state to indicate that we got a corrupted
-     * relay cell on a circuit and we don't intend to probe it.
-     */
-    PATH_STATE_USE_FAILED = 5,
+  /**
+   * This is a special state to indicate that we got a corrupted
+   * relay cell on a circuit and we don't intend to probe it.
+   */
+  PATH_STATE_USE_FAILED = 5,
 
-    /**
-     * This is a special state to indicate that we already counted
-     * the circuit. Used to guard against potential state machine
-     * violations.
-     */
-    PATH_STATE_ALREADY_COUNTED = 6,
+  /**
+   * This is a special state to indicate that we already counted
+   * the circuit. Used to guard against potential state machine
+   * violations.
+   */
+  PATH_STATE_ALREADY_COUNTED = 6,
 } path_state_t;
 #define path_state_bitfield_t ENUM_BF(path_state_t)
 
@@ -3261,6 +3391,27 @@ typedef struct origin_circuit_t {
   /** Holds hidden service identifier on either client or service side. This
    * is for both introduction and rendezvous circuit. */
   struct hs_ident_circuit_t *hs_ident;
+
+  /** Holds intermediary identifier. Works for circuit created by relay
+   *  for circuit created by clients
+   *  Only for intermediary circuits*/
+  intermediary_identity_t *inter_ident;
+
+  /**
+   * Typicall for General circuits: hold a pay_path_t structure to
+   * handle payment made through this very circuit
+   */
+  pay_path_t *ppath;
+
+  /** Used for ledger circuits at the relay
+   * As well as for ledger circs at the client and the intermediary */
+  mt_desc_t desc;
+
+  mt_desc_t *desci;
+
+  /** buffer used for intermediary circuits and ledger circuits
+   * on client, intermediary and relay */
+  struct buf_t *buf;
 
   /** Holds the data that the entry guard system uses to track the
    * status of the guard this circuit is using, and thereby to determine
@@ -3510,6 +3661,27 @@ typedef struct or_circuit_t {
    * to zero, it is initialized to the default value.
    */
   uint32_t max_middle_cells;
+  /**
+   * Contains the mt_desc_t to give to the payment module when
+   * we receive a payment cell over an intermerdiary or over a relay.
+   * This cell is has been sent by a Tor client
+   */
+  mt_desc_t desc;
+
+  /**
+   * Contains a pointer to a pointer of an existing intermediary descriptor
+   */
+  mt_desc_t **desci;
+
+  /**
+   * Set to 1 when we receive the first payment cell */
+
+  unsigned int circuit_received_first_payment_cell : 1;
+
+  /*
+   * Contains buffering that received on that circuit
+   * if this is a CIRCUIT_PURPOSE_INTERMEDIARY */
+  struct buf_t *buf;
 } or_circuit_t;
 
 #if REND_COOKIE_LEN != DIGEST_LEN
@@ -3553,7 +3725,7 @@ static inline origin_circuit_t *TO_ORIGIN_CIRCUIT(circuit_t *x)
   return DOWNCAST(origin_circuit_t, x);
 }
 static inline const origin_circuit_t *CONST_TO_ORIGIN_CIRCUIT(
-    const circuit_t *x)
+							      const circuit_t *x)
 {
   tor_assert(x->magic == ORIGIN_CIRCUIT_MAGIC);
   return DOWNCAST(origin_circuit_t, x);
@@ -3652,7 +3824,7 @@ typedef struct {
   int LogMessageDomains; /**< Boolean: Should we log the domain(s) in which
                           * each log message occurs? */
   int TruncateLogFile; /**< Boolean: Should we truncate the log file
-                            before we start writing? */
+			  before we start writing? */
   char *SyslogIdentityTag; /**< Identity tag to add for syslog logging. */
 
   char *DebugLogFile; /**< Where to send verbose log messages. */
@@ -3733,11 +3905,11 @@ typedef struct {
     TPT_TPROXY,
   } TransProxyType_parsed;
   config_line_t *NATDPort_lines; /**< Ports to listen on for transparent natd
-                            * connections. */
+				  * connections. */
   /** Ports to listen on for HTTP Tunnel connections. */
   config_line_t *HTTPTunnelPort_lines;
   config_line_t *ControlPort_lines; /**< Ports to listen on for control
-                               * connections. */
+				     * connections. */
   config_line_t *ControlSocket; /**< List of Unix Domain Sockets to listen on
                                  * for control connections. */
 
@@ -3751,7 +3923,7 @@ typedef struct {
    * MaxMemInQueues. */
   uint64_t MaxMemInQueues_raw;
   uint64_t MaxMemInQueues;/**< If we have more memory than this allocated
-                            * for queues and buffers, run the OOM handler */
+			   * for queues and buffers, run the OOM handler */
   /** Above this value, consider ourselves low on RAM. */
   uint64_t MaxMemInQueues_low_threshold;
 
@@ -3828,8 +4000,8 @@ typedef struct {
   int ClientOnly; /**< Boolean: should we never evolve into a server role? */
 
   int ReducedConnectionPadding; /**< Boolean: Should we try to keep connections
-                                  open shorter and pad them less against
-                                  connection-level traffic analysis? */
+				   open shorter and pad them less against
+				   connection-level traffic analysis? */
   /** Autobool: if auto, then connection padding will be negotiated by client
    * and server. If 0, it will be fully disabled. If 1, the client will still
    * pad to the server regardless of server support. */
@@ -3941,7 +4113,7 @@ typedef struct {
                             * least this many seconds ago. Used until
                             * adaptive algorithm learns a new value. */
   int CircuitsAvailableTimeout; /**< Try to have an open circuit for at
-                                     least this long after last activity */
+				   least this long after last activity */
   int CircuitStreamTimeout; /**< If non-zero, detach streams from circuits
                              * and try a new circuit if the stream has been
                              * waiting for this many seconds. If zero, use
@@ -3950,7 +4122,7 @@ typedef struct {
   int NewCircuitPeriod; /**< How long do we use a circuit before building
                          * a new one? */
   int MaxCircuitDirtiness; /**< Never use circs that were first used more than
-                                this interval ago. */
+			      this interval ago. */
   uint64_t BandwidthRate; /**< How much bandwidth, on average, are we willing
                            * to use in a second? */
   uint64_t BandwidthBurst; /**< How much bandwidth, at maximum, are we willing
@@ -3958,14 +4130,14 @@ typedef struct {
   uint64_t MaxAdvertisedBandwidth; /**< How much bandwidth are we willing to
                                     * tell other nodes we have? */
   uint64_t RelayBandwidthRate; /**< How much bandwidth, on average, are we
-                                 * willing to use for all relayed conns? */
+				* willing to use for all relayed conns? */
   uint64_t RelayBandwidthBurst; /**< How much bandwidth, at maximum, will we
                                  * use in a second for all relayed conns? */
   uint64_t PerConnBWRate; /**< Long-term bw on a single TLS conn, if set. */
   uint64_t PerConnBWBurst; /**< Allowed burst on a single TLS conn, if set. */
   int NumCPUs; /**< How many CPUs should we try to use? */
   config_line_t *RendConfigLines; /**< List of configuration lines
-                                          * for rendezvous services. */
+				   * for rendezvous services. */
   config_line_t *HidServAuth; /**< List of configuration lines for client-side
                                * authorizations for hidden services */
   char *ContactInfo; /**< Contact info to be published in the directory. */
@@ -4075,13 +4247,13 @@ typedef struct {
   char *CookieAuthFile; /**< Filesystem location of a ControlPort
                          *   authentication cookie. */
   char *ExtORPortCookieAuthFile; /**< Filesystem location of Extended
-                                 *   ORPort authentication cookie. */
+				  *   ORPort authentication cookie. */
   int CookieAuthFileGroupReadable; /**< Boolean: Is the CookieAuthFile g+r? */
   int ExtORPortCookieAuthFileGroupReadable; /**< Boolean: Is the
                                              * ExtORPortCookieAuthFile g+r? */
   int LeaveStreamsUnattached; /**< Boolean: Does Tor attach new streams to
-                          * circuits itself (0), or does it expect a controller
-                          * to cope? (1) */
+			       * circuits itself (0), or does it expect a controller
+			       * to cope? (1) */
   int DisablePredictedCircuits; /**< Boolean: does Tor preemptively
                                  * make circuits in the background (0),
                                  * or not (1)? */
@@ -4129,6 +4301,11 @@ typedef struct {
    * decide. */
   int UseGuardFraction;
 
+  /** If 1, the client can pay to get prioritization, relay can handle
+   *  payment and Intermediary can be set to 1
+   */
+  int EnablePayment;
+
   int NumDirectoryGuards; /**< How many dir guards do we try to establish?
                            * If 0, use value from NumEntryGuards. */
   int RephistTrackTime; /**< How many seconds do we keep rephist info? */
@@ -4143,26 +4320,28 @@ typedef struct {
                  * tunnelled dir conns from clients. If 1, enabled (default);
                  * If 0, disabled. */
 
+  int Ledger; /** Used to tell if this dirauth is going to be the ledger */
+
   char *VirtualAddrNetworkIPv4; /**< Address and mask to hand out for virtual
                                  * MAPADDRESS requests for IPv4 addresses */
   char *VirtualAddrNetworkIPv6; /**< Address and mask to hand out for virtual
                                  * MAPADDRESS requests for IPv6 addresses */
   int ServerDNSSearchDomains; /**< Boolean: If set, we don't force exit
-                      * addresses to be FQDNs, but rather search for them in
-                      * the local domains. */
+			       * addresses to be FQDNs, but rather search for them in
+			       * the local domains. */
   int ServerDNSDetectHijacking; /**< Boolean: If true, check for DNS failure
                                  * hijacking. */
   int ServerDNSRandomizeCase; /**< Boolean: Use the 0x20-hack to prevent
                                * DNS poisoning attacks. */
   char *ServerDNSResolvConfFile; /**< If provided, we configure our internal
-                     * resolver from the file here rather than from
-                     * /etc/resolv.conf (Unix) or the registry (Windows). */
+				  * resolver from the file here rather than from
+				  * /etc/resolv.conf (Unix) or the registry (Windows). */
   char *DirPortFrontPage; /**< This is a full path to a file with an html
-                    disclaimer. This allows a server administrator to show
-                    that they're running Tor and anyone visiting their server
-                    will know this without any specialized knowledge. */
+			     disclaimer. This allows a server administrator to show
+			     that they're running Tor and anyone visiting their server
+			     will know this without any specialized knowledge. */
   int DisableDebuggerAttachment; /**< Currently Linux only specific attempt to
-                                      disable ptrace; needs BSD testing. */
+				    disable ptrace; needs BSD testing. */
   /** Boolean: if set, we start even if our resolv.conf file is missing
    * or broken. */
   int ServerDNSAllowBrokenConfig;
@@ -4623,6 +4802,10 @@ typedef struct {
   /** Bool (default: 0): Tells if a %include was used on torrc */
   int IncludeUsed;
 
+  /** Bool (default: 0): Relay has an intermediary role if enabled */
+
+  int Intermediary;
+
   /** The seconds after expiration which we as a relay should keep old
    * consensuses around so that we can generate diffs from them.  If 0,
    * use the default. */
@@ -4675,6 +4858,22 @@ typedef struct {
 
   /** Autobool: Do we refuse single hop client rendezvous? */
   int DoSRefuseSingleHopClientRendezvous;
+  /* Used for testing purposes to signal that money can be publically created */
+  int MoneTorPublicMint;
+
+  /* Enforce single thread (i.e. non-current or blocking) mode for zkp calculations */
+  int MoneTorSingleThread;
+
+  /* Enforce single core (i.e. no parallel computations) mode for zkp calculations */
+  int MoneTorSingleCore;
+
+  /* Set value for how much moneTor prioritized paid traffic */
+  double MoneTorPriorityMod;
+
+  int MoneTorPaymentRate;
+
+  int MoneTorInitialWindow;
+
 } or_options_t;
 
 #define LOG_PROTOCOL_WARN (get_protocol_warning_severity_level())
@@ -4775,7 +4974,7 @@ static inline void or_state_mark_dirty(or_state_t *state, time_t when)
 
 /* || 0 is for -Wparentheses-equality (-Wall?) appeasement under clang */
 #define SOCKS_COMMAND_IS_CONNECT(c) (((c)==SOCKS_COMMAND_CONNECT) || 0)
-#define SOCKS_COMMAND_IS_RESOLVE(c) ((c)==SOCKS_COMMAND_RESOLVE || \
+#define SOCKS_COMMAND_IS_RESOLVE(c) ((c)==SOCKS_COMMAND_RESOLVE ||	\
                                      (c)==SOCKS_COMMAND_RESOLVE_PTR)
 
 /** State of a SOCKS request from a user to an OP.  Also used to encode other
@@ -4796,17 +4995,17 @@ struct socks_request_t {
   uint8_t listener_type;
   size_t replylen; /**< Length of <b>reply</b>. */
   uint8_t reply[MAX_SOCKS_REPLY_LEN]; /**< Write an entry into this string if
-                                    * we want to specify our own socks reply,
-                                    * rather than using the default socks4 or
-                                    * socks5 socks reply. We use this for the
-                                    * two-stage socks5 handshake.
-                                    */
+				       * we want to specify our own socks reply,
+				       * rather than using the default socks4 or
+				       * socks5 socks reply. We use this for the
+				       * two-stage socks5 handshake.
+				       */
   char address[MAX_SOCKS_ADDR_LEN]; /**< What address did the client ask to
                                        connect to/resolve? */
   uint16_t port; /**< What port did the client ask to connect to? */
   unsigned int has_finished : 1; /**< Has the SOCKS handshake finished? Used to
-                              * make sure we send back a socks reply for
-                              * every connection. */
+				  * make sure we send back a socks reply for
+				  * every connection. */
   unsigned int got_auth : 1; /**< Have we received any authentication data? */
   /** If this is set, we will choose "no authentication" instead of
    * "username/password" authentication if both are offered. Used as input to
@@ -5036,16 +5235,16 @@ typedef enum buildtimeout_set_event_t {
  *
  * Stmt must not contain any return or goto statements.
  */
-#define CONN_LOG_PROTECT(conn, stmt)                                    \
-  STMT_BEGIN                                                            \
-    int _log_conn_is_control;                                           \
-    tor_assert(conn);                                                   \
-    _log_conn_is_control = (conn->type == CONN_TYPE_CONTROL);           \
-    if (_log_conn_is_control)                                           \
-      disable_control_logging();                                        \
-  STMT_BEGIN stmt; STMT_END;                                            \
-    if (_log_conn_is_control)                                           \
-      enable_control_logging();                                         \
+#define CONN_LOG_PROTECT(conn, stmt)				\
+  STMT_BEGIN							\
+  int _log_conn_is_control;					\
+  tor_assert(conn);						\
+  _log_conn_is_control = (conn->type == CONN_TYPE_CONTROL);	\
+  if (_log_conn_is_control)					\
+    disable_control_logging();					\
+  STMT_BEGIN stmt; STMT_END;					\
+  if (_log_conn_is_control)					\
+    enable_control_logging();					\
   STMT_END
 
 /** Enum describing various stages of bootstrapping, for use with controller
@@ -5169,11 +5368,11 @@ typedef enum {
   /** END cell sent to circuit that initiated a tunneled request. */
   DIRREQ_END_CELL_SENT = 2,
   /** Flushed last cell from queue of the circuit that initiated a
-    * tunneled request to the outbuf of the OR connection. */
+   * tunneled request to the outbuf of the OR connection. */
   DIRREQ_CIRC_QUEUE_FLUSHED = 3,
   /** Flushed last byte from buffer of the channel belonging to the
-    * circuit that initiated a tunneled request; completes a tunneled
-    * request. */
+   * circuit that initiated a tunneled request; completes a tunneled
+   * request. */
   DIRREQ_CHANNEL_BUFFER_FLUSHED = 4
 } dirreq_state_t;
 
@@ -5252,7 +5451,7 @@ typedef struct rend_encoded_v2_service_descriptor_t {
  * expire. */
 #define INTRO_POINT_MIN_LIFETIME_INTRODUCTIONS 16384
 /* Double the minimum value so the interval is [min, min * 2]. */
-#define INTRO_POINT_MAX_LIFETIME_INTRODUCTIONS \
+#define INTRO_POINT_MAX_LIFETIME_INTRODUCTIONS	\
   (INTRO_POINT_MIN_LIFETIME_INTRODUCTIONS * 2)
 
 /** The minimum number of seconds that an introduction point will last
@@ -5280,7 +5479,7 @@ typedef struct rend_intro_point_t {
   extend_info_t *extend_info; /**< Extend info for connecting to this
                                * introduction point via a multi-hop path. */
   crypto_pk_t *intro_key; /**< Introduction key that replaces the service
-                               * key, if this descriptor is V2. */
+			   * key, if this descriptor is V2. */
 
   /** (Client side only) Flag indicating that a timeout has occurred
    * after sending an INTRODUCE cell to this intro point.  After a
@@ -5382,6 +5581,7 @@ typedef struct dir_server_t {
   unsigned int is_running:1; /**< True iff we think this server is running. */
   unsigned int is_authority:1; /**< True iff this is a directory authority
                                 * of some kind. */
+  //unsigned int is_ledger:1; [>* < True iff this server is the ledger. <]
 
   /** True iff this server has accepted the most recent server descriptor
    * we tried to upload to it. */
@@ -5438,8 +5638,12 @@ typedef struct dir_server_t {
 /** Possible ways to weight routers when choosing one randomly.  See
  * routerlist_sl_choose_by_bandwidth() for more information.*/
 typedef enum bandwidth_weight_rule_t {
-  NO_WEIGHTING, WEIGHT_FOR_EXIT, WEIGHT_FOR_MID, WEIGHT_FOR_GUARD,
-  WEIGHT_FOR_DIR
+  NO_WEIGHTING,
+  WEIGHT_FOR_EXIT,
+  WEIGHT_FOR_MID,
+  WEIGHT_FOR_GUARD,
+  WEIGHT_FOR_DIR,
+  WEIGHT_FOR_INTERMEDIARY,
 } bandwidth_weight_rule_t;
 
 /** Flags to be passed to control router_choose_random_node() to indicate what
@@ -5459,6 +5663,8 @@ typedef enum {
   /* On clients, only provide nodes with HSRend >= 2 protocol version which
    * is required for hidden service version >= 3. */
   CRN_RENDEZVOUS_V3 = 1<<9,
+  CRN_NEED_INTERMEDIARY = 1<<10,
+  CRN_NEED_LEDGER = 1<<11,
 } router_crn_flags_t;
 
 /** Return value for router_add_to_routerlist() and dirserv_add_descriptor() */
@@ -5513,5 +5719,705 @@ typedef struct tor_version_t {
   char git_tag[DIGEST_LEN];
 } tor_version_t;
 
-#endif /* !defined(TOR_OR_H) */
+/***************************** MoneTor **********************************/
 
+typedef enum {
+
+  /**
+   * Signal that the last mt_cpay_pay to the given relay desc was successful. Do
+   * not call mt_cpay_pay again until either this signal (or
+   * MT_SIGNAL_PAY_FAILURE) is broadcasted
+   */
+  MT_SIGNAL_PAYMENT_SUCCESS,
+
+  /**
+   * Signal that the last mt_cpay_pay to the given relay desc failed
+   */
+  MT_SIGNAL_PAYMENT_FAILURE,
+
+  /**
+   * Signal that the last mt_cpay_close to the given relay desc was
+   * successful. Do not call mt_cpay_close again until either this signal (or
+   * MT_SIGNAL_PAY_FAILURE) is broadcasted
+   *
+   * XXX Thien-Nan: I cannot call mt_cpay_close on desc1 and on desc2 at the same time?
+   */
+  MT_SIGNAL_CLOSE_SUCCESS,
+
+  /**
+   * Signal that the last mt_cpay_close to the given relay desc failed
+   */
+  MT_SIGNAL_CLOSE_FAILURE,
+
+  /**
+   * Signal to a relay controller that a client has initiated a payment
+   * protocol. The controller pre-emptively begin prioritizing traffic at this
+   * point as an act of trust even though an irrevocable payment has not yet
+   * been received.
+   */
+  MT_SIGNAL_PAYMENT_INITIALIZED,
+
+  /**
+   * Signal to a relay controller that a real, irrevocabl payment has been
+   * received by a client. The relay should continue prioritizing traffic from
+   * this client with confidence.
+   */
+  MT_SIGNAL_PAYMENT_RECEIVED,
+
+  /**
+   * Signal to an end user that there are no active nanopayment channels left
+   * with the intermediary in case the end user is inclined to close the
+   * circuit.
+   */
+  MT_SIGNAL_INTERMEDIARY_IDLE,
+
+} mt_signal_t;
+
+//XXX MoneTor merging moneTor enum & co here
+
+typedef unsigned char byte;
+
+// local return codes indicating return value success
+#define MT_SUCCESS 0
+#define MT_ERROR -1
+
+// network codes used for assorted purposes
+typedef enum {
+  MT_CODE_VERIFIED,
+  MT_CODE_REFUND,
+  MT_CODE_ACCEPT,
+  MT_CODE_REVOCATION,
+  MT_CODE_REQCLOSE,
+  MT_CODE_CLOSED,
+  MT_CODE_ESTABLISH,
+  MT_CODE_SUCCESS,
+  MT_CODE_FAILURE,
+  MT_CODE_READY,
+  MT_CODE_ESTABLISHED,
+  MT_CODE_DESTABLISHED,
+} mt_code_t;
+
+// relay roles for logging purposes; may be redudant with internal Tor
+// defs but oh well
+#define MT_GUARD 1
+#define MT_MIDDLE 2
+#define MT_EXIT 3
+
+//-------------------------- Public Payment Parameters ----------------------//
+
+#define MT_FEE 5
+#define MT_TAX 5
+#define MT_WINDOW 5
+
+#define MT_FAUCET_VAL 2147483647
+#define MT_NAN_VAL 100
+#define MT_NAN_LEN 1000
+#define MT_CHN_VAL_CLI 105 * 1000 * 100
+#define MT_CHN_VAL_REL 0
+#define MT_CHN_VAL_INT 200 * 1000 * 100
+
+//-------------------- Cryptographic String Sizes (bytes) -------------------//
+
+#define MT_SZ_HASH 32
+#define MT_SZ_PK 273
+#define MT_SZ_SK 893
+#define MT_SZ_SIG 128
+#define MT_SZ_COM 128
+
+#define MT_SZ_BL 128
+#define MT_SZ_UBLR 128
+#define MT_SZ_UBLD 128
+
+#define MT_SZ_PP 128
+#define MT_SZ_ZKP 128
+
+#define MT_SZ_ADDR DIGEST_LEN
+
+//---------------------------- Controller States ----------------------------//
+
+// possible states for micropayment channels on the ledger
+typedef enum {
+  MT_LSTATE_EMPTY,                  // channel has not yet been initialized
+  MT_LSTATE_INIT,                   // channel initialized by the end user
+  MT_LSTATE_OPEN,                   // channel is open (payments can be sent)
+  MT_LSTATE_INT_REQCLOSED,          // channel closure request sent by intermediary
+  MT_LSTATE_END_CLOSED,             // channel closed by end user
+  MT_LSTATE_INT_CLOSED,             // channel closed by both parties
+  MT_LSTATE_RESOLVED,               // final channel balances are set
+} mt_lstate_t;
+
+// possible states of the nanopayment channel on a general circuit
+
+typedef enum {
+  MT_NPSTATE_NONE,
+  MT_NPSTATE_INIT,
+  MT_NPSTATE_OPENED,
+  MT_NPSTATE_CLOSED,
+} mt_npstate_t;
+
+//----------------------------- Token Types ---------------------------------//
+
+/**
+ * High-level token structures housing the information necessary to operate the
+ * moneTor payment scheme. Most have 1:1 correlations with symbols in the formal
+ * protocol algorithm documentation. The following conventions are maintained:
+ *
+ * prefix 1: token type
+ *     mic - pertains to micropayments only
+ *     nan - pertains to nanopayments only
+ *     chn - pertains to both nano and micropayments
+ *     mac - macropayments (normal transfers on the ledger)
+ *
+ * prefix 2: party
+ *     end - end user (Tor client or relay)
+ *     cli - Tor client
+ *     rel - Tor relay
+ *     int - intermediary
+ *     any - any party (either end user or intermediary)
+ *     aut - Tor authority
+ *     led - ledger
+ */
+
+/**
+ * Locally maintained tokens that are never sent directly over the network
+ */
+typedef enum {
+  MT_LTYPE_CHN_END_REVOCATION,      // end user revocation of a wallet/nano channel
+
+  MT_LTYPE_CHN_INT_STATE,       // intermediary micropayment state
+  MT_LTYPE_CHN_END_WALLET,      // end user micropayment secrets
+  MT_LTYPE_CHN_INT_WALLET,      // int micropayment secrets
+  MT_LTYPE_NAN_INT_STATE,       // end user nanopayment state
+  MT_LTYPE_NAN_END_STATE,       // intermediary nanopayment state
+  MT_LTYPE_NAN_END_WALLET,      // end user nanopayment secrets
+
+  MT_LTYPE_CHN_END_PUBLIC,      // end user micropayment channel token
+  MT_LTYPE_CHN_INT_PUBLIC,      // intermediary micropayment channel token
+  MT_LTYPE_NAN_ANY_PUBLIC,      // nanopayment channel token
+  MT_LTYPE_CHN_END_REFUND,      // end user nanopayment refund token
+
+  MT_LTYPE_CHN_END_DATA,        // info to maintain channel for end user
+  MT_LTYPE_CHN_INT_DATA,        // info to maintain channel for intermediary
+
+  MT_LTYPE_ANY_LED_RECEIPT,     // receipt for a ledger operation
+} mt_ltype_t;
+
+/**
+ * Tokens that need to be sent across the network at one point or another
+ */
+typedef enum {
+
+  // channel establish protocol messages
+  MT_NTYPE_CHN_END_ESTAB1,      // to intermediary
+  MT_NTYPE_CHN_INT_ESTAB2,      // to end user
+  MT_NTYPE_CHN_END_ESTAB3,      // to intermediary
+  MT_NTYPE_CHN_INT_ESTAB4,      // to end user
+
+  // micropayment pay protocol messages
+  MT_NTYPE_MIC_CLI_PAY1,	       // to relay
+  MT_NTYPE_MIC_REL_PAY2,	       // to client
+  MT_NTYPE_MIC_CLI_PAY3,	       // to intermediary
+  MT_NTYPE_MIC_INT_PAY4,	       // to client
+  MT_NTYPE_MIC_CLI_PAY5,	       // to relay
+  MT_NTYPE_MIC_REL_PAY6,	       // to intermediary
+  MT_NTYPE_MIC_INT_PAY7,	       // to client
+  MT_NTYPE_MIC_INT_PAY8,	       // to relay
+
+  // nanopayment setup protocol messages
+  MT_NTYPE_NAN_CLI_SETUP1,      // to intermediary
+  MT_NTYPE_NAN_INT_SETUP2,      // to client
+  MT_NTYPE_NAN_CLI_SETUP3,      // to intermediary
+  MT_NTYPE_NAN_INT_SETUP4,      // to client
+  MT_NTYPE_NAN_CLI_SETUP5,      // to intermediary
+  MT_NTYPE_NAN_INT_SETUP6,      // to client
+
+  // direct payment establish protocol messages
+  MT_NTYPE_NAN_CLI_DESTAB1,     // to intermediary
+  MT_NTYPE_NAN_INT_DESTAB2,     // to client
+
+  // direct payment protocol messages
+  MT_NTYPE_NAN_CLI_DPAY1,     // to intermediary
+  MT_NTYPE_NAN_INT_DPAY2,     // to client
+
+  // nanopayment establish protocol messages
+  MT_NTYPE_NAN_CLI_ESTAB1,      // to relay
+  MT_NTYPE_NAN_REL_ESTAB2,      // to intermediary
+  MT_NTYPE_NAN_INT_ESTAB3,      // to relay
+  MT_NTYPE_NAN_REL_ESTAB4,      // to intermediary
+  MT_NTYPE_NAN_INT_ESTAB5,      // to relay
+  MT_NTYPE_NAN_REL_ESTAB6,      // to client
+
+  // nanopayment pay protocol messages
+  MT_NTYPE_NAN_CLI_PAY1,	// to relay
+  MT_NTYPE_NAN_REL_PAY2,        // to client
+
+  // special protocol for a client to request nanopayment closure
+  MT_NTYPE_NAN_CLI_REQCLOSE1,    // to relay
+  MT_NTYPE_NAN_REL_REQCLOSE2,   // to client
+
+  // nanopayment close protocol messages
+  MT_NTYPE_NAN_END_CLOSE1,      // to intermediary
+  MT_NTYPE_NAN_INT_CLOSE2,      // to end user
+  MT_NTYPE_NAN_END_CLOSE3,      // to intermediary
+  MT_NTYPE_NAN_INT_CLOSE4,      // to end user
+  MT_NTYPE_NAN_END_CLOSE5,      // to intermediary
+  MT_NTYPE_NAN_INT_CLOSE6,      // to end user
+  MT_NTYPE_NAN_END_CLOSE7,      // to intermediary
+  MT_NTYPE_NAN_INT_CLOSE8,      // to end user
+
+  // tokens for posting to the ledger
+  MT_NTYPE_MAC_AUT_MINT,        // message by tor authority to mint coins
+  MT_NTYPE_MAC_ANY_TRANS,       // macropayment transaction
+  MT_NTYPE_CHN_END_SETUP,       // end user escrow transaction
+  MT_NTYPE_CHN_INT_SETUP,       // intermediary escrow transaction
+  MT_NTYPE_CHN_INT_REQCLOSE,    // intermediary msg to request a user closure
+  MT_NTYPE_CHN_END_CLOSE,       // end user microchannel closure message
+  MT_NTYPE_CHN_INT_CLOSE,       // intermediary microchannel closure message
+  MT_NTYPE_CHN_END_CASHOUT,     // cash out of closed channel
+  MT_NTYPE_CHN_INT_CASHOUT,     // cash out of closed channel
+  MT_NTYPE_ANY_LED_CONFIRM,      // intermediary response to confirm escrow
+
+
+  // tokens for querying the ledger
+  MT_NTYPE_MAC_LED_DATA,        // macropayment ledger data mapped to an address
+  MT_NTYPE_CHN_LED_DATA,        // channel ledger data mapped to an address
+  MT_NTYPE_MAC_LED_QUERY,       // request to query macropayment data
+  MT_NTYPE_CHN_LED_QUERY,       // request to query channel data
+
+} mt_ntype_t;
+
+//----------------------------- Local Tokens --------------------------------//
+
+
+typedef struct {
+  char identity[DIGEST_LEN];
+} int_id_t;
+
+typedef struct {
+  mt_ntype_t type;
+  int val;
+  byte from[MT_SZ_ADDR];
+  byte to[MT_SZ_ADDR];
+  byte sig[MT_SZ_SIG];
+} any_led_receipt_t;
+
+typedef struct {
+  byte msg[sizeof(byte) + MT_SZ_PK];
+  byte sig[MT_SZ_SIG];
+} chn_end_revocation_t;
+
+typedef struct {
+  int val_from;
+  int val_to;
+  int num_payments;
+  byte hash_tail[MT_SZ_HASH];
+} nan_any_public_t;
+
+typedef union {
+  nan_any_public_t nan_public;
+  chn_end_revocation_t revocation;
+} chn_int_state_t;
+
+typedef struct {
+  int num_payments;
+  byte last_hash[MT_SZ_HASH];
+} nan_end_state_t;
+
+typedef struct {
+  mt_code_t status;
+  nan_any_public_t nan_public;
+  byte wcom[MT_SZ_COM];
+  nan_end_state_t end_state;
+} nan_int_state_t;
+
+typedef struct {
+  byte hc[MT_NAN_LEN][MT_SZ_HASH];
+} nan_end_wallet_t;
+
+typedef struct {
+  int end_bal;
+  int int_bal;
+  byte int_pk[MT_SZ_PK];
+  byte csk[MT_SZ_SK];
+  byte wpk[MT_SZ_PK];
+  byte wsk[MT_SZ_SK];
+  byte rand[MT_SZ_HASH];
+  byte wcom[MT_SZ_COM];
+  byte zkp[MT_SZ_ZKP];
+  byte sig[MT_SZ_SIG];
+  chn_end_revocation_t revocation;
+} chn_end_wallet_t;
+
+typedef struct {
+  int end_bal;
+  int int_bal;
+  byte cpk[MT_SZ_PK];
+  byte addr[MT_SZ_ADDR];
+  byte wcom[MT_SZ_COM];
+} chn_end_public_t;
+
+typedef struct {
+  byte csk[MT_SZ_SK];
+  any_led_receipt_t receipt;
+} chn_int_wallet_t;
+
+typedef struct {
+  int end_bal;
+  int int_bal;
+  byte cpk[MT_SZ_PK];
+  byte addr[MT_SZ_PK];
+} chn_int_public_t;
+
+typedef struct {
+  mt_code_t code;
+  byte wpk[MT_SZ_PK];
+  int end_bal;
+
+  // blank except for conditional refund
+  byte conditional[MT_SZ_PK];
+
+  // code || digest of nan_public || blinded wcom
+  byte msg[sizeof(byte) + DIGEST_LEN + MT_SZ_COM];
+
+  // signature on the refund token
+  byte sig[MT_SZ_SIG];
+} chn_end_refund_t;
+
+typedef struct {
+  chn_end_public_t public;
+  chn_end_wallet_t wallet;
+  chn_end_wallet_t wallet_nan;
+  chn_end_wallet_t wallet_new;
+
+  nan_any_public_t nan_public;
+  nan_end_wallet_t nan_wallet;
+  nan_end_state_t nan_state;
+
+  chn_end_refund_t refund;
+} chn_end_data_t;
+
+typedef struct {
+  chn_int_public_t public;
+  chn_int_wallet_t wallet;
+} chn_int_data_t;
+
+//----------------------------- Network Tokens --------------------------//
+
+typedef struct {
+  byte nonce[MT_SZ_HASH];
+  int value;
+
+  byte pk[MT_SZ_PK];
+  byte sig[MT_SZ_SIG];
+} mac_aut_mint_t;
+
+typedef struct {
+  byte nonce[MT_SZ_HASH];
+  int val_from;
+  int val_to;
+  byte from[MT_SZ_ADDR];
+  byte to[MT_SZ_ADDR];
+} mac_any_trans_t;
+
+typedef struct {
+  int val_from;
+  int val_to;
+  byte from[MT_SZ_ADDR];
+  byte chn[MT_SZ_ADDR];
+  chn_end_public_t chn_public;
+} chn_end_setup_t;
+
+typedef struct {
+  int val_from;
+  int val_to;
+  byte from[MT_SZ_ADDR];
+  byte chn[MT_SZ_ADDR];
+  chn_int_public_t chn_public;
+} chn_int_setup_t;
+
+typedef struct {
+  mt_code_t success;
+  any_led_receipt_t receipt;
+} any_led_confirm_t;
+
+typedef struct {
+  byte chn[MT_SZ_ADDR];
+
+  byte pk[MT_SZ_PK];
+  byte sig[MT_SZ_SIG];
+} chn_int_reqclose_t;
+
+typedef struct {
+  byte chn[MT_SZ_ADDR];
+  chn_end_refund_t refund_token;
+
+  // blank for micropayment closes
+  int last_pay_num;
+  byte last_hash[MT_SZ_HASH];
+
+  byte pk[MT_SZ_PK];
+  byte sig[MT_SZ_SIG];
+} chn_end_close_t;
+
+typedef struct {
+  mt_code_t close_code;
+  byte chn[MT_SZ_ADDR];
+  chn_end_revocation_t revocation;
+
+  // blank for micropayment closes
+  int last_pay_num;
+  byte last_hash[MT_SZ_HASH];
+
+  byte pk[MT_SZ_PK];
+  byte sig[MT_SZ_SIG];
+} chn_int_close_t;
+
+typedef struct {
+  int val_from;
+  int val_to;
+  byte chn[MT_SZ_ADDR];
+
+  byte pk[MT_SZ_PK];
+  byte sig[MT_SZ_SIG];
+} chn_end_cashout_t;
+
+typedef struct {
+  int val_from;
+  int val_to;
+  byte chn[MT_SZ_ADDR];
+
+  byte pk[MT_SZ_PK];
+  byte sig[MT_SZ_SIG];
+} chn_int_cashout_t;
+
+typedef struct {
+  int bal;
+} mac_led_data_t;
+
+typedef struct {
+  mt_lstate_t state;
+
+  byte end_addr[MT_SZ_ADDR];
+  byte int_addr[MT_SZ_ADDR];
+
+  int end_bal;
+  int int_bal;
+
+  chn_end_public_t end_public;
+  chn_int_public_t int_public;
+
+  chn_end_close_t end_close_token;
+  chn_int_close_t int_close_token;
+
+  int close_epoch;
+} chn_led_data_t;
+
+typedef struct {
+  byte addr[MT_SZ_ADDR];
+} mac_led_query_t;
+
+typedef struct {
+  byte addr[MT_SZ_ADDR];
+} chn_led_query_t;
+
+typedef struct {
+  int end_bal;
+  int int_bal;
+  byte addr[MT_SZ_ADDR];
+  byte wcom[MT_SZ_COM];
+  byte zkp[MT_SZ_ZKP];
+} chn_end_estab1_t;
+
+typedef struct {
+  mt_code_t verified;
+  byte int_pk[MT_SZ_PK];
+  any_led_receipt_t receipt;
+} chn_int_estab2_t;
+
+typedef struct {
+  byte wcom[MT_SZ_COM];
+} chn_end_estab3_t;
+
+typedef struct {
+  mt_code_t success;
+  byte sig[MT_SZ_SIG];
+} chn_int_estab4_t;
+
+typedef struct {
+  int value;
+} mic_cli_pay1_t;
+
+typedef struct {
+  byte wcom[MT_SZ_COM];
+  byte zkp[MT_SZ_ZKP];
+} mic_rel_pay2_t;
+
+typedef struct {
+  byte cli_valcom[MT_SZ_COM];
+  byte rel_valcom[MT_SZ_COM];
+  byte cli_wcom[MT_SZ_COM];
+  byte rel_wcom[MT_SZ_COM];
+  byte cli_zkp[MT_SZ_ZKP];
+  byte rel_zkp[MT_SZ_ZKP];
+} mic_cli_pay3_t;
+
+typedef struct {
+  chn_end_refund_t cli_refund;
+  chn_end_refund_t rel_refund;
+} mic_int_pay4_t;
+
+typedef struct {
+  chn_end_revocation_t cli_revocation;
+  chn_end_refund_t rel_refund;
+} mic_cli_pay5_t;
+
+typedef struct {
+  chn_end_revocation_t cli_revocation;
+  chn_end_revocation_t rel_revocation;
+} mic_rel_pay6_t;
+
+typedef struct {
+  mt_code_t success;
+  byte wsig[MT_SZ_SIG];
+} mic_int_pay7_t;
+
+typedef struct {
+  mt_code_t success;
+  byte wsig[MT_SZ_SIG];
+} mic_int_pay8_t;
+
+typedef struct {
+  byte wpk[MT_SZ_PK];
+  byte wpk_nan[MT_SZ_PK];
+  byte wcom[MT_SZ_COM];
+  byte zkp[MT_SZ_ZKP];
+  nan_any_public_t nan_public;
+} nan_cli_setup1_t;
+
+typedef struct {
+  mt_code_t verified;
+} nan_int_setup2_t;
+
+typedef struct {
+  byte refund_msg[sizeof(byte) + DIGEST_LEN + MT_SZ_COM];
+} nan_cli_setup3_t;
+
+typedef struct {
+  byte sig[MT_SZ_SIG];
+} nan_int_setup4_t;
+
+typedef struct {
+  chn_end_revocation_t revocation;
+} nan_cli_setup5_t;
+
+typedef struct {
+  mt_code_t success;
+} nan_int_setup6_t;
+
+typedef struct {
+  nan_any_public_t nan_public;
+} nan_cli_estab1_t;
+
+typedef struct {
+  byte wpk[MT_SZ_PK];
+  byte wpk_nan[MT_SZ_PK];
+  byte wcom[MT_SZ_COM];
+  byte zkp[MT_SZ_ZKP];
+  nan_any_public_t nan_public;
+} nan_rel_estab2_t;
+
+typedef struct {
+  mt_code_t verified;
+} nan_int_estab3_t;
+
+typedef struct {
+  byte refund_msg[sizeof(byte) + DIGEST_LEN + MT_SZ_COM];
+} nan_rel_estab4_t;
+
+typedef struct {
+  mt_code_t success;
+  byte sig[MT_SZ_SIG];
+} nan_int_estab5_t;
+
+typedef struct {
+  mt_code_t success;
+} nan_rel_estab6_t;
+
+typedef struct {
+  nan_any_public_t nan_public;
+  byte preimage[MT_SZ_HASH];
+} nan_cli_pay1_t;
+
+typedef struct {
+  mt_code_t success;
+} nan_rel_pay2_t;
+
+typedef struct {
+  nan_any_public_t nan_public;
+  mt_code_t reqclose;
+} nan_cli_reqclose1_t;
+
+typedef struct {
+  mt_code_t success;
+} nan_rel_reqclose2_t;
+
+typedef struct {
+  nan_any_public_t nan_public;
+} nan_cli_destab1_t;
+
+typedef struct {
+  mt_code_t success;
+} nan_int_destab2_t;
+
+typedef struct {
+  nan_any_public_t nan_public;
+  byte preimage[MT_SZ_HASH];
+} nan_cli_dpay1_t;
+
+typedef struct {
+  mt_code_t success;
+} nan_int_dpay2_t;
+
+typedef struct {
+  byte wpk[MT_SZ_PK];
+  byte wcom_new[MT_SZ_COM];
+  byte zkp_new[MT_SZ_ZKP];
+  nan_any_public_t nan_public;
+  int total_val;
+  int num_payments;
+  byte preimage[MT_SZ_HASH];
+} nan_end_close1_t;
+
+typedef struct {
+  mt_code_t verified;
+} nan_int_close2_t;
+
+typedef struct {
+  nan_any_public_t nan_public;
+  byte refund_msg[sizeof(byte) + MT_SZ_COM];
+} nan_end_close3_t;
+
+typedef struct {
+  byte sig[MT_SZ_SIG];
+} nan_int_close4_t;
+
+typedef struct {
+  byte wpk_nan[MT_SZ_PK];
+  chn_end_revocation_t revocation;
+} nan_end_close5_t;
+
+typedef struct {
+  mt_code_t verified;
+} nan_int_close6_t;
+
+typedef struct {
+  nan_any_public_t nan_public;
+  byte wcom_new[MT_SZ_COM];
+} nan_end_close7_t;
+
+typedef struct {
+  mt_code_t success;
+  byte sig[MT_SZ_SIG];
+} nan_int_close8_t;
+
+#endif /* !defined(TOR_OR_H) */

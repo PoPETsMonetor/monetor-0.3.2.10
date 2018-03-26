@@ -135,6 +135,11 @@ src_test_test_SOURCES = \
 	src/test/test_link_handshake.c \
 	src/test/test_logging.c \
 	src/test/test_microdesc.c \
+	src/test/test_mt_common.c \
+	src/test/test_mt_crypto.c \
+	src/test/test_mt_lpay.c \
+	src/test/test_mt_paymulti.c \
+	src/test/test_mt_tokens.c \
 	src/test/test_nodelist.c \
 	src/test/test_oom.c \
 	src/test/test_oos.c \
@@ -331,7 +336,7 @@ src_test_test_bt_cl_LDADD = src/common/libor-testing.a \
 	src/trace/libor-trace.a \
 	$(rust_ldadd) \
 	@TOR_LIB_MATH@ \
-	@TOR_LIB_WS32@ @TOR_LIB_GDI@ @TOR_LIB_USERENV@ 
+	@TOR_LIB_WS32@ @TOR_LIB_GDI@ @TOR_LIB_USERENV@
 src_test_test_bt_cl_CFLAGS = $(AM_CFLAGS) $(TEST_CFLAGS)
 src_test_test_bt_cl_CPPFLAGS= $(src_test_AM_CPPFLAGS) $(TEST_CPPFLAGS)
 
@@ -357,4 +362,3 @@ EXTRA_DIST += \
 	src/test/test_workqueue_pipe.sh \
 	src/test/test_workqueue_pipe2.sh \
 	src/test/test_workqueue_socketpair.sh
-

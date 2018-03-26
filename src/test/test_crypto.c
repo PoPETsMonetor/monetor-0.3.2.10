@@ -1937,9 +1937,9 @@ test_crypto_curve25519_impl(void *arg)
        * we're doing this variant test, we randomize the high bit of e2k, and
        * make sure that the handshake still works out the same as it would
        * otherwise. */
-      uint8_t byte;
-      crypto_rand((char*)&byte, 1);
-      e2k[31] |= (byte & 0x80);
+      uint8_t byte_var;
+      crypto_rand((char*)&byte_var, 1);
+      e2k[31] |= (byte_var & 0x80);
     }
     curve25519_impl(e1e2k,e1,e2k);
     tt_mem_op(e1e2k,OP_EQ, e2e1k, 32);
@@ -3025,4 +3025,3 @@ struct testcase_t crypto_tests[] = {
   { "failure_modes", test_crypto_failure_modes, TT_FORK, NULL, NULL },
   END_OF_TESTCASES
 };
-

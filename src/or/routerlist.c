@@ -2324,7 +2324,7 @@ void
 router_add_running_nodes_to_smartlist(smartlist_t *sl, int need_uptime,
                                       int need_capacity, int need_guard,
                                       int need_desc, int pref_addr,
-                                      int direct_conn)
+                                      int direct_conn, int need_intermediary)
 {
   const int check_reach = !router_skip_or_reachability(get_options(),
                                                        pref_addr);
@@ -2336,7 +2336,8 @@ router_add_running_nodes_to_smartlist(smartlist_t *sl, int need_uptime,
       continue;
     if (node->ri && node->ri->purpose != ROUTER_PURPOSE_GENERAL)
       continue;
-    if (node_is_unreliable(node, need_uptime, need_capacity, need_guard))
+    if (node_is_unreliable(node, need_uptime, need_capacity, need_guard,
+          need_intermediary))
       continue;
     /* Don't choose nodes if we are certain they can't do EXTEND2 cells */
     if (node->rs && !routerstatus_version_supports_extend2_cells(node->rs, 1))
@@ -2551,7 +2552,8 @@ compute_weighted_bandwidths(const smartlist_t *sl,
              rule == WEIGHT_FOR_EXIT ||
              rule == WEIGHT_FOR_GUARD ||
              rule == WEIGHT_FOR_MID ||
-             rule == WEIGHT_FOR_DIR);
+             rule == WEIGHT_FOR_DIR ||
+             rule == WEIGHT_FOR_INTERMEDIARY);
 
   *bandwidths_out = NULL;
 
@@ -2606,6 +2608,14 @@ compute_weighted_bandwidths(const smartlist_t *sl,
     Wm = networkstatus_get_bw_weight(NULL, "Wbm", -1);
     Wd = networkstatus_get_bw_weight(NULL, "Wbd", -1);
     Wg = networkstatus_get_bw_weight(NULL, "Wbg", -1);
+
+    Wgb = Wmb = Web = Wdb = weight_scale;
+  } else if (rule == WEIGHT_FOR_INTERMEDIARY) {
+    /* There no balancing between position. 
+     * We just balance with bandwidh of guard-only
+     * and middle relays - and we don't select exits*/
+    Wg = Wm = weight_scale;
+    We = Wd = 0;
 
     Wgb = Wmb = Web = Wdb = weight_scale;
   } else if (rule == NO_WEIGHTING) {
@@ -2814,7 +2824,9 @@ router_choose_random_node(smartlist_t *excludedsmartlist,
   const int pref_addr = (flags & CRN_PREF_ADDR) != 0;
   const int direct_conn = (flags & CRN_DIRECT_CONN) != 0;
   const int rendezvous_v3 = (flags & CRN_RENDEZVOUS_V3) != 0;
-
+  const int need_intermediary = (flags & CRN_NEED_INTERMEDIARY) != 0;
+  const int need_ledger = (flags & CRN_NEED_LEDGER) != 0;
+  
   smartlist_t *sl=smartlist_new(),
     *excludednodes=smartlist_new();
   const node_t *choice = NULL;
@@ -2823,7 +2835,8 @@ router_choose_random_node(smartlist_t *excludedsmartlist,
 
   tor_assert(!(weight_for_exit && need_guard));
   rule = weight_for_exit ? WEIGHT_FOR_EXIT :
-    (need_guard ? WEIGHT_FOR_GUARD : WEIGHT_FOR_MID);
+    (need_guard ? WEIGHT_FOR_GUARD :
+    (need_intermediary ? WEIGHT_FOR_INTERMEDIARY : WEIGHT_FOR_MID));
 
   SMARTLIST_FOREACH_BEGIN(nodelist_get_list(), node_t *, node) {
     if (node_allows_single_hop_exits(node)) {
@@ -2837,6 +2850,15 @@ router_choose_random_node(smartlist_t *excludedsmartlist,
        * version 3. */
       smartlist_add(excludednodes, node);
     }
+    /** Also adding the ledger to exclude node */
+    if (node->is_ledger && !need_ledger) {
+      log_info(LD_MT, "MoneTor: Adding ledger to excludenodes");
+      smartlist_add(excludednodes, node);
+    }
+    if (node->is_intermediary && !need_intermediary) {
+      log_info(LD_MT, "MoneTor: Adding intermediary node to excludednodes if not explicitly needed");
+      smartlist_add(excludednodes, node);
+    }
   } SMARTLIST_FOREACH_END(node);
 
   /* If the node_t is not found we won't be to exclude ourself but we
@@ -2847,7 +2869,7 @@ router_choose_random_node(smartlist_t *excludedsmartlist,
 
   router_add_running_nodes_to_smartlist(sl, need_uptime, need_capacity,
                                         need_guard, need_desc, pref_addr,
-                                        direct_conn);
+                                        direct_conn, need_intermediary);
   log_debug(LD_CIRC,
            "We found %d running nodes.",
             smartlist_len(sl));
@@ -2871,11 +2893,22 @@ router_choose_random_node(smartlist_t *excludedsmartlist,
               "We removed excludedset, leaving %d nodes.",
               smartlist_len(sl));
   }
+  
+  if (need_intermediary)
+    log_info(LD_MT, "We found %d candidates running nodes", smartlist_len(sl));
 
   // Always weight by bandwidth
   choice = node_sl_choose_by_bandwidth(sl, rule);
 
   smartlist_free(sl);
+  
+  if (!choice && need_intermediary) {
+    log_warn(LD_MT|LD_CIRC,
+        "MoneTor: No available intermediary");
+    smartlist_free(excludednodes);
+    return choice;
+  }
+
   if (!choice && (need_uptime || need_capacity || need_guard || pref_addr)) {
     /* try once more -- recurse but with fewer restrictions. */
     log_info(LD_CIRC,

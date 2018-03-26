@@ -49,6 +49,7 @@
 #include "hs_ntor.h"
 #include "main.h"
 #include "microdesc.h"
+#include "mt_common.h"
 #include "networkstatus.h"
 #include "nodelist.h"
 #include "onion.h"
@@ -486,6 +487,13 @@ origin_circuit_init(uint8_t purpose, int flags)
   circ->build_state->is_internal =
     ((flags & CIRCLAUNCH_IS_INTERNAL) ? 1 : 0);
   circ->base_.purpose = purpose;
+  if (purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY ||
+      purpose == CIRCUIT_PURPOSE_C_LEDGER ||
+      purpose == CIRCUIT_PURPOSE_I_LEDGER ||
+      purpose == CIRCUIT_PURPOSE_R_INTERMEDIARY ||
+      purpose == CIRCUIT_PURPOSE_R_LEDGER) {
+    circ->buf = buf_new_with_capacity(RELAY_PPAYLOAD_SIZE);
+  }
   return circ;
 }
 
@@ -508,6 +516,8 @@ circuit_establish_circuit(uint8_t purpose, extend_info_t *exit_ei, int flags)
   }
 
   circ = origin_circuit_init(purpose, flags);
+  
+  /** Again, no need to close the payment channel, we shouldn't have any */
 
   if (onion_pick_cpath_exit(circ, exit_ei, is_hs_v3_rp_circuit) < 0 ||
       onion_populate_cpath(circ) < 0) {
@@ -1372,6 +1382,22 @@ circuit_extend(cell_t *cell, circuit_t *circ)
   return 0;
 }
 
+
+pay_path_t*
+circuit_init_ppath(pay_path_t* prev) {
+  pay_path_t* ppath = tor_malloc_zero(sizeof(pay_path_t));
+  /* its not null => middle or exit relay */
+  ppath->inter_ident = tor_malloc_zero(sizeof(intermediary_identity_t));
+  if (prev) {
+    ppath->prev = prev;
+    ppath->buf = buf_new_with_capacity(RELAY_PPAYLOAD_SIZE);
+  }
+  else {
+    ppath->buf = buf_new_with_capacity(CELL_PPAYLOAD_SIZE);
+  }
+  return ppath;
+}
+
 /** Initialize cpath-\>{f|b}_{crypto|digest} from the key material in key_data.
  *
  * If <b>is_hs_v3</b> is set, this cpath will be used for next gen hidden
@@ -1539,8 +1565,15 @@ circuit_truncated(origin_circuit_t *circ, crypt_path_t *layer, int reason)
    *     means that a connection broke or an extend failed. For now,
    *     just give up.
    */
-  circuit_mark_for_close(TO_CIRCUIT(circ),
-          END_CIRC_REASON_FLAG_REMOTE|reason);
+  /** XXX MoneTor: abort the payment channel if this is a general circuit */
+  if (get_options()->EnablePayment) {
+    circuit_mark_payment_channel_for_close(TO_CIRCUIT(circ), 1,
+        END_CIRC_REASON_FLAG_REMOTE|reason);
+  }
+  else {
+    circuit_mark_for_close(TO_CIRCUIT(circ),
+            END_CIRC_REASON_FLAG_REMOTE|reason);
+  }
   return 0;
 
 #if 0
@@ -1702,6 +1735,13 @@ route_len_for_purpose(uint8_t purpose, extend_info_t *exit_ei)
     /* client connecting to introduction point */
   case CIRCUIT_PURPOSE_S_CONNECT_REND:
     /* hidden service connecting to rendezvous point */
+  case CIRCUIT_PURPOSE_C_INTERMEDIARY:
+    /* intermediary circuit launched by clients */
+  case CIRCUIT_PURPOSE_R_INTERMEDIARY:
+    /* intermediary circuit launched by relays */
+  case CIRCUIT_PURPOSE_C_LEDGER:
+  case CIRCUIT_PURPOSE_R_LEDGER:
+  case CIRCUIT_PURPOSE_I_LEDGER:
     known_purpose = 1;
     routelen++;
     break;
@@ -1911,7 +1951,7 @@ choose_good_exit_server_general(int need_uptime, int need_capacity)
       continue; /* not one of our chosen exit nodes */
     }
 
-    if (node_is_unreliable(node, need_uptime, need_capacity, 0)) {
+    if (node_is_unreliable(node, need_uptime, need_capacity, 0, 0)) {
       n_supported[i] = -1;
       continue; /* skip routers that are not suitable.  Don't worry if
                  * this makes us reject all the possible routers: if so,
@@ -2074,7 +2114,7 @@ pick_tor2web_rendezvous_node(router_crn_flags_t flags,
                                         0, 0, 0,
                                         need_desc,
                                         pref_addr,
-                                        direct_conn);
+                                        direct_conn, 0);
 
   /* Filter all_live_nodes to only add live *and* whitelisted RPs to
    * the list whitelisted_live_rps. */
@@ -2238,6 +2278,15 @@ warn_if_last_router_excluded(origin_circuit_t *circ,
       rs = options->ExcludeExitNodesUnion_;
       description = "controller-selected circuit target";
       break;
+    case CIRCUIT_PURPOSE_C_INTERMEDIARY:
+    case CIRCUIT_PURPOSE_R_INTERMEDIARY:
+      description = "chosen intermediary point";
+      break;
+    case CIRCUIT_PURPOSE_C_LEDGER:
+    case CIRCUIT_PURPOSE_R_LEDGER:
+    case CIRCUIT_PURPOSE_I_LEDGER:
+      description = "requested ledger node";
+      break;
     }
 
   if (routerset_contains_extendinfo(rs, exit_ei)) {
@@ -2351,6 +2400,7 @@ circuit_extend_to_new_exit(origin_circuit_t *circ, extend_info_t *exit_ei)
   if ((err_reason = circuit_send_next_onion_skin(circ))<0) {
     log_warn(LD_CIRC, "Couldn't extend circuit to new point %s.",
              extend_info_describe(exit_ei));
+    /** MoneTor: if we're here, the mt_cpay_pay() should not have been called*/
     circuit_mark_for_close(TO_CIRCUIT(circ), -err_reason);
     return -1;
   }
