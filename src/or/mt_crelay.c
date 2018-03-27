@@ -485,6 +485,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         if (!oricirc) {
           log_warn(LD_MT, "MoneTor: Not successfully launch a circuit :/ abording");
           //XXX alert payment module
+          tor_free(desci);
           return;
         }
         oricirc->inter_ident = tor_malloc_zero(sizeof(intermediary_identity_t));

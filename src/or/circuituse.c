@@ -107,7 +107,9 @@ circuit_has_intermediary_or_ledger(const origin_circuit_t *circ) {
 
 /** Return 1 if <b>circ</b> could be returned by circuit_get_best().
  * Else return 0.
- */
+ *
+ * FR: This function should definitly fill char* with a reason
+ * */
 static int
 circuit_is_acceptable(const origin_circuit_t *origin_circ,
                       const entry_connection_t *conn,
@@ -126,7 +128,7 @@ circuit_is_acceptable(const origin_circuit_t *origin_circ,
     return 0; /* ignore non-open circs */
   if (circ->marked_for_close)
     return 0;
-
+  log_debug(LD_CIRC, "MoneTor: open and not marked for close");
   /* if this circ isn't our purpose, skip. */
   if (purpose == CIRCUIT_PURPOSE_C_REND_JOINED && !must_be_open) {
     if (circ->purpose != CIRCUIT_PURPOSE_C_ESTABLISH_REND &&
@@ -140,10 +142,13 @@ circuit_is_acceptable(const origin_circuit_t *origin_circ,
         circ->purpose != CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT)
       return 0;
   } else {
-    if (purpose != circ->purpose)
+    if (purpose != circ->purpose) {
+      log_debug(LD_CIRC, "purpose asked: %s %d, circ purpose: %s, %d",
+          circuit_purpose_to_string(purpose), purpose, circuit_purpose_to_string(circ->purpose), circ->purpose);
       return 0;
+    }
   }
-
+  log_debug(LD_CIRC, "MoneTor: purpose is correct");
   /* If this is a timed-out hidden service circuit, skip it. */
   if (origin_circ->hs_circ_has_timed_out) {
     return 0;
@@ -154,13 +159,15 @@ circuit_is_acceptable(const origin_circuit_t *origin_circ,
       purpose == CIRCUIT_PURPOSE_C_REND_JOINED) {
     if (circ->timestamp_dirty &&
        circ->timestamp_dirty+get_options()->MaxCircuitDirtiness <= now) {
+      log_debug(LD_CIRC, "MoneTor: CIRCUIT DIRTY");
       return 0;
     }
   }
 
-  if (origin_circ->unusable_for_new_conns)
+  if (origin_circ->unusable_for_new_conns) {
+    log_debug(LD_CIRC, "MoneTor: Circuit has been set unusable for new conn ??");
     return 0;
-
+  }
   /* decide if this circ is suitable for this conn */
 
   /* for rend circs, circ->cpath->prev is not the last router in the
@@ -169,12 +176,13 @@ circuit_is_acceptable(const origin_circuit_t *origin_circ,
    */
   build_state = origin_circ->build_state;
   exitnode = build_state_get_exit_node(build_state);
-
+  log_debug(LD_CIRC, "Circ build state need_update: %d, internal: %d",
+      build_state->need_uptime, build_state->is_internal);
   if (need_uptime && !build_state->need_uptime)
     return 0;
   if (need_internal != build_state->is_internal)
     return 0;
-
+  log_debug(LD_CIRC, "MoneTor: uptime and internal match");
   if (purpose == CIRCUIT_PURPOSE_C_GENERAL ||
       purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) {
     tor_addr_t addr;
@@ -208,9 +216,11 @@ circuit_is_acceptable(const origin_circuit_t *origin_circ,
     } else {
       if (conn->want_onehop) {
         /* don't use three-hop circuits -- that could hurt our anonymity. */
+        log_debug(LD_CIRC, "MoneTor: conn wanted 1-hop");
         return 0;
       }
     }
+    log_debug(LD_CIRC, "MoneTor: passed build_state stuff");
     if (origin_circ->prepend_policy && family != -1) {
       int r = compare_tor_addr_to_addr_policy(&addr,
                                               conn->socks_request->port,
@@ -220,12 +230,14 @@ circuit_is_acceptable(const origin_circuit_t *origin_circ,
     }
     if (exitnode && !connection_ap_can_use_exit(conn, exitnode)) {
       /* can't exit from this router */
+      log_debug(LD_CIRC, "MoneTor: Can't exit from this router");
       return 0;
     }
     /** If there is an intermediary in the path or a ledger; don't take this*/
     /** This shitty bug might happen with preemptive built circuits, when the information
      * is not yet up to date :/ */
     if (circuit_has_intermediary_or_ledger(origin_circ)) {
+      log_debug(LD_CIRC, "MoneTor: circ has an intermediary or a ledger in it!");
       return 0;
     }
   } else { /* not general: this might be a rend circuit */
@@ -238,9 +250,10 @@ circuit_is_acceptable(const origin_circuit_t *origin_circ,
   if (!connection_edge_compatible_with_circuit(conn, origin_circ)) {
     /* conn needs to be isolated from other conns that have already used
      * origin_circ */
+    log_debug(LD_CIRC, "MoneTor: How the fuck conns are not compatible?");
     return 0;
   }
-
+  log_debug(LD_CIRC, "MoneTor: circuit is good to use!");
   return 1;
 }
 
@@ -387,8 +400,8 @@ circuit_get_best(const entry_connection_t *conn,
 
     if (!circuit_is_acceptable(origin_circ,conn,must_be_open,purpose,
                                need_uptime,need_internal, (time_t)now.tv_sec)) {
-      log_debug(LD_CIRC, "MoneTor: looks like circ %s not acceptable?",
-          circuit_purpose_to_string(TO_CIRCUIT(origin_circ)->purpose));
+      log_debug(LD_CIRC, "MoneTor: looks like circ %s not acceptable? need_uptime: %d, need_internal: %d",
+          circuit_purpose_to_string(TO_CIRCUIT(origin_circ)->purpose), need_uptime, need_internal);
       continue;
     }
 
@@ -1225,6 +1238,34 @@ needs_mt_circuits(time_t now, int num_uptime_internal) {
   return 0;
 }
 
+#define SUFFICIENT_INTERNAL_PAYMENT_CIRCUITS 2
+
+STATIC int
+needs_mt_payment_circuits(time_t now, int num_payment_internal) {
+    
+  if (!get_options()->EnablePayment || !mt_check_enough_fund()) {
+    goto no_need;
+  }
+  
+  if (ledger_mode(get_options()) || intermediary_mode(get_options()) ||
+      server_mode(get_options())) {
+    goto no_need;
+  }
+
+  if (num_payment_internal >= SUFFICIENT_INTERNAL_PAYMENT_CIRCUITS) {
+    goto no_need;
+  }
+  if (router_have_consensus_path() == CONSENSUS_PATH_UNKNOWN) {
+    /* Consensus hasn't been checked or might be invalid so requesting
+     * internal circuits is not wise. */
+    goto no_need;
+  }
+  rep_hist_note_used_internal(now, 1, 0);
+  return 1;
+ no_need:
+  return 0;
+}
+
 /* We need at least this many internal circuits for hidden service clients */
 #define SUFFICIENT_INTERNAL_HS_CLIENTS 3
 
@@ -1284,7 +1325,7 @@ static void
 circuit_predict_and_launch_new(void)
 {
   int num=0, num_internal=0, num_uptime_internal=0, num_payment=0,
-      num_payment_needs_capacity = 0;
+      num_payment_needs_capacity = 0, num_payment_internal = 0;
   int hidserv_needs_uptime=0, hidserv_needs_capacity=1;
   int port_needs_uptime=0, port_needs_capacity=1;
   time_t now = time(NULL);
@@ -1306,6 +1347,9 @@ circuit_predict_and_launch_new(void)
       num_internal++;
     if (build_state->need_uptime && build_state->is_internal)
       num_uptime_internal++;
+    if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT &&
+        build_state->is_internal)
+      num_payment_internal++;
 
   }
   SMARTLIST_FOREACH_END(circ);
@@ -1386,6 +1430,12 @@ circuit_predict_and_launch_new(void)
         "Have %d clean uptime-internal clean circs, need"
         " another MoneTor circuit.", num_uptime_internal);
     circuit_launch(CIRCUIT_PURPOSE_C_GENERAL, flags);
+  }
+  if (needs_mt_payment_circuits(now, num_payment_internal)) {
+    flags = CIRCLAUNCH_IS_INTERNAL;
+    log_info(LD_CIRC, "Launching a useless internal payment circuit ~ but should capture the necessary"
+        " load to handle payment circuit with hidden service");
+    circuit_launch(CIRCUIT_PURPOSE_C_GENERAL_PAYMENT, flags);
   }
 }
 
@@ -1813,7 +1863,8 @@ circuit_has_opened(origin_circuit_t *circ)
         /* free payment related information */
         mt_cclient_general_circuit_free(circ);
         circ->ppath = NULL;
-        circuit_try_attaching_streams(circ);
+        /*circuit_try_attaching_streams(circ);*/
+        circuit_mark_for_close(TO_CIRCUIT(circ), END_CIRC_REASON_NOPATH);
       }
       break;
     case CIRCUIT_PURPOSE_S_ESTABLISH_INTRO:
