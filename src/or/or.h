@@ -534,35 +534,39 @@ typedef enum {
  * client, intermediary or relay (no need to divide at first glance)*/
 #define CIRCUIT_PURPOSE_C_LEDGER 16
 #define CIRCUIT_PURPOSE_C_INTERMEDIARY 17
+/** This circuit is like a normal circuit with cpath but
+ * a payment channel is built on it as soon as the circuit
+ * opens */
+#define CIRCUIT_PURPOSE_C_GENERAL_PAYMENT 18
 
-#define CIRCUIT_PURPOSE_C_MAX_ 17
+#define CIRCUIT_PURPOSE_C_MAX_ 18
 /** Hidden-service-side circuit purpose: at the service, waiting for
  * introductions. */
-#define CIRCUIT_PURPOSE_S_ESTABLISH_INTRO 18
+#define CIRCUIT_PURPOSE_S_ESTABLISH_INTRO 19
 /** Hidden-service-side circuit purpose: at the service, successfully
  * established intro. */
-#define CIRCUIT_PURPOSE_S_INTRO 19
+#define CIRCUIT_PURPOSE_S_INTRO 20
 /** Hidden-service-side circuit purpose: at the service, connecting to rend
  * point. */
-#define CIRCUIT_PURPOSE_S_CONNECT_REND 20
+#define CIRCUIT_PURPOSE_S_CONNECT_REND 21
 /** Hidden-service-side circuit purpose: at the service, rendezvous
  * established. */
-#define CIRCUIT_PURPOSE_S_REND_JOINED 21
+#define CIRCUIT_PURPOSE_S_REND_JOINED 22
 /** A testing circuit; not meant to be used for actual traffic. */
-#define CIRCUIT_PURPOSE_TESTING 22
+#define CIRCUIT_PURPOSE_TESTING 23
 /** A controller made this circuit and Tor should not use it. */
-#define CIRCUIT_PURPOSE_CONTROLLER 23
+#define CIRCUIT_PURPOSE_CONTROLLER 24
 /** This circuit is used for path bias probing only */
-#define CIRCUIT_PURPOSE_PATH_BIAS_TESTING 24
+#define CIRCUIT_PURPOSE_PATH_BIAS_TESTING 25
 
 
-#define CIRCUIT_PURPOSE_R_INTERMEDIARY 25
+#define CIRCUIT_PURPOSE_R_INTERMEDIARY 26
 
-#define CIRCUIT_PURPOSE_I_LEDGER 26
+#define CIRCUIT_PURPOSE_I_LEDGER 27
 /** ledger circuit on a relay */
-#define CIRCUIT_PURPOSE_R_LEDGER 27
+#define CIRCUIT_PURPOSE_R_LEDGER 28
 
-#define CIRCUIT_PURPOSE_MAX_ 27
+#define CIRCUIT_PURPOSE_MAX_ 28
 /** A catch-all for unrecognized purposes. Currently we don't expect
  * to make or see any circuits with this purpose. */
 #define CIRCUIT_PURPOSE_UNKNOWN 255

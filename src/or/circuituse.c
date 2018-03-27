@@ -150,10 +150,12 @@ circuit_is_acceptable(const origin_circuit_t *origin_circ,
   }
 
   if (purpose == CIRCUIT_PURPOSE_C_GENERAL ||
+      purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT ||
       purpose == CIRCUIT_PURPOSE_C_REND_JOINED) {
     if (circ->timestamp_dirty &&
-       circ->timestamp_dirty+get_options()->MaxCircuitDirtiness <= now)
+       circ->timestamp_dirty+get_options()->MaxCircuitDirtiness <= now) {
       return 0;
+    }
   }
 
   if (origin_circ->unusable_for_new_conns)
@@ -173,7 +175,8 @@ circuit_is_acceptable(const origin_circuit_t *origin_circ,
   if (need_internal != build_state->is_internal)
     return 0;
 
-  if (purpose == CIRCUIT_PURPOSE_C_GENERAL) {
+  if (purpose == CIRCUIT_PURPOSE_C_GENERAL ||
+      purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) {
     tor_addr_t addr;
     const int family = tor_addr_parse(&addr, conn->socks_request->address);
     if (!exitnode && !build_state->onehop_tunnel) {
@@ -261,6 +264,21 @@ circuit_is_better(const origin_circuit_t *oa, const origin_circuit_t *ob,
     return 1; /* oa is better. It's not relaxed. */
 
   switch (purpose) {
+    case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
+      /** The less dirty is always best 
+       * takes the older circuit, which maximizes
+       * the likelihood that the payment channels have
+       * finished to build */
+      if (b->timestamp_dirty) {
+        if (a->timestamp_dirty &&
+            a->timestamp_dirty < b->timestamp_dirty)
+          return 1;
+      } else {
+        if (a->timestamp_dirty ||
+            timercmp(&b->timestamp_began, &a->timestamp_began, OP_GT))
+          return 1;
+      }
+      break;
     case CIRCUIT_PURPOSE_C_GENERAL:
       /* if it's used but less dirty it's best;
        * else if it's more recently created it's best
@@ -308,8 +326,8 @@ circuit_is_better(const origin_circuit_t *oa, const origin_circuit_t *ob,
     return 1;
   }
   a_bits &= ~ oa->isolation_flags_mixed;
-  a_bits &= ~ ob->isolation_flags_mixed;
   if (n_bits_set_u8(a_bits) < n_bits_set_u8(b_bits)) {
+  a_bits &= ~ ob->isolation_flags_mixed;
     /* The fewer new restrictions we need to make on a circuit for stream
      * isolation, the better. */
     return 1;
@@ -346,6 +364,7 @@ circuit_get_best(const entry_connection_t *conn,
   tor_assert(conn);
 
   tor_assert(purpose == CIRCUIT_PURPOSE_C_GENERAL ||
+             purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT ||
              purpose == CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT ||
              purpose == CIRCUIT_PURPOSE_C_REND_JOINED);
 
@@ -367,8 +386,11 @@ circuit_get_best(const entry_connection_t *conn,
     }
 
     if (!circuit_is_acceptable(origin_circ,conn,must_be_open,purpose,
-                               need_uptime,need_internal, (time_t)now.tv_sec))
+                               need_uptime,need_internal, (time_t)now.tv_sec)) {
+      log_debug(LD_CIRC, "MoneTor: looks like circ %s not acceptable?",
+          circuit_purpose_to_string(TO_CIRCUIT(origin_circ)->purpose));
       continue;
+    }
 
     /* now this is an acceptable circ to hand back. but that doesn't
      * mean it's the *best* circ to hand back. try to decide.
@@ -1108,7 +1130,8 @@ circuit_is_available_for_use(const circuit_t *circ)
     return 0; /* Don't mess with marked circs */
   if (circ->timestamp_dirty)
     return 0; /* Only count clean circs */
-  if (circ->purpose != CIRCUIT_PURPOSE_C_GENERAL)
+  if (circ->purpose != CIRCUIT_PURPOSE_C_GENERAL &&
+      circ->purpose != CIRCUIT_PURPOSE_C_GENERAL_PAYMENT)
     return 0; /* We only pay attention to general purpose circuits.
                  General purpose circuits are always origin circuits. */
 
@@ -1260,7 +1283,8 @@ needs_circuits_for_build(int num)
 static void
 circuit_predict_and_launch_new(void)
 {
-  int num=0, num_internal=0, num_uptime_internal=0;
+  int num=0, num_internal=0, num_uptime_internal=0, num_payment=0,
+      num_payment_needs_capacity = 0;
   int hidserv_needs_uptime=0, hidserv_needs_capacity=1;
   int port_needs_uptime=0, port_needs_capacity=1;
   time_t now = time(NULL);
@@ -1272,12 +1296,17 @@ circuit_predict_and_launch_new(void)
       continue;
 
     num++;
-
+    if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT)
+      num_payment++;
     cpath_build_state_t *build_state = TO_ORIGIN_CIRCUIT(circ)->build_state;
+    if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT &&
+        build_state->need_capacity)
+      num_payment_needs_capacity++;
     if (build_state->is_internal)
       num_internal++;
     if (build_state->need_uptime && build_state->is_internal)
       num_uptime_internal++;
+
   }
   SMARTLIST_FOREACH_END(circ);
 
@@ -1294,7 +1323,16 @@ circuit_predict_and_launch_new(void)
     log_info(LD_CIRC,
              "Have %d clean circs (%d internal), need another exit circ.",
              num, num_internal);
-    circuit_launch(CIRCUIT_PURPOSE_C_GENERAL, flags);
+    /** Don't pre-built too much payment circuit ..
+     * We definitly need a smarter policy to pre-built them!*/
+    if (ledger_mode(get_options()) || intermediary_mode(get_options())
+        || server_mode(get_options()) ||
+        !get_options()->EnablePayment ||
+        (num_payment_needs_capacity > 0 && num_payment > 3) ||
+        num == 0)
+      circuit_launch(CIRCUIT_PURPOSE_C_GENERAL, flags);
+    else
+      circuit_launch(CIRCUIT_PURPOSE_C_GENERAL_PAYMENT, flags);
     return;
   }
 
@@ -1755,6 +1793,29 @@ circuit_has_opened(origin_circuit_t *circ)
        * circuit that one is ready. */
       circuit_try_attaching_streams(circ);
       break;
+    case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
+      /** Build payments channels and try attaching a stream
+       * if some AP connections are waiting */
+      circ->ppath = circuit_init_ppath(NULL);
+      circ->ppath->next = circuit_init_ppath(circ->ppath);
+      circ->ppath->next->position = MIDDLE;
+      circ->ppath->next->next = circuit_init_ppath(circ->ppath->next);
+      circ->ppath->next->next->position = EXIT;
+      /** Pre-build channels :-) */
+      if(!mt_cclient_launch_payment(circ)) {
+        /** Attach streams if any are pending */
+        circuit_try_attaching_streams(circ);
+      }
+      else {
+      /** if launch_payment failed, should we move this circuit
+       * to general circ? */
+        circuit_change_purpose(TO_CIRCUIT(circ), CIRCUIT_PURPOSE_C_GENERAL);
+        /* free payment related information */
+        mt_cclient_general_circuit_free(circ);
+        circ->ppath = NULL;
+        circuit_try_attaching_streams(circ);
+      }
+      break;
     case CIRCUIT_PURPOSE_S_ESTABLISH_INTRO:
       /* at the service, waiting for introductions */
       hs_service_circuit_has_opened(circ);
@@ -1991,7 +2052,9 @@ circuit_launch_by_extend_info(uint8_t purpose,
     need_specific_rp = 1;
   }
 
-  if ((extend_info || purpose != CIRCUIT_PURPOSE_C_GENERAL) &&
+  if ((extend_info || 
+       (purpose != CIRCUIT_PURPOSE_C_GENERAL 
+        && purpose != CIRCUIT_PURPOSE_C_GENERAL_PAYMENT)) &&
       purpose != CIRCUIT_PURPOSE_TESTING &&
       !onehop_tunnel && !need_specific_rp) {
     /* see if there are appropriate circs available to cannibalize. */
@@ -2048,6 +2111,7 @@ circuit_launch_by_extend_info(uint8_t purpose,
         case CIRCUIT_PURPOSE_C_INTRODUCING:
         case CIRCUIT_PURPOSE_S_CONNECT_REND:
         case CIRCUIT_PURPOSE_C_GENERAL:
+        case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
         case CIRCUIT_PURPOSE_S_ESTABLISH_INTRO:
         case CIRCUIT_PURPOSE_C_INTERMEDIARY:
         case CIRCUIT_PURPOSE_R_INTERMEDIARY:
@@ -2314,25 +2378,11 @@ circuit_get_open_circ_or_launch(entry_connection_t *conn,
                "service");
     }
     
-    /*XXX MoneTor*/
-    /*If this is an Intermediary circuit, handle that case*/
-    if (desired_circuit_purpose == CIRCUIT_PURPOSE_C_INTERMEDIARY) {
-      // pick the intermediary node
-      /**
-       * Need to implement intermediary choice abstraction; how to remember
-       * the choice (state file), etc. Then the function to here basically
-       * returns the intermediary on which we have a payment channel linked
-       * or a random one matching our policies
-       */
-    }
-
-    /*XXX MoneTor*/
-    /**Do the same as above for ledger circuit
-     */
     /* If we have specified a particular exit node for our
      * connection, then be sure to open a circuit to that exit node.
      */
-    if (desired_circuit_purpose == CIRCUIT_PURPOSE_C_GENERAL) {
+    if (desired_circuit_purpose == CIRCUIT_PURPOSE_C_GENERAL ||
+        desired_circuit_purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) {
       if (conn->chosen_exit_name) {
         const node_t *r;
         int opt = conn->chosen_exit_optional;
@@ -2440,7 +2490,8 @@ circuit_get_open_circ_or_launch(entry_connection_t *conn,
 
     /* Now trigger things that need to happen when we launch circuits */
 
-    if (desired_circuit_purpose == CIRCUIT_PURPOSE_C_GENERAL) {
+    if (desired_circuit_purpose == CIRCUIT_PURPOSE_C_GENERAL ||
+        desired_circuit_purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) {
       /* We just caused a circuit to get built because of this stream.
        * If this stream has caused a _lot_ of circuits to be built, that's
        * a bad sign: we should tell the user. */
@@ -2575,7 +2626,8 @@ link_apconn_to_circ(entry_connection_t *apconn, origin_circuit_t *circ,
     apconn->may_use_optimistic_data = 0;
   log_info(LD_APP, "Looks like completed circuit to %s %s allow "
            "optimistic data for connection to %s",
-           circ->base_.purpose == CIRCUIT_PURPOSE_C_GENERAL ?
+           (circ->base_.purpose == CIRCUIT_PURPOSE_C_GENERAL || 
+            circ->base_.purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) ?
              /* node_describe() does the right thing if exitnode is NULL */
              safe_str_client(node_describe(exitnode)) :
              "hidden service",
@@ -2794,11 +2846,27 @@ connection_ap_handshake_attach_circuit(entry_connection_t *conn)
 
     /* Find the circuit that we should use, if there is one. Otherwise
      * launch it. */
-    retval = circuit_get_open_circ_or_launch(
-        conn, CIRCUIT_PURPOSE_C_GENERAL, &circ);
+    if (base_conn->linked_conn &&
+        base_conn->linked_conn->type == CONN_TYPE_DIR &&
+        base_conn->linked_conn->purpose == DIR_PURPOSE_FETCH_CONSENSUS) {
+      retval = circuit_get_open_circ_or_launch(
+          conn, CIRCUIT_PURPOSE_C_GENERAL, &circ);
+    }
+    else if (!ledger_mode(get_options()) && !intermediary_mode(get_options())
+        && !server_mode(get_options()) && get_options()->EnablePayment &&
+        !conn->use_begindir && !conn->want_onehop) {
+      log_debug(LD_CIRC, "MoneTor: Looking for a payment circ");
+      retval = circuit_get_open_circ_or_launch(
+          conn, CIRCUIT_PURPOSE_C_GENERAL_PAYMENT, &circ);
+    }
+    else {
+      retval = circuit_get_open_circ_or_launch(
+          conn, CIRCUIT_PURPOSE_C_GENERAL, &circ);
+    }
     if (retval < 1) {
       /* We were either told "-1" (complete failure) or 0 (circuit in
        * progress); we can't attach this stream yet. */
+      log_debug(LD_CIRC, "MoneTor: retval: %d", retval);
       return retval;
     }
 
@@ -2813,9 +2881,13 @@ connection_ap_handshake_attach_circuit(entry_connection_t *conn)
      * the attachment. */
 
     /*
+     * XXX MoneTor Todo: only launch payment if the circuit has not been
+     * pre-built
      * Should launch payment on general circs and avoid begindir circs
      */
-    if (get_options()->EnablePayment && !conn->use_begindir && !conn->want_onehop) {
+    if (get_options()->EnablePayment && 
+        TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT &&
+        !conn->use_begindir && !conn->want_onehop) { /** probably not needed*/
       if (!circ->ppath) {
           circ->ppath = circuit_init_ppath(NULL);
           circ->ppath->next = circuit_init_ppath(circ->ppath);

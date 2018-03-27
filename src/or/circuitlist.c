@@ -645,6 +645,8 @@ circuit_purpose_to_controller_string(uint8_t purpose)
 
     case CIRCUIT_PURPOSE_C_GENERAL:
       return "GENERAL";
+    case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
+      return "GENERAL_PAYMENT";
     case CIRCUIT_PURPOSE_C_INTRODUCING:
     case CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT:
     case CIRCUIT_PURPOSE_C_INTRODUCE_ACKED:
@@ -707,6 +709,7 @@ circuit_purpose_to_controller_hs_state_string(uint8_t purpose)
 
     case CIRCUIT_PURPOSE_OR:
     case CIRCUIT_PURPOSE_C_GENERAL:
+    case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
     case CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT:
     case CIRCUIT_PURPOSE_TESTING:
     case CIRCUIT_PURPOSE_CONTROLLER:
@@ -773,6 +776,8 @@ circuit_purpose_to_string(uint8_t purpose)
       return "Acting as rendevous (established)";
     case CIRCUIT_PURPOSE_C_GENERAL:
       return "General-purpose client";
+    case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
+      return "General-purpose payment circuit for client";
     case CIRCUIT_PURPOSE_C_INTRODUCING:
       return "Hidden service client: Connecting to intro point";
     case CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT:
@@ -2124,7 +2129,7 @@ circuit_about_to_free(circuit_t *circ)
     mt_crelay_ledger_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));
   }
   /* Notify payment controller when a general circuit has closed */
-  else if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
+  else if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) {
     if (!authdir_mode(get_options()) && !intermediary_mode(get_options()) &&
         !server_mode(get_options())) {
       mt_cclient_general_circ_has_closed(TO_ORIGIN_CIRCUIT(circ));

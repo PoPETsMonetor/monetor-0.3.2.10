@@ -215,21 +215,21 @@ intermediary_need_cleanup(intermediary_t *intermediary, time_t now) {
  * want to establish a payment circuit.
  */
 
-void
+int
 mt_cclient_launch_payment(origin_circuit_t* circ) {
   log_info(LD_MT, "MoneTor - Initiating payment - calling payment module");
 
   if (router_have_consensus_path() == CONSENSUS_PATH_UNKNOWN ||
       !have_completed_a_circuit()) {
     log_warn(LD_MT, "MoneTor: Looks like we launch a payment while we still not bootstrapped?");
-    return;
+    return -1;
   }
   /** get guard's desc pointer */
   tor_assert(circ->cpath->extend_info);
   node_t* node = (node_t*)node_get_by_id(circ->cpath->extend_info->identity_digest);
   if (!node) {
     log_warn(LD_MT, "MoneTor: node is NULL");
-    return;
+    return -1;
   }
   if (!node->desc) {
     /** a desc pointer in node_t should work fine we have more than one guard
@@ -260,7 +260,7 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   if (!intermediary_g) {
     log_warn(LD_MT, "Looks like we do not have an intermediary yet ..");
     circuit_mark_for_close(TO_CIRCUIT(circ), -1);
-    return;
+    return -1;
   }
 
   if (intermediary_g) {
@@ -283,6 +283,11 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   if (intermediary_e) {
     memcpy(exit->inter_ident->identity, intermediary_e->identity->identity,
         DIGEST_LEN);
+  }
+  else {
+    log_warn(LD_MT, "Looks like we do not have an intermediary yet for exit..");
+    circuit_mark_for_close(TO_CIRCUIT(circ), -1);
+    return -1;
   }
   log_info(LD_MT, "MoneTor - Adding circ's descs %s to digestmap",
       mt_desc_describe(&circ->ppath->desc));
@@ -329,6 +334,7 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
     exit->p_marked_for_close = 1;
     log_info(LD_MT, "MoneTor: mt_cpay_pay returned -1");
   }
+  return 0;
 }
 
 
@@ -888,7 +894,7 @@ mt_cclient_intermediary_circ_has_opened(origin_circuit_t *circ) {
  * the circuit for close */
 void mt_cclient_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason) {
   origin_circuit_t *oricirc = NULL;
-  if (circ->purpose != CIRCUIT_PURPOSE_C_GENERAL || abort) {
+  if (circ->purpose != CIRCUIT_PURPOSE_C_GENERAL_PAYMENT || abort) {
     if (abort) {
       log_info(LD_MT, "We should abort the payment channel");
     }
@@ -1099,7 +1105,7 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
       log_info(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %s", mt_token_describe(pcommand));
     }
   }
-  else if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
+  else if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) {
 
     pay_path_t *ppath = circ->ppath;
     crypt_path_t *cpath = circ->cpath;

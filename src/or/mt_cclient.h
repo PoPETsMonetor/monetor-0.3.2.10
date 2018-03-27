@@ -90,7 +90,7 @@ intermediary_t* mt_cclient_get_intermediary_from_ocirc(origin_circuit_t* circ);
  * stream is attached to a general circuit
  */
 
-void mt_cclient_launch_payment(origin_circuit_t* circ);
+int mt_cclient_launch_payment(origin_circuit_t* circ);
 
 /**
  * Interface to send payment message from a client related role

@@ -517,7 +517,6 @@ circuit_establish_circuit(uint8_t purpose, extend_info_t *exit_ei, int flags)
 
   circ = origin_circuit_init(purpose, flags);
   
-  /** Again, no need to close the payment channel, we shouldn't have any */
 
   if (onion_pick_cpath_exit(circ, exit_ei, is_hs_v3_rp_circuit) < 0 ||
       onion_populate_cpath(circ) < 0) {
@@ -527,6 +526,7 @@ circuit_establish_circuit(uint8_t purpose, extend_info_t *exit_ei, int flags)
 
   control_event_circuit_status(circ, CIRC_EVENT_LAUNCHED, 0);
 
+  /** Again, no need to close the payment channel, we shouldn't have any */
   if ((err_reason = circuit_handle_first_hop(circ)) < 0) {
     circuit_mark_for_close(TO_CIRCUIT(circ), -err_reason);
     return NULL;
@@ -2211,6 +2211,7 @@ choose_good_exit_server(uint8_t purpose,
 
   switch (purpose) {
     case CIRCUIT_PURPOSE_C_GENERAL:
+    case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
       if (is_internal) /* pick it like a middle hop */
         return router_choose_random_node(NULL, options->ExcludeNodes, flags);
       else
