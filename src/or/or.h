@@ -511,33 +511,33 @@ typedef enum {
  */
 /** Client-side circuit purpose: Normal circuit, with cpath. */
 #define CIRCUIT_PURPOSE_C_GENERAL 7
-/** Client-side circuit purpose: at the client, connecting to intro point. */
-#define CIRCUIT_PURPOSE_C_INTRODUCING 8
-/** Client-side circuit purpose: at the client, sent INTRODUCE1 to intro point,
- * waiting for ACK/NAK. */
-#define CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT 9
-/** Client-side circuit purpose: at the client, introduced and acked, closing.
- */
-#define CIRCUIT_PURPOSE_C_INTRODUCE_ACKED 10
-/** Client-side circuit purpose: at the client, waiting for ack. */
-#define CIRCUIT_PURPOSE_C_ESTABLISH_REND 11
-/** Client-side circuit purpose: at the client, waiting for the service. */
-#define CIRCUIT_PURPOSE_C_REND_READY 12
-/** Client-side circuit purpose: at the client, waiting for the service,
- * INTRODUCE has been acknowledged. */
-#define CIRCUIT_PURPOSE_C_REND_READY_INTRO_ACKED 13
-/** Client-side circuit purpose: at the client, rendezvous established. */
-#define CIRCUIT_PURPOSE_C_REND_JOINED 14
-/** This circuit is used for build time measurement only */
-#define CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT 15
-/** This circuit is used for whatever interaction with the ledger from
- * client, intermediary or relay (no need to divide at first glance)*/
-#define CIRCUIT_PURPOSE_C_LEDGER 16
-#define CIRCUIT_PURPOSE_C_INTERMEDIARY 17
 /** This circuit is like a normal circuit with cpath but
  * a payment channel is built on it as soon as the circuit
  * opens */
-#define CIRCUIT_PURPOSE_C_GENERAL_PAYMENT 18
+#define CIRCUIT_PURPOSE_C_GENERAL_PAYMENT 8
+/** Client-side circuit purpose: at the client, connecting to intro point. */
+#define CIRCUIT_PURPOSE_C_INTRODUCING 9
+/** Client-side circuit purpose: at the client, sent INTRODUCE1 to intro point,
+ * waiting for ACK/NAK. */
+#define CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT 10
+/** Client-side circuit purpose: at the client, introduced and acked, closing.
+ */
+#define CIRCUIT_PURPOSE_C_INTRODUCE_ACKED 11
+/** Client-side circuit purpose: at the client, waiting for ack. */
+#define CIRCUIT_PURPOSE_C_ESTABLISH_REND 12
+/** Client-side circuit purpose: at the client, waiting for the service. */
+#define CIRCUIT_PURPOSE_C_REND_READY 13
+/** Client-side circuit purpose: at the client, waiting for the service,
+ * INTRODUCE has been acknowledged. */
+#define CIRCUIT_PURPOSE_C_REND_READY_INTRO_ACKED 14
+/** Client-side circuit purpose: at the client, rendezvous established. */
+#define CIRCUIT_PURPOSE_C_REND_JOINED 15
+/** This circuit is used for build time measurement only */
+#define CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT 16
+/** This circuit is used for whatever interaction with the ledger from
+ * client, intermediary or relay (no need to divide at first glance)*/
+#define CIRCUIT_PURPOSE_C_LEDGER 17
+#define CIRCUIT_PURPOSE_C_INTERMEDIARY 18
 
 #define CIRCUIT_PURPOSE_C_MAX_ 18
 /** Hidden-service-side circuit purpose: at the service, waiting for

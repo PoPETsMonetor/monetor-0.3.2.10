@@ -1624,7 +1624,6 @@ circuit_expire_old_circuits_clientside(void)
     } else if (!circ->timestamp_dirty && circ->state == CIRCUIT_STATE_OPEN) {
       if (timercmp(&circ->timestamp_began, &cutoff, OP_LT)) {
         if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL ||
-                circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT ||
                 circ->purpose == CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT ||
                 circ->purpose == CIRCUIT_PURPOSE_S_ESTABLISH_INTRO ||
                 circ->purpose == CIRCUIT_PURPOSE_TESTING ||
@@ -1693,7 +1692,8 @@ circuit_expire_old_circuits_serverside(time_t now)
   time_t cutoff = now - IDLE_ONE_HOP_CIRC_TIMEOUT;
 
   SMARTLIST_FOREACH_BEGIN(circuit_get_global_list(), circuit_t *, circ) {
-    if (circ->marked_for_close || CIRCUIT_IS_ORIGIN(circ))
+    if (circ->marked_for_close || CIRCUIT_IS_ORIGIN(circ) ||
+        circ->mt_priority)
       continue;
     or_circ = TO_OR_CIRCUIT(circ);
     /* If the circuit has been idle for too long, and there are no streams
@@ -2807,11 +2807,6 @@ connection_ap_handshake_attach_chosen_circuit(entry_connection_t *conn,
 /* XXXX this function should mark for close whenever it returns -1;
  * its callers shouldn't have to worry about that. */
 
-/*
- * XXX MoneTor - link or launch an intermediary circuit if payment
- * is enabled and that the stream attached to that particular circuit
- * does not already has a payment channel established.
- */
 int
 connection_ap_handshake_attach_circuit(entry_connection_t *conn)
 {
@@ -2942,18 +2937,18 @@ connection_ap_handshake_attach_circuit(entry_connection_t *conn)
      * pre-built
      * Should launch payment on general circs and avoid begindir circs
      */
-    if (get_options()->EnablePayment && 
-        TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT &&
-        !conn->use_begindir && !conn->want_onehop) { /** probably not needed*/
-      if (!circ->ppath) {
-          circ->ppath = circuit_init_ppath(NULL);
-          circ->ppath->next = circuit_init_ppath(circ->ppath);
-          circ->ppath->next->position = MIDDLE;
-          circ->ppath->next->next = circuit_init_ppath(circ->ppath->next);
-          circ->ppath->next->next->position = EXIT;
-          mt_cclient_launch_payment(circ);
-      }
-    }
+    /*if (get_options()->EnablePayment && */
+        /*TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT &&*/
+        /*!conn->use_begindir && !conn->want_onehop) { [>* probably not needed<]*/
+      /*if (!circ->ppath) {*/
+          /*circ->ppath = circuit_init_ppath(NULL);*/
+          /*circ->ppath->next = circuit_init_ppath(circ->ppath);*/
+          /*circ->ppath->next->position = MIDDLE;*/
+          /*circ->ppath->next->next = circuit_init_ppath(circ->ppath->next);*/
+          /*circ->ppath->next->next->position = EXIT;*/
+          /*mt_cclient_launch_payment(circ);*/
+      /*}*/
+    /*}*/
 
     return connection_ap_handshake_attach_chosen_circuit(conn, circ, NULL);
 
