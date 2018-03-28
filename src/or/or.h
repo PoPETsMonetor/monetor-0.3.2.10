@@ -5728,6 +5728,13 @@ typedef struct tor_version_t {
 typedef enum {
 
   /**
+   * Signal that the last mt_cpay_estab to the given relay desc was successful. Do
+   * not call mt_cpay_pay until either this signal (or
+   * MT_SIGNAL_PAY_FAILURE) is broadcasted
+   */
+  MT_SIGNAL_ESTABLISH_SUCCESS,
+
+  /**
    * Signal that the last mt_cpay_pay to the given relay desc was successful. Do
    * not call mt_cpay_pay again until either this signal (or
    * MT_SIGNAL_PAY_FAILURE) is broadcasted

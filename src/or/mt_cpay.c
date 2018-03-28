@@ -78,6 +78,7 @@ typedef struct {
   int num_payments;
 
   struct timeval start_estab;
+  struct timeval end_estab;
   struct timeval start_pay;
   struct timeval end_pay;
   struct timeval start_close;
@@ -177,6 +178,8 @@ static int help_nan_int_close8(void* args);
 // miscallaneous helper functions
 static int pay_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
 static int dpay_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
+static int estab_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
+static int destab_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
 static double timeval_diff(struct timeval t1, struct timeval t2);
 
 static mt_channel_t* new_channel(void);
@@ -186,6 +189,7 @@ static workqueue_reply_t cpu_task_estab(void* thread, void* arg);
 static workqueue_reply_t cpu_task_nanestab(void* thread, void* arg);
 static workqueue_reply_t cpu_task_nanclose(void* thread, void* arg);
 static int pay_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
+static int estab_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
 static int close_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
 
 static mt_cpay_t client;
@@ -240,6 +244,23 @@ int mt_cpay_init(void){
 }
 
 /**
+ * Establish a channel wit hthe relay through a given intermediary. If
+ * <b>rdesc<\b> and <b>idesc<\b> are equal, then the payment module will make a
+ * direct payment to the intermediary module.
+ */
+int mt_cpay_establish(mt_desc_t* rdesc, mt_desc_t* idesc){
+
+  // determine whether this is a standard or direct payment
+  if(mt_desc_comp(rdesc, idesc) != 0){
+    return estab_helper(rdesc, idesc);
+  }
+  else{
+    return destab_helper(rdesc, idesc);
+  }
+}
+
+
+/**
  * Send a single payment to the relay through a given intermediary. If
  * <b>rdesc<\b> and <b>idesc<\b> are equal, then the payment module will make a
  * direct payment to the intermediary module. If a payment request to a given
@@ -249,13 +270,109 @@ int mt_cpay_init(void){
  */
 int mt_cpay_pay(mt_desc_t* rdesc, mt_desc_t* idesc){
 
-  // determine whether this is a standard or direct payment
+   // determine whether this is a standard or direct payment
   if(mt_desc_comp(rdesc, idesc) != 0){
     return pay_helper(rdesc, idesc);
   }
   else{
     return dpay_helper(rdesc, idesc);
   }
+}
+
+/**
+ * Handle standard establish from mt_cpay_estab(). Re-enter this payment again and
+ * again until the establish is successful and estab_finish is called.
+ */
+static int estab_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
+  mt_channel_t* chn;
+  byte digest[DIGEST_LEN];
+  mt_desc2digest(rdesc, &digest);
+  byte pid[DIGEST_LEN];
+  mt_crypt_rand(DIGEST_LEN, pid);
+
+  // establish nanopayment channel if possible; callback pay_helper
+  if((chn = smartlist_pop_last(client.nans_setup))){
+    log_info(LD_MT, "MoneTor: Trying to establish a nanopayment channel ~ Callback estab_finish");
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->rdesc = *rdesc;
+    chn->callback = (mt_callback_t){.fn = estab_finish, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_nan_cli_estab1(chn, &pid);
+  }
+
+  // set up nanopayment channel if possible; callback estab_helper
+  if((chn = smartlist_pop_last(client.chns_estab))){
+    log_info(LD_MT, "MoneTor: Trying to set up the nanopayment channel ~ Callback estab_helper");
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->callback = (mt_callback_t){.fn = estab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_nan_cli_setup1(chn, &pid);
+  }
+
+  // establish channel if possible; callback estab_helper
+  if((chn = smartlist_pop_last(client.chns_setup))){
+    log_info(LD_MT, "MoneTor: Trying to establish a channel ~ Callback estab_helper");
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->callback = (mt_callback_t){.fn = estab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_chn_end_estab1(chn, &pid);
+  }
+
+  // set up channel if possible; callback estab_helper
+  if((client.mac_bal >= MT_CHN_VAL_CLI + client.fee) || get_options()->MoneTorPublicMint){
+    log_info(LD_MT, "MoneTor: Trying to set up the channel ~ Callback estab_helper");
+    chn = new_channel();
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->idesc = *idesc;    // set channel intermediary
+    chn->callback = (mt_callback_t){.fn = estab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_chn_end_setup(chn, &pid);
+  }
+
+  log_warn(LD_MT, "MoneTor: insufficient funds to start channel");
+  return MT_ERROR;
+}
+
+/**
+ * Handle direct establish from mt_cpay_destab(). Re-enter this payment again and
+ * again until the establish is successful and estab_finish is called.
+ */
+static int destab_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
+  mt_channel_t* chn;
+  byte digest[DIGEST_LEN];
+  mt_desc2digest(rdesc, &digest);
+  byte pid[DIGEST_LEN];
+  mt_crypt_rand(DIGEST_LEN, pid);
+
+  // establish nanopayment channel if possible; callback destab_finish
+  if((chn = smartlist_idesc_remove(client.nans_setup, rdesc))){
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->rdesc = *rdesc;
+    chn->callback = (mt_callback_t){.fn = estab_finish, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_nan_cli_destab1(chn, &pid);
+  }
+
+  // set up nanopayment channel if possible; callback destab_helper
+  if((chn = smartlist_idesc_remove(client.chns_estab, rdesc))){
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->callback = (mt_callback_t){.fn = destab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_nan_cli_setup1(chn, &pid);
+  }
+
+  // establish channel if possible; callback destab_helper
+  if((chn = smartlist_idesc_remove(client.chns_setup, rdesc))){
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->callback = (mt_callback_t){.fn = destab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_chn_end_estab1(chn, &pid);
+  }
+
+  // setup channel if possible; callback destab_helper
+  if((client.mac_bal >= MT_CHN_VAL_CLI + client.fee) || get_options()->MoneTorPublicMint){
+    chn = new_channel();
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->idesc = *idesc;
+    chn->callback = (mt_callback_t){.fn = destab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_chn_end_setup(chn, &pid);
+  }
+
+  log_warn(LD_MT, "MoneTor: insufficient funds to start channel");
+  return MT_ERROR;
 }
 
 /**
@@ -977,6 +1094,9 @@ static int handle_nan_rel_estab6(mt_desc_t* desc, nan_rel_estab6_t* token, byte 
     return MT_ERROR;
   }
 
+  // record start of nanopayment channel for log
+  tor_gettimeofday(&chn->log.end_estab);
+
   // check token validity
   if(token->success != MT_CODE_SUCCESS)
     return MT_ERROR;
@@ -1078,6 +1198,9 @@ static int handle_nan_int_destab2(mt_desc_t* desc, nan_int_destab2_t* token, byt
     log_warn(LD_MT, "protocol id not recognized");
     return MT_ERROR;
   }
+
+  // record start of nanopayment channel for log
+  tor_gettimeofday(&chn->log.end_estab);
 
   // check token validity
   if(token->success != MT_CODE_SUCCESS)
@@ -1395,8 +1518,8 @@ static int help_nan_int_close8(void* args){
   tor_gettimeofday(&now);
 
   double lifetime = timeval_diff(now, chn->log.start_estab);
-  double tt_establish = timeval_diff(chn->log.start_pay, chn->log.start_estab);
-  double tt_payment = timeval_diff(chn->log.end_pay, chn->log.start_estab);
+  double tt_establish = timeval_diff(chn->log.end_estab, chn->log.start_estab);
+  double tt_payment = timeval_diff(chn->log.end_pay, chn->log.start_pay);
   double tt_close = timeval_diff(now, chn->log.start_close);
 
   log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %lf, ttestablish: %lf, ttpayment: %lf, ttclose: %lf}",
@@ -1503,8 +1626,12 @@ static workqueue_reply_t cpu_task_nanclose(void* thread, void* args){
   return WQ_RPL_REPLY;
 }
 
+static int estab_finish(mt_desc_t* rdesc, mt_desc_t* idesc){
+  (void)idesc;
+  return mt_paymod_signal(MT_SIGNAL_ESTABLISH_SUCCESS, rdesc);
+}
+
 static int pay_finish(mt_desc_t* rdesc, mt_desc_t* idesc){
-  //return mt_pay_success(rdesc, idesc, MT_SUCCESS);
   (void)idesc;
   return mt_paymod_signal(MT_SIGNAL_PAYMENT_SUCCESS, rdesc);
 }

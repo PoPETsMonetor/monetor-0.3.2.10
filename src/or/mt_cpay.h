@@ -21,6 +21,13 @@
 int mt_cpay_init(void);
 
 /**
+ * Establish a channel wit hthe relay through a given intermediary. If
+ * <b>rdesc<\b> and <b>idesc<\b> are equal, then the payment module will make a
+ * direct payment to the intermediary module.
+ */
+int mt_cpay_establish(mt_desc_t* rdesc, mt_desc_t* idesc);
+
+/**
  * Send a single payment to the relay through a given intermediary. If
  * <b>rdesc<\b> and <b>idesc<\b> are equal, then the payment module will make a
  * direct payment to the intermediary module. If a payment request to a given
