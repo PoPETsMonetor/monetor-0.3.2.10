@@ -225,24 +225,26 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
     return -1;
   }
   /** get guard's desc pointer */
-  tor_assert(circ->cpath->extend_info);
-  node_t* node = (node_t*)node_get_by_id(circ->cpath->extend_info->identity_digest);
-  if (!node) {
-    log_warn(LD_MT, "MoneTor: node is NULL");
-    return -1;
-  }
-  if (!node->desc) {
+  /*tor_assert(circ->cpath->extend_info);*/
+  /*node_t* node = (node_t*)node_get_by_id(circ->cpath->extend_info->identity_digest);*/
+  /*if (!node) {*/
+    /*log_warn(LD_MT, "MoneTor: node is NULL");*/
+    /*return -1;*/
+  /*}*/
+  /*if (!node->desc) {*/
     /** a desc pointer in node_t should work fine we have more than one guard
      * but not the right architecture if we want to save this information to
      * the disk*/
-    increment(count);
-    node->desc = tor_malloc_zero(sizeof(mt_desc_t));
-    node->desc->id[0] = count[0];
-    node->desc->id[1] = count[1];
-    node->desc->party = MT_PARTY_REL;
-  }
-  circ->ppath->desc.id[0] = node->desc->id[0];
-  circ->ppath->desc.id[1] = node->desc->id[1];
+  increment(count);
+    /*node->desc = tor_malloc_zero(sizeof(mt_desc_t));*/
+    /*node->desc->id[0] = count[0];*/
+    /*node->desc->id[1] = count[1];*/
+    /*node->desc->party = MT_PARTY_REL;*/
+  /*}*/
+  /*circ->ppath->desc.id[0] = node->desc->id[0];*/
+  circ->ppath->desc.id[0] = count[0];
+  /*circ->ppath->desc.id[1] = node->desc->id[1];*/
+  circ->ppath->desc.id[1] = count[1];
   circ->ppath->desc.party = MT_PARTY_REL;
   /* Choosing right intermediary */
   tor_assert(circ->ppath->next);
