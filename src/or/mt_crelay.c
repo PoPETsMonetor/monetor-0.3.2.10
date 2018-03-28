@@ -656,7 +656,16 @@ mt_crelay_intermediary_circuit_free(origin_circuit_t *oricirc) {
 
 void mt_crelay_orcirc_free(or_circuit_t* circ) {
   if (circ->desci) {
-    tor_free(*circ->desci);
+    int can_free = 1;
+    /** Check wheter the same pointer is still used*/
+    SMARTLIST_FOREACH_BEGIN(intercircs, origin_circuit_t *, oricirc) {
+      if (mt_desc_eq(oricirc->desci, *circ->desci)) {
+        can_free = 0;
+        break;
+      }
+    } SMARTLIST_FOREACH_END(oricirc);
+    if (can_free)
+      tor_free(*circ->desci);
   }
   buf_free(circ->buf);
 }
