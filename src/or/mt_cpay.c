@@ -1094,9 +1094,6 @@ static int handle_nan_rel_estab6(mt_desc_t* desc, nan_rel_estab6_t* token, byte 
     return MT_ERROR;
   }
 
-  // record start of nanopayment channel for log
-  tor_gettimeofday(&chn->log.end_estab);
-
   // check token validity
   if(token->success != MT_CODE_SUCCESS)
     return MT_ERROR;
@@ -1109,6 +1106,9 @@ static int handle_nan_rel_estab6(mt_desc_t* desc, nan_rel_estab6_t* token, byte 
   mt_desc2digest(desc, &digest);
   digestmap_remove(client.chns_transition, (char*)*pid);
   digestmap_set(client.nans_estab, (char*)digest, chn);
+
+  // record start of nanopayment channel for log
+  tor_gettimeofday(&chn->log.end_estab);
 
   if(chn->callback.fn)
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
@@ -1199,9 +1199,6 @@ static int handle_nan_int_destab2(mt_desc_t* desc, nan_int_destab2_t* token, byt
     return MT_ERROR;
   }
 
-  // record start of nanopayment channel for log
-  tor_gettimeofday(&chn->log.end_estab);
-
   // check token validity
   if(token->success != MT_CODE_SUCCESS)
     return MT_ERROR;
@@ -1211,7 +1208,8 @@ static int handle_nan_int_destab2(mt_desc_t* desc, nan_int_destab2_t* token, byt
   digestmap_remove(client.chns_transition, (char*)*pid);
   digestmap_set(client.nans_destab, (char*)digest, chn);
 
-  // check validity incoming message
+  // record start of nanopayment channel for log
+  tor_gettimeofday(&chn->log.end_estab);
 
   if(chn->callback.fn)
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
