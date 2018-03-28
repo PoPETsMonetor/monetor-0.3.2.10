@@ -350,7 +350,7 @@ mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   if (!circ) {
     log_warn(LD_MT, "MoneTor: circ linked to mt_desc_t %s is not in our map, in mt_crelay_send_message"
         " for command %s", mt_desc_describe(desc), mt_token_describe(type));
-    return -2;
+    return -1;
   }
 
   if (circ->marked_for_close) {

@@ -1730,6 +1730,7 @@ route_len_for_purpose(uint8_t purpose, extend_info_t *exit_ei)
     /* These three purposes connect to a router that someone else
      * might have chosen, so add an extra hop to protect anonymity. */
   case CIRCUIT_PURPOSE_C_GENERAL:
+  case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
     /* connecting to hidden service directory */
   case CIRCUIT_PURPOSE_C_INTRODUCING:
     /* client connecting to introduction point */
@@ -2256,6 +2257,7 @@ warn_if_last_router_excluded(origin_circuit_t *circ,
                circuit_purpose_to_string(purpose));
       return;
     case CIRCUIT_PURPOSE_C_GENERAL:
+    case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
       if (circ->build_state->is_internal)
         return;
       description = "requested exit node";

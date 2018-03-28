@@ -430,7 +430,8 @@ count_pending_general_client_circuits(void)
   SMARTLIST_FOREACH_BEGIN(circuit_get_global_list(), circuit_t *, circ) {
     if (circ->marked_for_close ||
         circ->state == CIRCUIT_STATE_OPEN ||
-        circ->purpose != CIRCUIT_PURPOSE_C_GENERAL ||
+        (circ->purpose != CIRCUIT_PURPOSE_C_GENERAL &&
+        circ->purpose != CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) ||
         !CIRCUIT_IS_ORIGIN(circ))
       continue;
 
@@ -1087,7 +1088,8 @@ circuit_stream_is_being_handled(entry_connection_t *conn,
   SMARTLIST_FOREACH_BEGIN(circuit_get_global_list(), circuit_t *, circ) {
     if (CIRCUIT_IS_ORIGIN(circ) &&
         !circ->marked_for_close &&
-        circ->purpose == CIRCUIT_PURPOSE_C_GENERAL &&
+        (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL ||
+         circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) &&
         (!circ->timestamp_dirty ||
          circ->timestamp_dirty + get_options()->MaxCircuitDirtiness > now)) {
       origin_circuit_t *origin_circ = TO_ORIGIN_CIRCUIT(circ);
@@ -1987,6 +1989,7 @@ circuit_build_failed(origin_circuit_t *circ)
 
   switch (circ->base_.purpose) {
     case CIRCUIT_PURPOSE_C_GENERAL:
+    case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
       /* If we never built the circuit, note it as a failure. */
       circuit_increment_failure_count();
       if (failed_at_last_hop) {
@@ -2264,7 +2267,8 @@ circuit_get_open_circ_or_launch(entry_connection_t *conn,
                                           conn->socks_request->port);
 
   /* Do we need an "internal" circuit? */
-  if (desired_circuit_purpose != CIRCUIT_PURPOSE_C_GENERAL)
+  if (desired_circuit_purpose != CIRCUIT_PURPOSE_C_GENERAL &&
+      desired_circuit_purpose != CIRCUIT_PURPOSE_C_GENERAL_PAYMENT)
     need_internal = 1;
   else if (conn->use_begindir || conn->want_onehop)
     need_internal = 1;
@@ -2672,6 +2676,7 @@ link_apconn_to_circ(entry_connection_t *apconn, origin_circuit_t *circ,
   /* See if we can use optimistic data on this circuit */
   if (optimistic_data_enabled() &&
       (circ->base_.purpose == CIRCUIT_PURPOSE_C_GENERAL ||
+       circ->base_.purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT ||
        circ->base_.purpose == CIRCUIT_PURPOSE_C_REND_JOINED))
     apconn->may_use_optimistic_data = 1;
   else

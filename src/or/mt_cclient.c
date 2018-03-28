@@ -259,7 +259,6 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   /* Log if intermediary is NULL? Should not happen*/
   if (!intermediary_g) {
     log_warn(LD_MT, "Looks like we do not have an intermediary yet ..");
-    circuit_mark_for_close(TO_CIRCUIT(circ), -1);
     return -1;
   }
 
@@ -286,7 +285,6 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   }
   else {
     log_warn(LD_MT, "Looks like we do not have an intermediary yet for exit..");
-    circuit_mark_for_close(TO_CIRCUIT(circ), -1);
     return -1;
   }
   log_info(LD_MT, "MoneTor - Adding circ's descs %s to digestmap",

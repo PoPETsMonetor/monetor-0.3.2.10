@@ -789,6 +789,7 @@ connection_ap_expire_beginning(void)
       continue;
     }
     if (circ->purpose != CIRCUIT_PURPOSE_C_GENERAL &&
+        circ->purpose != CIRCUIT_PURPOSE_C_GENERAL_PAYMENT &&
         circ->purpose != CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT &&
         circ->purpose != CIRCUIT_PURPOSE_PATH_BIAS_TESTING) {
       log_warn(LD_BUG, "circuit->purpose == CIRCUIT_PURPOSE_C_GENERAL failed. "
@@ -2588,6 +2589,7 @@ connection_ap_supports_optimistic_data(const entry_connection_t *conn)
   if (edge_conn->on_circuit == NULL ||
       edge_conn->on_circuit->state != CIRCUIT_STATE_OPEN ||
       (edge_conn->on_circuit->purpose != CIRCUIT_PURPOSE_C_GENERAL &&
+       edge_conn->on_circuit->purpose != CIRCUIT_PURPOSE_C_GENERAL_PAYMENT &&
        edge_conn->on_circuit->purpose != CIRCUIT_PURPOSE_C_REND_JOINED))
     return 0;
 
@@ -2609,7 +2611,8 @@ connection_ap_get_begincell_flags(entry_connection_t *ap_conn)
     return 0;
 
   /* No flags for hidden services. */
-  if (edge_conn->on_circuit->purpose != CIRCUIT_PURPOSE_C_GENERAL)
+  if (edge_conn->on_circuit->purpose != CIRCUIT_PURPOSE_C_GENERAL &&
+      edge_conn->on_circuit->purpose != CIRCUIT_PURPOSE_C_GENERAL_PAYMENT)
     return 0;
 
   /* If only IPv4 is supported, no flags */
@@ -2692,7 +2695,8 @@ connection_ap_handshake_send_begin,(entry_connection_t *ap_conn))
   edge_conn->begincell_flags = connection_ap_get_begincell_flags(ap_conn);
 
   tor_snprintf(payload,RELAY_PAYLOAD_SIZE, "%s:%d",
-               (circ->base_.purpose == CIRCUIT_PURPOSE_C_GENERAL) ?
+               (circ->base_.purpose == CIRCUIT_PURPOSE_C_GENERAL ||
+                circ->base_.purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) ?
                  ap_conn->socks_request->address : "",
                ap_conn->socks_request->port);
   payload_len = (int)strlen(payload)+1;
@@ -2793,7 +2797,8 @@ connection_ap_handshake_send_resolve(entry_connection_t *ap_conn)
   tor_assert(base_conn->type == CONN_TYPE_AP);
   tor_assert(base_conn->state == AP_CONN_STATE_CIRCUIT_WAIT);
   tor_assert(ap_conn->socks_request);
-  tor_assert(circ->base_.purpose == CIRCUIT_PURPOSE_C_GENERAL);
+  tor_assert(circ->base_.purpose == CIRCUIT_PURPOSE_C_GENERAL ||
+             circ->base_.purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT);
 
   command = ap_conn->socks_request->command;
   tor_assert(SOCKS_COMMAND_IS_RESOLVE(command));

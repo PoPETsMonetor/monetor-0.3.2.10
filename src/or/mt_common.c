@@ -684,7 +684,7 @@ MOCK_IMPL(void,
     if (CIRCUIT_IS_ORIGIN(circ)) {
       if (msg_len > RELAY_PPAYLOAD_SIZE) {
         origin_circuit_t *ocirc = TO_ORIGIN_CIRCUIT(circ);
-        if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
+        if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) {
           // get right ppath
           pay_path_t *ppath = ocirc->ppath;
           crypt_path_t *cpath = ocirc->cpath;
