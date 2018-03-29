@@ -50,6 +50,7 @@ void mt_crelay_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
   /* when it reaches 1000, it should receive
    * a payment from the client */
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
+  mt_rpay_set_status(&circ->desc, 1);
 }
 
 ledger_t * mt_crelay_get_ledger(void) {
@@ -206,6 +207,7 @@ mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
 
 void
 mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
+  mt_rpay_set_status(&circ->desc, 0);
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
   if (digestmap_get(desc2circ, (char*) id)) {
@@ -467,6 +469,8 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       /** We didn't find a circ connected/connecting to ninter */
       mt_desc_t *desci = tor_malloc_zero(sizeof(mt_desc_t));
       memcpy(desci, msg+sizeof(int_id_t), sizeof(mt_desc_t));
+      /** It may be a MT_PARTY_REL in case of guard position ~ let's change that */
+      /*desci->party = MT_PARTY_INT;*/
       int use_new_desci = 0;
       if (!oricirc) {
         log_info(LD_MT, "MoneTor: We don't have any current circuit towards %s that intermediary"
@@ -509,6 +513,8 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         digestmap_set(desc2circ, (char*) id, oricirc);
       }
       if (use_new_desci) {
+        /** reactive the status of this desc if it was used before! */
+        mt_rpay_set_status(desci, 1);
         /** We don't nee this descriptor */
         if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
               msg+sizeof(int_id_t)+sizeof(mt_desc_t),
@@ -637,8 +643,9 @@ void mt_crelay_mark_payment_channel_for_close(circuit_t *circ, int abort, int re
   }
   else {
     /** Before sending a destroy cell, let's try to close */
-    log_warn(LD_MT, "MoneTor: We should properly close from relay side (not implemented), so "
-        "we destroy the circuit");
+    if (circ->mt_priority)
+      log_warn(LD_MT, "MoneTor: We should properly close from relay side (not implemented), so "
+          "we destroy the circuit");
     circuit_mark_for_close(circ, reason);
     // XXX No mt_rpay_close ??
   }
@@ -646,11 +653,9 @@ void mt_crelay_mark_payment_channel_for_close(circuit_t *circ, int abort, int re
 
 void
 mt_crelay_intermediary_circuit_free(origin_circuit_t *oricirc) {
-  /** It seems to have rare situation where freeing this memory
-   * cause a segfault ... keep leaking for now*/
-  /*if (oricirc->desci) {*/
-    /*tor_free(oricirc->desci);*/
-  /*}*/
+  if (oricirc->desci) {
+    tor_free(oricirc->desci);
+  }
   buf_free(oricirc->buf);
 }
 

@@ -63,21 +63,21 @@ int mt_set_desc_status(mt_msgbuf_t* msgbuf, mt_desc_t* desc, int status_new){
     SMARTLIST_FOREACH_BEGIN(buffer, message_t*, elm){
       int result;
       if(!elm->is_multidesc)
-	result = mt_send_message(&elm->desc1, elm->type, elm->msg, elm->size);
+        result = mt_send_message(&elm->desc1, elm->type, elm->msg, elm->size);
       else
-	result = mt_send_message_multidesc(&elm->desc1, &elm->desc2, elm->type,
-					   elm->msg, elm->size);
+        result = mt_send_message_multidesc(&elm->desc1, &elm->desc2, elm->type,
+            elm->msg, elm->size);
 
       if(result == 0){
-	smartlist_remove(buffer, elm);
-	tor_free(elm);
-	elm_sl_len--;
+        smartlist_remove(buffer, elm);
+        tor_free(elm);
+        elm_sl_len--;
       }
 
       else{
-	log_info(LD_MT, "Descriptor disconnected while sending messages\n");
-	*status = 0;
-	break;
+        log_info(LD_MT, "Descriptor disconnected while sending messages\n");
+        *status = 0;
+        break;
       }
     } SMARTLIST_FOREACH_END(elm);
   }
