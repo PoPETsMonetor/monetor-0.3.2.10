@@ -218,14 +218,22 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
   }
 
   if (circ->desci && *circ->desci) {
-    mt_rpay_set_status(*circ->desci, 0);
-    mt_desc2digest(*circ->desci, &id);
-    /** remove or intermediary map duplication */
-    if (digestmap_get(desc2circ, (char*) id)) {
-      digestmap_remove(desc2circ, (char*) id);
-    }
-    else {
-      log_warn(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
+    /** Check whether *circ->desci match an intermediary in the list */
+    int removeit = 1;
+    SMARTLIST_FOREACH_BEGIN(intercircs, origin_circuit_t *, oricirc) {
+      if (mt_desc_eq(oricirc->desci, *circ->desci))
+        removeit = 0;
+    }SMARTLIST_FOREACH_END(oricirc);
+    if (removeit) {
+      mt_rpay_set_status(*circ->desci, 0);
+      mt_desc2digest(*circ->desci, &id);
+      /** remove or intermediary map duplication */
+      if (digestmap_get(desc2circ, (char*) id)) {
+        digestmap_remove(desc2circ, (char*) id);
+      }
+      else {
+        log_warn(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
+      }
     }
   }
 }
