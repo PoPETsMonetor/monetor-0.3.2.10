@@ -464,9 +464,9 @@ run_cclient_housekeeping_event(time_t now) {
           }
         }
       }
-      else if (!ppath_tmp->last_mt_cpay_succeeded) {
-        log_warn(LD_MT, "MoneTor: Last payment did not succeeded yet for hop %d.", hop);
-      }
+      /*else if (!ppath_tmp->last_mt_cpay_succeeded) {*/
+        /*log_warn(LD_MT, "MoneTor: Last payment did not succeeded yet for hop %d.", hop);*/
+      /*}*/
       ppath_tmp = ppath_tmp->next;
       hop++;
     }

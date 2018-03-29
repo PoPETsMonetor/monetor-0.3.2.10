@@ -216,7 +216,7 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
   }
 
   if (circ->desci && *circ->desci) {
-    mt_rpay_set_status(*circ->desci, 0);
+    /*mt_rpay_set_status(*circ->desci, 0);*/
     mt_desc2digest(*circ->desci, &id);
     /** remove or intermediary map duplication */
     if (digestmap_get(desc2circ, (char*) id)) {
@@ -468,7 +468,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       mt_desc_t *desci = tor_malloc_zero(sizeof(mt_desc_t));
       memcpy(desci, msg+sizeof(int_id_t), sizeof(mt_desc_t));
       /** It may be a MT_PARTY_REL in case of guard position ~ let's change that */
-      desci->party = MT_PARTY_INT;
+      /*desci->party = MT_PARTY_INT;*/
       int use_new_desci = 0;
       if (!oricirc) {
         log_info(LD_MT, "MoneTor: We don't have any current circuit towards %s that intermediary"
@@ -512,7 +512,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       }
       if (use_new_desci) {
         /** reactive the status of this desc if it was used before! */
-        mt_rpay_set_status(desci, 1);
+        /*mt_rpay_set_status(desci, 1);*/
         /** We don't nee this descriptor */
         if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
               msg+sizeof(int_id_t)+sizeof(mt_desc_t),
