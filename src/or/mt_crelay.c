@@ -216,7 +216,7 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
   }
 
   if (circ->desci && *circ->desci) {
-    /*mt_rpay_set_status(*circ->desci, 0);*/
+    mt_rpay_set_status(*circ->desci, 0);
     mt_desc2digest(*circ->desci, &id);
     /** remove or intermediary map duplication */
     if (digestmap_get(desc2circ, (char*) id)) {
@@ -469,7 +469,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       memcpy(desci, msg+sizeof(int_id_t), sizeof(mt_desc_t));
       /** It may be a MT_PARTY_REL in case of guard position ~ let's change that */
       desci->party = MT_PARTY_INT;
-      int can_free_desci = 0;
+      int use_new_desci = 0;
       if (!oricirc) {
         log_info(LD_MT, "MoneTor: We don't have any current circuit towards %s that intermediary"
             " .. Building one. ", node_describe(ninter));
@@ -498,7 +498,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       else {
         /** XXX: Should we notify the payment module about that it can send towards the
          * intermediary without waiting?*/
-        can_free_desci = 1;
+        use_new_desci = 1;
         log_info(LD_MT, "MoneTor: Cool, we already have a circuit towards that intermediary");
       }
 
@@ -510,10 +510,9 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       if (!digestmap_get(desc2circ, (char*) id)) {
         digestmap_set(desc2circ, (char*) id, oricirc);
       }
-      if (can_free_desci) {
+      if (use_new_desci) {
         /** We don't nee this descriptor */
-        tor_free(desci);
-        if (mt_rpay_recv_multidesc(&orcirc->desc, oricirc->desci, pcommand,
+        if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
               msg+sizeof(int_id_t)+sizeof(mt_desc_t),
               msg_len-sizeof(int_id_t)-sizeof(mt_desc_t)) < 0) {
           log_warn(LD_MT, "MoneTor: Payment module returned -1"
@@ -521,7 +520,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
           circ->mt_priority = 0;
         }
       }
-      else if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
+      else if (mt_rpay_recv_multidesc(&orcirc->desc, oricirc->desci, pcommand,
             msg+sizeof(int_id_t)+sizeof(mt_desc_t),
             msg_len-sizeof(int_id_t)-sizeof(mt_desc_t)) < 0) {
         log_warn(LD_MT, "MoneTor: Payment module returned -1"
@@ -657,6 +656,18 @@ mt_crelay_intermediary_circuit_free(origin_circuit_t *oricirc) {
 }
 
 void mt_crelay_orcirc_free(or_circuit_t* circ) {
+  if (circ->desci) {
+    int can_free = 1;
+    /** Check wheter the same pointer is still used*/
+    SMARTLIST_FOREACH_BEGIN(intercircs, origin_circuit_t *, oricirc) {
+      if (mt_desc_eq(oricirc->desci, *circ->desci)) {
+        can_free = 0;
+        break;
+      }
+    } SMARTLIST_FOREACH_END(oricirc);
+    if (can_free)
+      tor_free(*circ->desci);
+  }
   buf_free(circ->buf);
 }
 

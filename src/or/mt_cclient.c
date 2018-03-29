@@ -1177,7 +1177,7 @@ mt_cclient_intermediary_circuit_free(origin_circuit_t* circ) {
 
 /************************** Informational (Logging purposes) ***************************/
 
-int mt_cclient_relay_type(mt_desc_t *desc){
+MOCK_IMPL(int, mt_cclient_relay_type,(mt_desc_t *desc)){
   byte digest[DIGEST_LEN];
   mt_desc2digest(desc, &digest);
 
