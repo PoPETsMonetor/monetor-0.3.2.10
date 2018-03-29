@@ -511,6 +511,8 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
         digestmap_set(desc2circ, (char*) id, oricirc);
       }
       if (use_new_desci) {
+        /** reactive the status of this desc if it was used before! */
+        mt_rpay_set_status(desci, 1);
         /** We don't nee this descriptor */
         if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
               msg+sizeof(int_id_t)+sizeof(mt_desc_t),
