@@ -1493,8 +1493,8 @@ static int help_nan_int_close8(void* args){
   digestmap_remove(client.chns_transition, (char*)pid);
 
   // if sufficient funds left then move channel to establish state, otherwise move to spent
-  if(chn->data.wallet.end_bal >= MT_NAN_LEN * (MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100)){
-    //new wallet becomes old wallet
+  if(chn->data.wallet.end_bal >= MT_NAN_LEN * (MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100)
+     && mt_desc_comp(&chn->rdesc, &chn->idesc) != 0){
     smartlist_add(client.chns_estab, chn);
   }
   else{
