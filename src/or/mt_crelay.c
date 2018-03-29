@@ -467,6 +467,8 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       /** We didn't find a circ connected/connecting to ninter */
       mt_desc_t *desci = tor_malloc_zero(sizeof(mt_desc_t));
       memcpy(desci, msg+sizeof(int_id_t), sizeof(mt_desc_t));
+      /** It may be a MT_PARTY_REL in case of guard position ~ let's change that */
+      desci->party = MT_PARTY_INT;
       int can_free_desci = 0;
       if (!oricirc) {
         log_info(LD_MT, "MoneTor: We don't have any current circuit towards %s that intermediary"
@@ -638,8 +640,9 @@ void mt_crelay_mark_payment_channel_for_close(circuit_t *circ, int abort, int re
   }
   else {
     /** Before sending a destroy cell, let's try to close */
-    log_warn(LD_MT, "MoneTor: We should properly close from relay side (not implemented), so "
-        "we destroy the circuit");
+    if (circ->mt_priority)
+      log_warn(LD_MT, "MoneTor: We should properly close from relay side (not implemented), so "
+          "we destroy the circuit");
     circuit_mark_for_close(circ, reason);
     // XXX No mt_rpay_close ??
   }
@@ -647,11 +650,9 @@ void mt_crelay_mark_payment_channel_for_close(circuit_t *circ, int abort, int re
 
 void
 mt_crelay_intermediary_circuit_free(origin_circuit_t *oricirc) {
-  /** It seems to have rare situation where freeing this memory
-   * cause a segfault ... keep leaking for now*/
-  /*if (oricirc->desci) {*/
-    /*tor_free(oricirc->desci);*/
-  /*}*/
+  if (oricirc->desci) {
+    tor_free(oricirc->desci);
+  }
   buf_free(oricirc->buf);
 }
 

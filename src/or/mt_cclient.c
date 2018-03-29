@@ -427,45 +427,49 @@ run_cclient_housekeeping_event(time_t now) {
     }
   } SMARTLIST_FOREACH_END(intermediary);
 
-  /*log_info(LD_MT, "MoneTor: relay digestmap length: %d", digestmap_size(desc2circ));*/
-  /*DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {*/
-    /*if (!CIRCUIT_IS_ORIGIN(circ) && !TO_ORIGIN_CIRCUIT(circ)->ppath) {*/
-      /*continue;*/
-    /*}*/
+  log_info(LD_MT, "MoneTor: relay digestmap length: %d", digestmap_size(desc2circ));
+  DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
+    if (!CIRCUIT_IS_ORIGIN(circ) && !TO_ORIGIN_CIRCUIT(circ)->ppath) {
+      continue;
+    }
     /*[>* Verify if we have enough remaining window <]*/
-    /*pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;*/
-    /*int hop = 1;*/
-    /*while (ppath_tmp != NULL) {*/
-      /*if (ppath_tmp->window < LIMIT_PAYMENT_WINDOW &&*/
-          /*!ppath_tmp->payment_is_processing &&*/
-          /*!ppath_tmp->p_marked_for_close) {*/
+    pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
+    int hop = 1;
+    while (ppath_tmp != NULL) {
+      if (ppath_tmp->window < LIMIT_PAYMENT_WINDOW &&
+          !ppath_tmp->payment_is_processing &&
+          !ppath_tmp->p_marked_for_close) {
         /*[>* pay :-) <]*/
-        /*intermediary_t* intermediary = get_intermediary_by_role(ppath_tmp->position);*/
-        /*log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d", ppath_tmp->window);*/
-        /*ppath_tmp->payment_is_processing = 1;*/
-        /*if (hop == 1) {*/
+        intermediary_t* intermediary = NULL;
+        if (MAX_INTERMEDIARY_CHOSEN == 1)
+          intermediary = get_intermediary_by_role(ALLPOS);
+        else
+          intermediary = get_intermediary_by_role(ppath_tmp->position);
+        log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d", ppath_tmp->window);
+        ppath_tmp->payment_is_processing = 1;
+        if (hop == 1) {
           /*[>* We must do a direct payment, using same descriptor <]*/
-          /*if (mt_cpay_pay(&ppath_tmp->desc, &ppath_tmp->desc) < 0) {*/
-            /*log_warn(LD_MT, "MoneTor: direct payment mt_cpay_pay failed");*/
-            /*ppath_tmp->p_marked_for_close = 1;*/
-            /*ppath_tmp->last_mt_cpay_succeeded = 0;*/
-          /*}*/
-        /*}*/
-        /*else {*/
-          /*if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {*/
-            /*log_warn(LD_MT, "MoneTor: mt_cpay_pay failed");*/
-            /*ppath_tmp->p_marked_for_close = 1;*/
-            /*ppath_tmp->last_mt_cpay_succeeded = 0;*/
-          /*}*/
-        /*}*/
-      /*}*/
-      /*else if (!ppath_tmp->last_mt_cpay_succeeded) {*/
-        /*log_warn(LD_MT, "MoneTor: Last payment did not succeeded yet for hop %d.", hop);*/
-      /*}*/
-      /*ppath_tmp = ppath_tmp->next;*/
-      /*hop++;*/
-    /*}*/
-  /*} DIGESTMAP_FOREACH_END;*/
+          if (mt_cpay_pay(&ppath_tmp->desc, &ppath_tmp->desc) < 0) {
+            log_warn(LD_MT, "MoneTor: direct payment mt_cpay_pay failed");
+            ppath_tmp->p_marked_for_close = 1;
+            ppath_tmp->last_mt_cpay_succeeded = 0;
+          }
+        }
+        else {
+          if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
+            log_warn(LD_MT, "MoneTor: mt_cpay_pay failed");
+            ppath_tmp->p_marked_for_close = 1;
+            ppath_tmp->last_mt_cpay_succeeded = 0;
+          }
+        }
+      }
+      else if (!ppath_tmp->last_mt_cpay_succeeded) {
+        log_warn(LD_MT, "MoneTor: Last payment did not succeeded yet for hop %d.", hop);
+      }
+      ppath_tmp = ppath_tmp->next;
+      hop++;
+    }
+  } DIGESTMAP_FOREACH_END;
 }
 
 /*
