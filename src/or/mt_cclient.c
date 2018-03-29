@@ -254,6 +254,7 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
     intermediary_g = get_intermediary_by_role(ALLPOS);
   else
     intermediary_g = get_intermediary_by_role(MIDDLE);
+  
   increment(count);
   middle->desc.id[0] = count[0];
   middle->desc.id[1] = count[1];
@@ -957,7 +958,7 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   if (!circ) {
     log_warn(LD_MT, "MoneTor: in mt_cclient_send_message, digestmap_get failed to return a circ for descriptor"
         " %s", mt_desc_describe(desc));
-    return -2;
+    return -1;
   }
   if(circ->marked_for_close) {
     log_warn(LD_MT, "MoneTor: This circuit is about to be freed");
