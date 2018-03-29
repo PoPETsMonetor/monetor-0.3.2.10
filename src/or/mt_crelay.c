@@ -50,6 +50,7 @@ void mt_crelay_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
   /* when it reaches 1000, it should receive
    * a payment from the client */
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
+  mt_rpay_set_status(&circ->desc, 1);
 }
 
 ledger_t * mt_crelay_get_ledger(void) {
@@ -206,6 +207,7 @@ mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
 
 void
 mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
+  mt_rpay_set_status(&circ->desc, 0);
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
   if (digestmap_get(desc2circ, (char*) id)) {
@@ -216,7 +218,7 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
   }
 
   if (circ->desci && *circ->desci) {
-    /*mt_rpay_set_status(*circ->desci, 0);*/
+    mt_rpay_set_status(*circ->desci, 0);
     mt_desc2digest(*circ->desci, &id);
     /** remove or intermediary map duplication */
     if (digestmap_get(desc2circ, (char*) id)) {
@@ -512,7 +514,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       }
       if (use_new_desci) {
         /** reactive the status of this desc if it was used before! */
-        /*mt_rpay_set_status(desci, 1);*/
+        mt_rpay_set_status(desci, 1);
         /** We don't nee this descriptor */
         if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
               msg+sizeof(int_id_t)+sizeof(mt_desc_t),
