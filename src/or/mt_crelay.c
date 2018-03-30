@@ -20,7 +20,6 @@ static digestmap_t  *desc2circ = NULL;
 static ledger_t *ledger = NULL;
 static smartlist_t *ledgercircs = NULL;
 static smartlist_t *intercircs = NULL;
-static smartlist_t *desctoset = NULL;
 static int intermediary_role_initiated = 0;
 
 static void run_crelay_housekeeping_event(time_t now);
@@ -32,7 +31,6 @@ mt_crelay_init(void) {
   ledgercircs = smartlist_new();
   desc2circ = digestmap_new();
   intercircs = smartlist_new();
-  desctoset = smartlist_new();
   count[0] = rand_uint64();
   count[1] = rand_uint64();
   log_info(LD_MT, "MoneTor: initialization of payment relay code");
@@ -204,14 +202,14 @@ mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
   log_info(LD_MT, "MoneTor: changing status on the payment module, for descriptor %s",
       mt_desc_describe(ocirc->desci));
   mt_rpay_set_status(ocirc->desci, 1);
-  byte id[DIGEST_LEN];
-  SMARTLIST_FOREACH_BEGIN(desctoset, mt_desc_t *, desc) {
-    mt_desc2digest(desc, &id);
-    if (digestmap_get(desc2circ, (char*) id))
-      mt_rpay_set_status(desc, 1);
-  }SMARTLIST_FOREACH_END(desc);
-  if (smartlist_len(desctoset) > 0)
-    smartlist_clear(desctoset);
+  /*byte id[DIGEST_LEN];*/
+  /*SMARTLIST_FOREACH_BEGIN(desctoset, mt_desc_t *, desc) {*/
+    /*mt_desc2digest(desc, &id);*/
+    /*if (digestmap_get(desc2circ, (char*) id))*/
+      /*mt_rpay_set_status(desc, 1);*/
+  /*}SMARTLIST_FOREACH_END(desc);*/
+  /*if (smartlist_len(desctoset) > 0)*/
+    /*smartlist_clear(desctoset);*/
 }
 
 
