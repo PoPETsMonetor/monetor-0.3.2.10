@@ -210,8 +210,8 @@ mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
     if (digestmap_get(desc2circ, (char*) id))
       mt_rpay_set_status(desc, 1);
   }SMARTLIST_FOREACH_END(desc);
-
-  smartlist_clear(desctoset);
+  if (smartlist_len(desctoset) > 0)
+    smartlist_clear(desctoset);
 }
 
 
@@ -227,25 +227,25 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
     log_warn(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
   }
 
-  if (circ->desci && *circ->desci) {
-    /** Check whether *circ->desci match an intermediary in the list */
-    int removeit = 1;
-    SMARTLIST_FOREACH_BEGIN(intercircs, origin_circuit_t *, oricirc) {
-      if (mt_desc_eq(oricirc->desci, *circ->desci))
-        removeit = 0;
-    }SMARTLIST_FOREACH_END(oricirc);
-    if (removeit) {
-      mt_rpay_set_status(*circ->desci, 0);
-      mt_desc2digest(*circ->desci, &id);
-      /** remove or intermediary map duplication */
-      if (digestmap_get(desc2circ, (char*) id)) {
-        digestmap_remove(desc2circ, (char*) id);
-      }
-      else {
-        log_warn(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));
-      }
-    }
-  }
+  /*if (circ->desci && *circ->desci) {*/
+    /*[>* Check whether *circ->desci match an intermediary in the list <]*/
+    /*int removeit = 1;*/
+    /*SMARTLIST_FOREACH_BEGIN(intercircs, origin_circuit_t *, oricirc) {*/
+      /*if (mt_desc_eq(oricirc->desci, *circ->desci))*/
+        /*removeit = 0;*/
+    /*}SMARTLIST_FOREACH_END(oricirc);*/
+    /*if (removeit) {*/
+      /*mt_rpay_set_status(*circ->desci, 0);*/
+      /*mt_desc2digest(*circ->desci, &id);*/
+      /*[>* remove or intermediary map duplication <]*/
+      /*if (digestmap_get(desc2circ, (char*) id)) {*/
+        /*digestmap_remove(desc2circ, (char*) id);*/
+      /*}*/
+      /*else {*/
+        /*log_warn(LD_MT, "MoneTor: desc %s not found in our map", mt_desc_describe(&circ->desc));*/
+      /*}*/
+    /*}*/
+  /*}*/
 }
 
 /************************** Events *****************************/
@@ -474,10 +474,10 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       
       SMARTLIST_FOREACH_BEGIN(intercircs, origin_circuit_t*, circtmp) {
         if (!TO_CIRCUIT(circtmp)->marked_for_close) {
-          log_info(LD_MT, "MoneTor: we found one intermediary circ:");
-          circuit_log_path(LOG_INFO, LD_MT, circtmp);
           if (tor_memeq(circtmp->inter_ident->identity,
                 int_id.identity, DIGEST_LEN)) {
+            log_info(LD_MT, "MoneTor: we found one intermediary circ to use:");
+            circuit_log_path(LOG_INFO, LD_MT, circtmp);
             oricirc = circtmp;
             break;
           }
@@ -489,7 +489,7 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       memcpy(desci, msg+sizeof(int_id_t), sizeof(mt_desc_t));
       /** It may be a MT_PARTY_REL in case of guard position ~ let's change that */
       /*desci->party = MT_PARTY_INT;*/
-      int use_new_desci = 0;
+      int can_free_desci = 0;
       if (!oricirc) {
         log_info(LD_MT, "MoneTor: We don't have any current circuit towards %s that intermediary"
             " .. Building one. ", node_describe(ninter));
@@ -518,42 +518,30 @@ mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
       else {
         /** XXX: Should we notify the payment module about that it can send towards the
          * intermediary without waiting?*/
-        use_new_desci = 1;
+        can_free_desci = 1;
         log_info(LD_MT, "MoneTor: Cool, we already have a circuit towards that intermediary");
       }
 
-      orcirc->desci = &oricirc->desci;
+      orcirc->desci = &oricirc->desci; 
+      /*orcirc->desci = &desci;*/
 
       /** adding to digestmap desci => oricirc */
-      byte id[DIGEST_LEN];
-      mt_desc2digest(desci, &id);
-      if (!digestmap_get(desc2circ, (char*) id)) {
-        digestmap_set(desc2circ, (char*) id, oricirc);
-      }
-      if (use_new_desci) {
-        /** reactive the status of this desc if it was used before! */
-        // if multiple ESTAB1 arrive at the same time, we must set all
-        // desci to 1 in has_open() function
-        if (TO_CIRCUIT(oricirc)->state != CIRCUIT_STATE_OPEN)
-          smartlist_add(desctoset, desci);
-        else
-          mt_rpay_set_status(desci, 1);
-        /** We don't nee this descriptor */
-        if (mt_rpay_recv_multidesc(&orcirc->desc, desci, pcommand,
-              msg+sizeof(int_id_t)+sizeof(mt_desc_t),
-              msg_len-sizeof(int_id_t)-sizeof(mt_desc_t)) < 0) {
-          log_warn(LD_MT, "MoneTor: Payment module returned -1"
-              " we should stop prioritizing this circuit");
-          circ->mt_priority = 0;
+      if (!can_free_desci) {
+        byte id[DIGEST_LEN];
+        mt_desc2digest(desci, &id);
+        if (!digestmap_get(desc2circ, (char*) id)) {
+          digestmap_set(desc2circ, (char*) id, oricirc);
         }
       }
-      else if (mt_rpay_recv_multidesc(&orcirc->desc, oricirc->desci, pcommand,
+      else {
+        tor_free(desci);
+      }
+      if (mt_rpay_recv_multidesc(&orcirc->desc, oricirc->desci, pcommand,
             msg+sizeof(int_id_t)+sizeof(mt_desc_t),
             msg_len-sizeof(int_id_t)-sizeof(mt_desc_t)) < 0) {
         log_warn(LD_MT, "MoneTor: Payment module returned -1"
             " we should stop prioritizing this circuit");
         circ->mt_priority = 0;
-        log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");
       }
     }
     else {
@@ -683,18 +671,18 @@ mt_crelay_intermediary_circuit_free(origin_circuit_t *oricirc) {
 }
 
 void mt_crelay_orcirc_free(or_circuit_t* circ) {
-  if (circ->desci) {
-    int can_free = 1;
-    /** Check wheter the same pointer is still used*/
-    SMARTLIST_FOREACH_BEGIN(intercircs, origin_circuit_t *, oricirc) {
-      if (mt_desc_eq(oricirc->desci, *circ->desci)) {
-        can_free = 0;
-        break;
-      }
-    } SMARTLIST_FOREACH_END(oricirc);
-    if (can_free)
-      tor_free(*circ->desci);
-  }
+  /*if (circ->desci) {*/
+    /*int can_free = 1;*/
+    /*[>* Check wheter the same pointer is still used<]*/
+    /*SMARTLIST_FOREACH_BEGIN(intercircs, origin_circuit_t *, oricirc) {*/
+      /*if (mt_desc_eq(oricirc->desci, *circ->desci)) {*/
+        /*can_free = 0;*/
+        /*break;*/
+      /*}*/
+    /*} SMARTLIST_FOREACH_END(oricirc);*/
+    /*if (can_free)*/
+      /*tor_free(*circ->desci);*/
+  /*}*/
   buf_free(circ->buf);
 }
 
