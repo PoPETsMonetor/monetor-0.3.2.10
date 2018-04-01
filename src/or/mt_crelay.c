@@ -41,6 +41,11 @@ mt_crelay_init(void) {
 }
 
 void mt_crelay_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
+  /** We're a general circ over a relay that received its first
+   * RELAY_COMMAND_MT cell, let's change the purpose of this circ --
+   * This should avoid we that we kill the circuit after 60 seconds
+   * of inactivity (default for C_GENERAL) */
+  circuit_change_purpose(TO_CIRCUIT(circ), CIRCUIT_PURPOSE_C_GENERAL_PAYMENT);
   increment(count);
   circ->desc.id[0] = count[0];
   circ->desc.id[1] = count[1];

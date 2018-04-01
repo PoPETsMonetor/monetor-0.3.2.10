@@ -1374,7 +1374,7 @@ circuit_predict_and_launch_new(void)
     if (ledger_mode(get_options()) || intermediary_mode(get_options())
         || server_mode(get_options()) ||
         !get_options()->EnablePayment ||
-        (num_payment_needs_capacity > 0 && num_payment > 3) ||
+        (num_payment > 1) ||
         num == 0)
       circuit_launch(CIRCUIT_PURPOSE_C_GENERAL, flags);
     else
