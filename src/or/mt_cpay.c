@@ -295,7 +295,7 @@ static int pay_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
   }
 
   // establish nanopayment channel if possible; callback pay_helper
-  if((chn = smartlist_pop_last(client.nans_setup))){
+  if((chn = smartlist_idesc_remove(client.nans_setup, idesc))){
     log_info(LD_MT, "MoneTor: Trying to establish a nanopayment channel ~ Callback pay_helper");
     digestmap_set(client.chns_transition, (char*)pid, chn);
     chn->rdesc = *rdesc;
@@ -304,7 +304,7 @@ static int pay_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
   }
 
   // set up nanopayment channel if possible; callback pay_helper
-  if((chn = smartlist_pop_last(client.chns_estab))){
+  if((chn = smartlist_idesc_remove(client.chns_estab, idesc))){
     log_info(LD_MT, "MoneTor: Trying to set up the nanopayment channel ~ Callback pay_helper");
     digestmap_set(client.chns_transition, (char*)pid, chn);
     chn->callback = (mt_callback_t){.fn = pay_helper, .dref1 = *rdesc, .dref2 = *idesc};
@@ -312,7 +312,7 @@ static int pay_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
   }
 
   // establish channel if possible; callback pay_helper
-  if((chn = smartlist_pop_last(client.chns_setup))){
+  if((chn = smartlist_idesc_remove(client.chns_setup, idesc))){
     log_info(LD_MT, "MoneTor: Trying to establish a channel ~ Callback pay_helper");
     digestmap_set(client.chns_transition, (char*)pid, chn);
     chn->callback = (mt_callback_t){.fn = pay_helper, .dref1 = *rdesc, .dref2 = *idesc};
