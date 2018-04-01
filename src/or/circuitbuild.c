@@ -1388,6 +1388,7 @@ circuit_init_ppath(pay_path_t* prev) {
   pay_path_t* ppath = tor_malloc_zero(sizeof(pay_path_t));
   /* its not null => middle or exit relay */
   ppath->inter_ident = tor_malloc_zero(sizeof(intermediary_identity_t));
+  ppath->window = get_options()->MoneTorInitialWindow;
   if (prev) {
     ppath->prev = prev;
     ppath->buf = buf_new_with_capacity(RELAY_PPAYLOAD_SIZE);

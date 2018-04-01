@@ -486,7 +486,9 @@ typedef enum {
 /** OR-side circuit on a ledger */
 #define CIRCUIT_PURPOSE_LEDGER 6
 
-#define CIRCUIT_PURPOSE_OR_MAX_ 6
+#define CIRCUIT_PURPOSE_PAYMENT 7
+
+#define CIRCUIT_PURPOSE_OR_MAX_ 7
 
 /* these circuits originate at this node */
 
@@ -510,63 +512,63 @@ typedef enum {
  *     the service, and are talking to it.
  */
 /** Client-side circuit purpose: Normal circuit, with cpath. */
-#define CIRCUIT_PURPOSE_C_GENERAL 7
+#define CIRCUIT_PURPOSE_C_GENERAL 8
 /** This circuit is like a normal circuit with cpath but
  * a payment channel is built on it as soon as the circuit
  * opens */
-#define CIRCUIT_PURPOSE_C_GENERAL_PAYMENT 8
+#define CIRCUIT_PURPOSE_C_GENERAL_PAYMENT 9
 /** Client-side circuit purpose: at the client, connecting to intro point. */
-#define CIRCUIT_PURPOSE_C_INTRODUCING 9
+#define CIRCUIT_PURPOSE_C_INTRODUCING 10
 /** Client-side circuit purpose: at the client, sent INTRODUCE1 to intro point,
  * waiting for ACK/NAK. */
-#define CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT 10
+#define CIRCUIT_PURPOSE_C_INTRODUCE_ACK_WAIT 11
 /** Client-side circuit purpose: at the client, introduced and acked, closing.
  */
-#define CIRCUIT_PURPOSE_C_INTRODUCE_ACKED 11
+#define CIRCUIT_PURPOSE_C_INTRODUCE_ACKED 12
 /** Client-side circuit purpose: at the client, waiting for ack. */
-#define CIRCUIT_PURPOSE_C_ESTABLISH_REND 12
+#define CIRCUIT_PURPOSE_C_ESTABLISH_REND 13
 /** Client-side circuit purpose: at the client, waiting for the service. */
-#define CIRCUIT_PURPOSE_C_REND_READY 13
+#define CIRCUIT_PURPOSE_C_REND_READY 14
 /** Client-side circuit purpose: at the client, waiting for the service,
  * INTRODUCE has been acknowledged. */
-#define CIRCUIT_PURPOSE_C_REND_READY_INTRO_ACKED 14
+#define CIRCUIT_PURPOSE_C_REND_READY_INTRO_ACKED 15
 /** Client-side circuit purpose: at the client, rendezvous established. */
-#define CIRCUIT_PURPOSE_C_REND_JOINED 15
+#define CIRCUIT_PURPOSE_C_REND_JOINED 16
 /** This circuit is used for build time measurement only */
-#define CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT 16
+#define CIRCUIT_PURPOSE_C_MEASURE_TIMEOUT 17
 /** This circuit is used for whatever interaction with the ledger from
  * client, intermediary or relay (no need to divide at first glance)*/
-#define CIRCUIT_PURPOSE_C_LEDGER 17
-#define CIRCUIT_PURPOSE_C_INTERMEDIARY 18
+#define CIRCUIT_PURPOSE_C_LEDGER 18
+#define CIRCUIT_PURPOSE_C_INTERMEDIARY 19
 
-#define CIRCUIT_PURPOSE_C_MAX_ 18
+#define CIRCUIT_PURPOSE_C_MAX_ 19
 /** Hidden-service-side circuit purpose: at the service, waiting for
  * introductions. */
-#define CIRCUIT_PURPOSE_S_ESTABLISH_INTRO 19
+#define CIRCUIT_PURPOSE_S_ESTABLISH_INTRO 20
 /** Hidden-service-side circuit purpose: at the service, successfully
  * established intro. */
-#define CIRCUIT_PURPOSE_S_INTRO 20
+#define CIRCUIT_PURPOSE_S_INTRO 21
 /** Hidden-service-side circuit purpose: at the service, connecting to rend
  * point. */
-#define CIRCUIT_PURPOSE_S_CONNECT_REND 21
+#define CIRCUIT_PURPOSE_S_CONNECT_REND 22
 /** Hidden-service-side circuit purpose: at the service, rendezvous
  * established. */
-#define CIRCUIT_PURPOSE_S_REND_JOINED 22
+#define CIRCUIT_PURPOSE_S_REND_JOINED 23
 /** A testing circuit; not meant to be used for actual traffic. */
-#define CIRCUIT_PURPOSE_TESTING 23
+#define CIRCUIT_PURPOSE_TESTING 24
 /** A controller made this circuit and Tor should not use it. */
-#define CIRCUIT_PURPOSE_CONTROLLER 24
+#define CIRCUIT_PURPOSE_CONTROLLER 25
 /** This circuit is used for path bias probing only */
-#define CIRCUIT_PURPOSE_PATH_BIAS_TESTING 25
+#define CIRCUIT_PURPOSE_PATH_BIAS_TESTING 26
 
 
-#define CIRCUIT_PURPOSE_R_INTERMEDIARY 26
+#define CIRCUIT_PURPOSE_R_INTERMEDIARY 27
 
-#define CIRCUIT_PURPOSE_I_LEDGER 27
+#define CIRCUIT_PURPOSE_I_LEDGER 28
 /** ledger circuit on a relay */
-#define CIRCUIT_PURPOSE_R_LEDGER 28
+#define CIRCUIT_PURPOSE_R_LEDGER 29
 
-#define CIRCUIT_PURPOSE_MAX_ 28
+#define CIRCUIT_PURPOSE_MAX_ 29
 /** A catch-all for unrecognized purposes. Currently we don't expect
  * to make or see any circuits with this purpose. */
 #define CIRCUIT_PURPOSE_UNKNOWN 255
@@ -2981,6 +2983,8 @@ typedef struct pay_path_t {
   unsigned int last_mt_cpay_succeeded : 1;
 
   unsigned int first_payment_succeeded : 1;
+
+  unsigned int establish_succeeded : 1;
   /** Tell whether we already called a mt_cpay_pay */
   unsigned int payment_is_processing : 1;
   /* Position type of the current hop */
