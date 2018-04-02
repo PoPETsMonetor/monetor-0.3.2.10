@@ -2753,8 +2753,10 @@ connection_ap_handshake_send_begin,(entry_connection_t *ap_conn))
                   begin_type == RELAY_COMMAND_BEGIN ? payload_len : 0) < 0)
     return -1; /* circuit is closed, don't continue */
 
-  edge_conn->package_window = STREAMWINDOW_START;
-  edge_conn->deliver_window = STREAMWINDOW_START;
+  // moneTor flow: client side
+  edge_conn->package_window = mt_modify_flow_value(STREAMWINDOW_START, TO_CIRCUIT(circ));
+  edge_conn->deliver_window = mt_modify_flow_value(STREAMWINDOW_START, TO_CIRCUIT(circ));
+
   base_conn->state = AP_CONN_STATE_CONNECT_WAIT;
   log_info(LD_APP,"Address/port sent, ap socket "TOR_SOCKET_T_FORMAT
            ", n_circ_id %u",
@@ -3512,8 +3514,10 @@ connection_exit_begin_conn(cell_t *cell, circuit_t *circ)
   n_stream->stream_id = rh.stream_id;
   n_stream->base_.port = port;
   /* leave n_stream->s at -1, because it's not yet valid */
-  n_stream->package_window = STREAMWINDOW_START;
-  n_stream->deliver_window = STREAMWINDOW_START;
+
+  // moneTor flow: relay side
+  n_stream->package_window = mt_modify_flow_value(STREAMWINDOW_START, circ);
+  n_stream->deliver_window = mt_modify_flow_value(STREAMWINDOW_START, circ);
 
   if (circ->purpose == CIRCUIT_PURPOSE_S_REND_JOINED) {
     tor_free(address);
@@ -4167,4 +4171,3 @@ connection_edge_free_all(void)
   smartlist_free(pending_entry_connections);
   pending_entry_connections = NULL;
 }
-

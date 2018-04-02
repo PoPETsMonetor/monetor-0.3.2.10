@@ -103,6 +103,8 @@ int relay_crypt(circuit_t *circ, cell_t *cell, cell_direction_t cell_direction,
 
 circid_t packed_cell_get_circid(const packed_cell_t *cell, int wide_circ_ids);
 
+int32_t mt_modify_flow_value(int32_t original, circuit_t* circ);
+
 #ifdef RELAY_PRIVATE
 STATIC int connected_cell_parse(const relay_header_t *rh, const cell_t *cell,
                          tor_addr_t *addr_out, int *ttl_out);
@@ -126,4 +128,3 @@ STATIC int cell_queues_check_size(void);
 #endif /* defined(RELAY_PRIVATE) */
 
 #endif /* !defined(TOR_RELAY_H) */
-

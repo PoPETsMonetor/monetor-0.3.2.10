@@ -1207,8 +1207,13 @@ static int handle_nan_int_destab2(mt_desc_t* desc, nan_int_destab2_t* token, byt
   digestmap_remove(client.chns_transition, (char*)*pid);
   digestmap_set(client.nans_destab, (char*)digest, chn);
 
+<<<<<<< HEAD
   // record start of nanopayment channel for log
   tor_gettimeofday(&chn->log.end_estab);
+=======
+  mt_paymod_signal(MT_SIGNAL_PAYMENT_INITIALIZED, &chn->rdesc);
+
+>>>>>>> 7310232... all current flow work
 
   if(chn->callback.fn)
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
@@ -1239,7 +1244,6 @@ static int init_nan_cli_dpay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   int msg_size = pack_nan_cli_dpay1(&token, pid, &msg);
   int result = mt_buffer_message(client.msgbuf, &chn->idesc, MT_NTYPE_NAN_CLI_DPAY1, msg, msg_size);
   tor_free(msg);
-  return result;
 }
 
 static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*pid)[DIGEST_LEN]){

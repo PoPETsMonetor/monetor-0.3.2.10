@@ -3215,9 +3215,11 @@ typedef struct circuit_t {
   /** Used on relay side to keep track of
    *  payment */
   int payment_window;
-  /**
-   * Set to 1 when we prioritize this circuit
-   */
+
+  /** number of channels that have been initialized via MT_SIGNAL_PAYMENT_INITIALIZED **/
+  uint8_t mt_channels_initialized;
+
+  /** Set to 1 when we prioritize this circuit **/
   uint32_t mt_priority;
 
   /** Temporary field used during circuits_handle_oom. */
@@ -4875,12 +4877,17 @@ typedef struct {
   /* Enforce single core (i.e. no parallel computations) mode for zkp calculations */
   int MoneTorSingleCore;
 
-  /* Set value for how much moneTor prioritized paid traffic */
+  /* Set value for how much moneTor prioritizes paid traffic via scheduling*/
   double MoneTorPriorityMod;
+
+  /* Set value for how much moneTor prioritizes paid traffic via flow control windows*/
+  double MoneTorFlowMod;
+
 
   int MoneTorPaymentRate;
 
   int MoneTorInitialWindow;
+
 
 } or_options_t;
 
