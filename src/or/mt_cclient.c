@@ -430,7 +430,7 @@ run_cclient_housekeeping_event(time_t now) {
 
   log_info(LD_MT, "MoneTor: relay digestmap length: %d", digestmap_size(desc2circ));
   DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
-    if (!CIRCUIT_IS_ORIGIN(circ) && !TO_ORIGIN_CIRCUIT(circ)->ppath) {
+    if (!CIRCUIT_IS_ORIGIN(circ) || !TO_ORIGIN_CIRCUIT(circ)->ppath) {
       continue;
     }
     /*[>* Verify if we have enough remaining window <]*/
