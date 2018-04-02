@@ -254,7 +254,7 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
     intermediary_g = get_intermediary_by_role(ALLPOS);
   else
     intermediary_g = get_intermediary_by_role(MIDDLE);
-  
+
   increment(count);
   middle->desc.id[0] = count[0];
   middle->desc.id[1] = count[1];
@@ -429,10 +429,29 @@ run_cclient_housekeeping_event(time_t now) {
   } SMARTLIST_FOREACH_END(intermediary);
 
   log_info(LD_MT, "MoneTor: relay digestmap length: %d", digestmap_size(desc2circ));
-  DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {
+  DIGESTMAP_FOREACH_MODIFY(desc2circ, key, circuit_t *, circ) {
+
+    /************************************************************************/
+    // XXX moneTor: very temporary measure until we find freed pointer
+
+    int found = 0;
+    SMARTLIST_FOREACH_BEGIN(circuit_get_global_list(), circuit_t *, next_circ) {
+      if(next_circ == circ){
+	found = 1;
+      }
+    } SMARTLIST_FOREACH_END(next_circ);
+
+    if(!found){
+      MAP_DEL_CURRENT(key);
+      continue;
+    }
+
+    /************************************************************************/
+
     if (!CIRCUIT_IS_ORIGIN(circ) || !TO_ORIGIN_CIRCUIT(circ)->ppath) {
       continue;
     }
+
     /*[>* Verify if we have enough remaining window <]*/
     pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
     int hop = 1;

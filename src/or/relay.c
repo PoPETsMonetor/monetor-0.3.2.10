@@ -723,7 +723,7 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
     cell_direction = CELL_DIRECTION_IN;
     cpath_layer = NULL;
   }
-  
+
   if (cell_direction == CELL_DIRECTION_OUT && circ->n_chan) {
     /* if we're using relaybandwidthrate, this conn wants priority */
     channel_timestamp_client(circ->n_chan);
@@ -3219,7 +3219,7 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
     }
   }
 #endif /* 0 */
-  
+
 
   cell_queue_append_packed_copy(circ, queue, exitward, cell,
                                 chan->wide_circ_ids, 1);
@@ -3249,7 +3249,7 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
 
   /* New way: mark this as having waiting cells for the scheduler */
   scheduler_channel_has_waiting_cells(chan);
-  
+
 }
 
 /** Append an encoded value of <b>addr</b> to <b>payload_out</b>, which must
