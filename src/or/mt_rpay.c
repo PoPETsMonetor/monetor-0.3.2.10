@@ -144,6 +144,7 @@ static int help_nan_end_close1(void* args);
 static int help_nan_int_close8(void *args);
 
 // miscallaneous helper functions
+static int mt_rpay_recv_helper(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size);
 static mt_channel_t* new_channel(void);
 static workqueue_reply_t cpu_task_estab(void* thread, void* arg);
 static workqueue_reply_t cpu_task_nanestab(void* thread, void* arg);
@@ -206,11 +207,6 @@ int mt_rpay_init(void){
  */
 int mt_rpay_recv_multidesc(mt_desc_t* cdesc, mt_desc_t* idesc, mt_ntype_t type, byte* msg, int size){
 
-  log_info(LD_MT, "MoneTor: Receiving %s from %s %" PRIu64 ".%" PRIu64 " | %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type), mt_party_describe(cdesc->party),
-	   cdesc->id[0], cdesc->id[1], idesc->id[0], idesc->id[1]);
-
-
   byte digest[DIGEST_LEN];
   mt_desc2digest(cdesc, &digest);
   mt_desc_t* int_desc = tor_malloc(sizeof(mt_desc_t));
@@ -224,10 +220,13 @@ int mt_rpay_recv_multidesc(mt_desc_t* cdesc, mt_desc_t* idesc, mt_ntype_t type, 
  * Handle an incoming message from the given descriptor
  */
 int mt_rpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
+  log_info(LD_MT, "MoneTor: (msg) ------------ recv %s %" PRIu64 ".%" PRIu64 ", %s",
+	   mt_party_describe(desc->party), desc->id[0], desc->id[1], mt_token_describe(type));
 
-  log_info(LD_MT, "MoneTor: Received %s from %s %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type), mt_party_describe(desc->party),
-	   desc->id[0], desc->id[1]);
+  return mt_rpay_recv_helper(desc, type, msg, size);
+}
+
+static int mt_rpay_recv_helper(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 
   int result;
   byte pid[DIGEST_LEN];
@@ -638,7 +637,7 @@ static int handle_nan_cli_estab1(mt_desc_t* desc, nan_cli_estab1_t* token, byte 
   // if we have a channel set up then establish it
   if((chn = digestmap_smartlist_pop_last(relay.chns_setup, (char*)idigest))){
     digestmap_set(relay.chns_transition, (char*)rpid, chn);
-    chn->callback = (mt_callback_t){.fn = mt_rpay_recv, .dref1 = *desc, .arg2 = MT_NTYPE_NAN_CLI_ESTAB1};
+    chn->callback = (mt_callback_t){.fn = mt_rpay_recv_helper, .dref1 = *desc, .arg2 = MT_NTYPE_NAN_CLI_ESTAB1};
     chn->callback.arg4 = pack_nan_cli_estab1(token, pid, &chn->callback.arg3);
     return init_chn_end_estab1(chn, &rpid);
   }
@@ -648,7 +647,7 @@ static int handle_nan_cli_estab1(mt_desc_t* desc, nan_cli_estab1_t* token, byte 
     chn = new_channel();
     digestmap_set(relay.chns_transition, (char*)rpid, chn);
     chn->idesc = *intermediary;
-    chn->callback = (mt_callback_t){.fn = mt_rpay_recv, .dref1 = *desc,
+    chn->callback = (mt_callback_t){.fn = mt_rpay_recv_helper, .dref1 = *desc,
 				    .arg2 = MT_NTYPE_NAN_CLI_ESTAB1};
     chn->callback.arg4 = pack_nan_cli_estab1(token, pid, &chn->callback.arg3);
     return init_chn_end_setup(chn, &rpid);
@@ -789,7 +788,7 @@ static int handle_nan_cli_reqclose1(mt_desc_t* desc, nan_cli_reqclose1_t* token,
 
   if((chn = digestmap_remove(relay.nans_estab, (char*)digest))){
     digestmap_set(relay.chns_transition, (char*)pid, chn);
-    chn->callback = (mt_callback_t){.fn = mt_rpay_recv, .dref1 = *desc};
+    chn->callback = (mt_callback_t){.fn = mt_rpay_recv_helper, .dref1 = *desc};
     chn->callback.arg2 = MT_NTYPE_NAN_CLI_REQCLOSE1;
     chn->callback.arg4 = pack_nan_cli_reqclose1(token, pid, &chn->callback.arg3);
     return init_nan_end_close1(chn, pid);

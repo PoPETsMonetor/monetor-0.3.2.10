@@ -117,6 +117,7 @@ static int handle_nan_end_close5(mt_desc_t* desc, nan_end_close5_t* token, byte 
 static int handle_nan_end_close7(mt_desc_t* desc, nan_end_close7_t* token, byte (*pid)[DIGEST_LEN]);
 
 // miscallaneous helper functions
+static int mt_ipay_recv_helper(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size);
 static mt_channel_t* new_channel(byte (*chn_addr)[MT_SZ_ADDR]);
 
 static mt_ipay_t intermediary;
@@ -172,9 +173,13 @@ int mt_ipay_init(void){
  */
 int mt_ipay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 
-  log_info(LD_MT, "MoneTor: Received %s from %s %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type), mt_party_describe(desc->party),
-	   desc->id[0], desc->id[1]);
+  log_info(LD_MT, "MoneTor: (msg) ------------ recv %s %" PRIu64 ".%" PRIu64 ", %s",
+	   mt_party_describe(desc->party), desc->id[0], desc->id[1], mt_token_describe(type));
+
+  return mt_ipay_recv_helper(desc, type, msg, size);
+}
+
+static int mt_ipay_recv_helper(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 
   int result;
   byte pid[DIGEST_LEN];
@@ -460,7 +465,7 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
     chn->data.public.end_bal = token->end_bal;
     chn->data.public.int_bal = token->int_bal;
     // save wcom
-    chn->callback = (mt_callback_t){.fn = mt_ipay_recv, .dref1 = *desc,
+    chn->callback = (mt_callback_t){.fn = mt_ipay_recv_helper, .dref1 = *desc,
 				    .arg2 = MT_NTYPE_CHN_END_ESTAB1};
     chn->callback.arg4 = pack_chn_end_estab1(token, pid, &chn->callback.arg3);
     digestmap_set(intermediary.chns_transition, (char*)ipid, chn);

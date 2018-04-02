@@ -833,9 +833,9 @@ int mt_process_received_directpaymentcell(circuit_t *circ, cell_t *cell) {
 MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
       byte* msg, int size)) {
 
-  log_info(LD_MT, "MoneTor: Sending %s to %s %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type), mt_party_describe(desc->party),
-	   desc->id[0], desc->id[1]);
+  log_info(LD_MT, "MoneTor: (msg) --------- send %s %" PRIu64 ".%" PRIu64 ", %s",
+	   mt_party_describe(desc->party), desc->id[0], desc->id[1],
+	   mt_token_describe(type));
 
   switch (type) {
     uint8_t command;
@@ -1038,9 +1038,9 @@ MOCK_IMPL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2,
     return -1;
   }
 
-  log_info(LD_MT, "MoneTor: Sending %s to %s %" PRIu64 ".%" PRIu64 " | %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type), mt_party_describe(desc1->party),
-	   desc1->id[0], desc1->id[1], desc2->id[0], desc2->id[1]);
+  log_info(LD_MT, "MoneTor: (msg) send %s %" PRIu64 ".%" PRIu64 ", %s, %" PRIu64 ".%" PRIu64 "",
+	   mt_party_describe(desc1->party), desc1->id[0], desc1->id[1],
+	   mt_token_describe(type), desc2->id[0], desc2->id[1]);
 
   return mt_cclient_send_message_multidesc(desc1, desc2, type, msg, size);
 }

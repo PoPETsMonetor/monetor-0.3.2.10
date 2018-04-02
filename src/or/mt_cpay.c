@@ -563,9 +563,8 @@ int mt_cpay_close(mt_desc_t* rdesc, mt_desc_t* idesc){
  */
 int mt_cpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 
-  log_info(LD_MT, "MoneTor: Received %s from %s %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type), mt_party_describe(desc->party),
-	   desc->id[0], desc->id[1]);
+  log_info(LD_MT, "MoneTor: (msg) ------------ recv %s %" PRIu64 ".%" PRIu64 ", %s",
+	   mt_party_describe(desc->party), desc->id[0], desc->id[1], mt_token_describe(type));
 
   int result;
   byte pid[DIGEST_LEN];
