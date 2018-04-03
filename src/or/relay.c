@@ -2973,8 +2973,7 @@ int32_t mt_modify_flow_value(int32_t original, circuit_t* circ){
   if(flow_mod_sqrt <= 0)
     flow_mod_sqrt = sqrt(get_options()->MoneTorFlowMod);
 
-  if((circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT && get_options()->ClientOnly) ||
-     (circ->purpose == CIRCUIT_PURPOSE_PAYMENT && !get_options()->ClientOnly)){
+  if((circ->mt_priority)){
     return (int32_t)(original * flow_mod_sqrt);
   }
   else{
