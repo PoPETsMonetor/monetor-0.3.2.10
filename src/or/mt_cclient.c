@@ -434,21 +434,23 @@ run_cclient_housekeeping_event(time_t now) {
     /************************************************************************/
     // XXX moneTor: very temporary measure until we find freed pointer
 
-    int found = 0;
-    SMARTLIST_FOREACH_BEGIN(circuit_get_global_list(), circuit_t *, next_circ) {
-      if(next_circ == circ){
-	found = 1;
-      }
-    } SMARTLIST_FOREACH_END(next_circ);
+    /*int found = 0;*/
+    /*SMARTLIST_FOREACH_BEGIN(circuit_get_global_list(), circuit_t *, next_circ) {*/
+      /*if(next_circ == circ){*/
+        /*found = 1;*/
+      /*}*/
+    /*} SMARTLIST_FOREACH_END(next_circ);*/
 
-    if(!found){
-      MAP_DEL_CURRENT(key);
-      continue;
-    }
+    /*if(!found){*/
+      /*MAP_DEL_CURRENT(key);*/
+      /*continue;*/
+    /*}*/
 
     /************************************************************************/
 
     if (!CIRCUIT_IS_ORIGIN(circ) || !TO_ORIGIN_CIRCUIT(circ)->ppath) {
+      /** That should not happen, though */
+      log_warn(LD_MT, "MoneTor: housekeeping noticed a circuit that has nothing to do there");
       continue;
     }
 
