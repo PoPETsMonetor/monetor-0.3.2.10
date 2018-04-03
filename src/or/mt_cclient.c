@@ -634,7 +634,7 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
    * a general circuit towards the ledger, then we may have
    * a reachability problem.. */
   if (TO_CIRCUIT(circ)->state != CIRCUIT_STATE_OPEN) {
-    now = approx_time();
+   now = approx_time();
     log_warn(LD_MT, "MoneTor: Looks like we did not extend a circuit successfully"
         " towards the ledger %lld", (long long) now);
     ledger->circuit_retries++;
@@ -820,7 +820,7 @@ void mt_cclient_general_circ_has_closed(origin_circuit_t *oricirc) {
     byte id[DIGEST_LEN];
     crypt_path_t *cpath_tmp = oricirc->cpath;
     pay_path_t *ppath_tmp = oricirc->ppath;
-    while (cpath_tmp->next != oricirc->cpath && ppath_tmp) {
+    while (ppath_tmp) {
       mt_desc2digest(&ppath_tmp->desc, &id);
       if (digestmap_get(desc2circ, (char*) id)) {
         digestmap_remove(desc2circ, (char*) id);

@@ -421,6 +421,7 @@ int mt_desc_eq(mt_desc_t* desc1, mt_desc_t* desc2) {
 
 const char* mt_signal_describe(mt_signal_t signal) {
   switch (signal) {
+    case MT_SIGNAL_ESTABLISH_SUCCESS: return "Payment channel has been established";
     case MT_SIGNAL_PAYMENT_SUCCESS: return "Last mt_cpay_pay call is successful";
     case MT_SIGNAL_PAYMENT_FAILURE: return "Last mt_cpay_pay call has failed";
     case MT_SIGNAL_CLOSE_SUCCESS: return "Last mt_cpay_close is successfull";
