@@ -771,8 +771,10 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
 static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byte (*pid)[DIGEST_LEN]){
 
-  if(mt_desc_comp(desc, &client.led_desc) != 0)
+  if(mt_desc_comp(desc, &client.led_desc) != 0){
+    log_warn(LD_MT, "MoneTor: message does not come from ledger");
     return MT_ERROR;
+  }
 
   // if this is confirmation of mac_any_trans call then ignore and return success
   byte zeros[DIGEST_LEN] = {0};
@@ -786,8 +788,10 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
     return MT_ERROR;
   }
 
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return SUCCESS code");
     return MT_ERROR;
+  }
 
   digestmap_remove(client.chns_transition, (char*)*pid);
   smartlist_add(client.chns_setup, chn);
@@ -809,14 +813,18 @@ static int init_chn_end_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // if single threaded then just call procedures in series
   if(get_options()->MoneTorSingleThread){
-    if(cpu_task_estab(NULL, args) != WQ_RPL_REPLY)
+    if(cpu_task_estab(NULL, args) != WQ_RPL_REPLY){
+      log_warn(LD_MT, "MoneTor: cpu task returned error");
        return MT_ERROR;
+    }
     return help_chn_end_estab1(args);
   }
 
   // if not single threaded then offload task to a different cpu task/reply flow
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_estab, (work_task)help_chn_end_estab1, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_estab, (work_task)help_chn_end_estab1, args)){
+    log_warn(LD_MT, "MoneTor: cpu task returned error");
     return MT_ERROR;
+  }
   return MT_SUCCESS;
 }
 
@@ -856,8 +864,10 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
   }
 
   // validate token
-  if(token->verified != MT_CODE_VERIFIED)
+  if(token->verified != MT_CODE_VERIFIED){
+    log_warn(LD_MT, "MoneTor: token did not return code VERIFIED");
     return MT_ERROR;
+  }
 
   byte int_addr[MT_SZ_ADDR];
   mt_pk2addr(&token->int_pk, &int_addr);
@@ -867,6 +877,7 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
      token->receipt.val != chn->data.public.int_bal ||
      memcmp(token->receipt.from, int_addr, MT_SZ_ADDR) != 0 ||
      memcmp(token->receipt.to, chn->data.public.addr, MT_SZ_ADDR) != 0){
+    log_warn(LD_MT, "MoneTor: receipt does not verify");
     return MT_ERROR;
    }
 
@@ -897,6 +908,7 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
   // check validity of incoming message;
   if(mt_sig_verify(chn->data.wallet.wcom, MT_SZ_COM, &chn->data.wallet.int_pk, &token->sig)
      != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: signature did not verify");
     return MT_ERROR;
   }
 
@@ -907,14 +919,18 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
 
   // if single threaded then just call procedures in series
   if(get_options()->MoneTorSingleThread){
-    if(cpu_task_nanestab(NULL, args) != WQ_RPL_REPLY)
+    if(cpu_task_nanestab(NULL, args) != WQ_RPL_REPLY){
+      log_warn(LD_MT, "MoneTor: cpu task returned error");
        return MT_ERROR;
+    }
     return help_chn_int_estab4(args);
   }
 
   // if not single threaded then offload task to a different cpu task/reply flow
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanestab, (work_task)help_chn_int_estab4, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanestab, (work_task)help_chn_int_estab4, args)){
+    log_warn(LD_MT, "MoneTor: cpu task returned error");
     return MT_ERROR;
+  }
   return MT_SUCCESS;
 }
 
@@ -982,8 +998,10 @@ static int handle_nan_int_setup2(mt_desc_t* desc, nan_int_setup2_t* token, byte 
   }
 
   // check validity of incoming message
-  if(token->verified != MT_CODE_VERIFIED)
+  if(token->verified != MT_CODE_VERIFIED){
+    log_warn(LD_MT, "MoneTor: token did not return code VERIFIED");
     return MT_ERROR;
+  }
 
   // Fill in refund token
   chn_end_refund_t* refund = &chn->data.refund;
@@ -1023,6 +1041,7 @@ static int handle_nan_int_setup4(mt_desc_t* desc, nan_int_setup4_t* token, byte 
   // check validity of incoming message
   if(mt_sig_verify(chn->data.refund.msg, sizeof(chn->data.refund.msg),
 		   &chn->data.wallet_nan.int_pk, &token->sig) != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: signature did not verify");
     return MT_ERROR;
   }
 
@@ -1049,8 +1068,10 @@ static int handle_nan_int_setup6(mt_desc_t* desc, nan_int_setup6_t* token, byte 
     return MT_ERROR;
   }
 
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   digestmap_remove(client.chns_transition, (char*)*pid);
   smartlist_add(client.nans_setup, chn);
@@ -1094,8 +1115,10 @@ static int handle_nan_rel_estab6(mt_desc_t* desc, nan_rel_estab6_t* token, byte 
   }
 
   // check token validity
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code success");
     return MT_ERROR;
+  }
 
   // update local data
   chn->data.nan_state.num_payments = 0;
@@ -1149,8 +1172,10 @@ static int handle_nan_rel_pay2(mt_desc_t* desc, nan_rel_pay2_t* token, byte (*pi
     return MT_ERROR;
   }
 
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   byte digest[DIGEST_LEN];
   mt_desc2digest(desc, &digest);
@@ -1199,8 +1224,10 @@ static int handle_nan_int_destab2(mt_desc_t* desc, nan_int_destab2_t* token, byt
   }
 
   // check token validity
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   byte digest[DIGEST_LEN];
   mt_desc2digest(desc, &digest);
@@ -1243,8 +1270,10 @@ static int init_nan_cli_dpay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
 static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*pid)[DIGEST_LEN]){
 
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -1290,8 +1319,10 @@ static int init_nan_cli_reqclose1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 }
 
 static int handle_nan_rel_reqclose2(mt_desc_t* desc, nan_rel_reqclose2_t* token, byte (*pid)[DIGEST_LEN]){
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -1324,14 +1355,18 @@ static int init_nan_end_close1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // if single threaded then just call procedures in series
   if(get_options()->MoneTorSingleThread){
-    if(cpu_task_nanclose(NULL, args) != WQ_RPL_REPLY)
+    if(cpu_task_nanclose(NULL, args) != WQ_RPL_REPLY){
+      log_warn(LD_MT, "MoneTor: cpu task returned error");
        return MT_ERROR;
+    }
     return help_nan_end_close1(args);
   }
 
   // if not single threaded then offload task to a different cpu task/reply flow
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanclose, (work_task)help_nan_end_close1, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanclose, (work_task)help_nan_end_close1, args)){
+    log_warn(LD_MT, "MoneTor: cpu task returned error");
     return MT_ERROR;
+  }
   return MT_SUCCESS;
 }
 
@@ -1366,8 +1401,10 @@ static int handle_nan_int_close2(mt_desc_t* desc, nan_int_close2_t* token, byte 
   (void)desc;
 
 
-  if(token->verified != MT_CODE_SUCCESS)
+  if(token->verified != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -1405,6 +1442,7 @@ static int handle_nan_int_close4(mt_desc_t* desc, nan_int_close4_t* token, byte 
 
   if(mt_sig_verify(refund_msg, sizeof(refund_msg),
 		   &chn->data.wallet_new.int_pk, &token->sig) != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: signature did not verify");
     return MT_ERROR;
   }
 
@@ -1426,8 +1464,10 @@ static int handle_nan_int_close4(mt_desc_t* desc, nan_int_close4_t* token, byte 
 static int handle_nan_int_close6(mt_desc_t* desc, nan_int_close6_t* token, byte (*pid)[DIGEST_LEN]){
 
 
-  if(token->verified != MT_CODE_VERIFIED)
+  if(token->verified != MT_CODE_VERIFIED){
+    log_warn(LD_MT, "MoneTor: token did not return code VERIFIED");
     return MT_ERROR;
+  }
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -1457,11 +1497,15 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
   }
 
   // verify token validity
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
   if(mt_sig_verify(chn->data.wallet_new.wcom, MT_SZ_COM, &chn->data.wallet_new.int_pk, &token->sig)
-     != MT_SUCCESS)
+     != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: signature did not verify");
     return MT_ERROR;
+  }
 
   // new wallet becomes current wallet
   memcpy(&chn->data.wallet, &chn->data.wallet_new, sizeof(chn->data.wallet));
@@ -1472,14 +1516,18 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
 
   // if single threaded then just call procedures in series
   if(get_options()->MoneTorSingleThread){
-    if(cpu_task_nanestab(NULL, args) != WQ_RPL_REPLY)
+    if(cpu_task_nanestab(NULL, args) != WQ_RPL_REPLY){
+      log_warn(LD_MT, "MoneTor: cpu task returned error");
        return MT_ERROR;
+    }
     return help_nan_int_close8(args);
   }
 
   // if not single threaded then offload task to a different cpu task/reply flow
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanestab, (work_task)help_nan_int_close8, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanestab, (work_task)help_nan_int_close8, args)){
+    log_warn(LD_MT, "MoneTor: cpu task returned error");
     return MT_ERROR;
+  }
   return MT_SUCCESS;
 }
 
