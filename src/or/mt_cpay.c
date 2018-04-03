@@ -1207,7 +1207,6 @@ static int handle_nan_int_destab2(mt_desc_t* desc, nan_int_destab2_t* token, byt
   digestmap_remove(client.chns_transition, (char*)*pid);
   digestmap_set(client.nans_destab, (char*)digest, chn);
 
-  // record start of nanopayment channel for log
   tor_gettimeofday(&chn->log.end_estab);
 
   if(chn->callback.fn)

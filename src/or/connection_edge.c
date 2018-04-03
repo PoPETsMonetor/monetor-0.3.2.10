@@ -2755,6 +2755,7 @@ connection_ap_handshake_send_begin,(entry_connection_t *ap_conn))
 
   edge_conn->package_window = STREAMWINDOW_START;
   edge_conn->deliver_window = STREAMWINDOW_START;
+
   base_conn->state = AP_CONN_STATE_CONNECT_WAIT;
   log_info(LD_APP,"Address/port sent, ap socket "TOR_SOCKET_T_FORMAT
            ", n_circ_id %u",
@@ -3512,6 +3513,7 @@ connection_exit_begin_conn(cell_t *cell, circuit_t *circ)
   n_stream->stream_id = rh.stream_id;
   n_stream->base_.port = port;
   /* leave n_stream->s at -1, because it's not yet valid */
+
   n_stream->package_window = STREAMWINDOW_START;
   n_stream->deliver_window = STREAMWINDOW_START;
 
@@ -3553,6 +3555,8 @@ connection_exit_begin_conn(cell_t *cell, circuit_t *circ)
       assert_circuit_ok(circ);
       log_debug(LD_EXIT,"about to call connection_exit_connect().");
       connection_exit_connect(n_stream);
+      log_info(LD_MT, "mt_debug: Connected to stream circ id %d with purpose %d",
+	       TO_OR_CIRCUIT(circ)->p_circ_id, circ->purpose);
       return 0;
     case -1: /* resolve failed */
       relay_send_end_cell_from_edge(rh.stream_id, circ,
@@ -4167,4 +4171,3 @@ connection_edge_free_all(void)
   smartlist_free(pending_entry_connections);
   pending_entry_connections = NULL;
 }
-

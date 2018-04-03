@@ -305,10 +305,10 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   mt_desc2digest(&exit->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
   /*Now, notify payment module that we have to start a payment*/
-  int retVal;
   log_info(LD_MT, "MoneTor - Calling payment module for direct payment"
       " with param %s and %s", mt_desc_describe(&circ->ppath->desc),
       mt_desc_describe(&circ->ppath->desc));
+  int retVal;
   /* Direct payment to the guard */
   retVal = mt_cpay_establish(&circ->ppath->desc, &circ->ppath->desc);
   if (retVal < 0) {
@@ -731,6 +731,13 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
     return -1;
   }
   oricirc = TO_ORIGIN_CIRCUIT(circ);
+  if(signal == MT_SIGNAL_PAYMENT_INITIALIZED){
+    log_info(LD_MT, "MoneTor: began establishing channel with a relay");
+    if(++circ->mt_channels_initialized >= 3){
+      circ->mt_priority = 1;
+      log_info(LD_MT, "MoneTor: Payment initialized, start prioritizing now");
+    }
+  }
   if (signal == MT_SIGNAL_PAYMENT_SUCCESS) {
     /** Which one? */
     pay_path_t *ppath_tmp = oricirc->ppath;
@@ -1102,7 +1109,6 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
   memcpy(msg_with_desc, msg_int_id, size_int_id);
   memcpy(msg_with_desc+size_int_id, desc2, sizeof(mt_desc_t)); // XXX not safe over network ~ byte ordering
   memcpy(msg_with_desc+sizeof(mt_desc_t)+size_int_id, msg, size);
-
   int ret = mt_cclient_send_message(desc1, RELAY_COMMAND_MT, type, msg_with_desc, size+size_int_id+sizeof(mt_desc_t));
   tor_free(msg_with_desc);
   tor_free(msg_int_id);
