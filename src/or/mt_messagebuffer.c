@@ -23,7 +23,7 @@ typedef struct {
   int size;
 } message_t;
 
-int mt_add_to_buffer(mt_msgbuf_t* msgbuf, mt_desc_t* desc, message_t* message);
+static int mt_add_to_buffer(mt_msgbuf_t* msgbuf, mt_desc_t* desc, message_t* message);
 
 /**
  * Initialize the module. This function can be safely called multiple
@@ -60,8 +60,14 @@ int mt_set_desc_status(mt_msgbuf_t* msgbuf, mt_desc_t* desc, int status_new){
 
   smartlist_t* buffer;
   if(*status && (buffer = digestmap_get(msgbuf->buffers, (char*)digest))){
+
     SMARTLIST_FOREACH_BEGIN(buffer, message_t*, elm){
+
+      log_info(LD_MT, "MoneTor: descriptor %s is back online, resending %s",
+	       mt_desc_describe(desc), mt_token_describe(elm->type));
+
       int result;
+
       if(!elm->is_multidesc)
         result = mt_send_message(&elm->desc1, elm->type, elm->msg, elm->size);
       else
@@ -69,11 +75,9 @@ int mt_set_desc_status(mt_msgbuf_t* msgbuf, mt_desc_t* desc, int status_new){
             elm->msg, elm->size);
 
       if(result == 0){
-        smartlist_remove(buffer, elm);
         tor_free(elm);
-        elm_sl_len--;
+	SMARTLIST_DEL_CURRENT(buffer, elm);
       }
-
       else{
         log_info(LD_MT, "Descriptor disconnected while sending messages\n");
         *status = 0;
@@ -89,10 +93,13 @@ int mt_set_desc_status(mt_msgbuf_t* msgbuf, mt_desc_t* desc, int status_new){
  * Helper function for <b>mt_send_message</b> and
  * <b>mt_send_message_multidesc</b>
  */
-int mt_add_to_buffer(mt_msgbuf_t* msgbuf, mt_desc_t* desc, message_t* message){
+static int mt_add_to_buffer(mt_msgbuf_t* msgbuf, mt_desc_t* desc, message_t* message){
 
   byte digest[DIGEST_LEN];
   mt_desc2digest(desc, &digest);
+
+  log_info(LD_MT, "MoneTor: buffering message to be sent when %s is back online",
+	   mt_desc_describe(desc));
 
   // create new status element if necessary
   int* status = digestmap_get(msgbuf->statuses, (char*)digest);
