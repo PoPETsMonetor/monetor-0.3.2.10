@@ -448,9 +448,14 @@ run_cclient_housekeeping_event(time_t now) {
 
     /************************************************************************/
 
-    if (!CIRCUIT_IS_ORIGIN(circ) || !TO_ORIGIN_CIRCUIT(circ)->ppath) {
-      /** That should not happen, though */
+    /** That should not happen, though */
+    if (!CIRCUIT_IS_ORIGIN(circ)) {
       log_warn(LD_MT, "MoneTor: housekeeping noticed a circuit that has nothing to do there");
+      continue;
+    }
+
+    if (!TO_ORIGIN_CIRCUIT(circ)->ppath) {
+      /** Say hello to the ledger and intermediary circ */
       continue;
     }
 
@@ -648,9 +653,9 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
   byte id[DIGEST_LEN];
   mt_desc2digest(&ledger->desc, &id);
   if (digestmap_get(desc2circ, (char*) id)) {
-    digestmap_remove(desc2circ, (char*) id);
     log_info(LD_MT, "MoneTor: ledger circ has closed. Removed %s from our internal structure",
       mt_desc_describe(&ledger->desc));
+    digestmap_remove(desc2circ, (char*) id);
   }
   else {
     log_warn(LD_MT, "MoneTor: in ledger_circ_has_closed, looks like we didn't have this desc in our map %s", mt_desc_describe(&ledger->desc));
@@ -820,7 +825,6 @@ void mt_cclient_general_circ_has_closed(origin_circuit_t *oricirc) {
   if (oricirc->ppath) {
     log_info(LD_MT, "MoneTor: a general circuit has closed");
     byte id[DIGEST_LEN];
-    crypt_path_t *cpath_tmp = oricirc->cpath;
     pay_path_t *ppath_tmp = oricirc->ppath;
     while (ppath_tmp) {
       mt_desc2digest(&ppath_tmp->desc, &id);
@@ -1201,6 +1205,19 @@ void
 mt_cclient_general_circuit_free(origin_circuit_t* circ) {
   if (!circ)
     return;
+  /** Should we check again if the map contains the circ? */
+  byte digest[DIGEST_LEN];
+  pay_path_t *ppath_tmp = circ->ppath;
+  int hop = 1;
+  while (ppath_tmp) {
+    mt_desc2digest(&ppath_tmp->desc, &digest);
+    if (digestmap_get(desc2circ, (char*)digest)) {
+      log_warn(LD_MT, "MoneTor: Wut hop %d should have been already removed :/", hop);
+      digestmap_remove(desc2circ, (char*) digest);
+    }
+    ppath_tmp = ppath_tmp->next;
+    hop++;
+  }
   pay_path_free(circ->ppath);
   buf_free(circ->buf); //normally untouched
 }
