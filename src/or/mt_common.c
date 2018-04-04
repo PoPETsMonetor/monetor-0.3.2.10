@@ -421,6 +421,7 @@ int mt_desc_eq(mt_desc_t* desc1, mt_desc_t* desc2) {
 
 const char* mt_signal_describe(mt_signal_t signal) {
   switch (signal) {
+    case MT_SIGNAL_ESTABLISH_SUCCESS: return "Payment channel has been established";
     case MT_SIGNAL_PAYMENT_SUCCESS: return "Last mt_cpay_pay call is successful";
     case MT_SIGNAL_PAYMENT_FAILURE: return "Last mt_cpay_pay call has failed";
     case MT_SIGNAL_CLOSE_SUCCESS: return "Last mt_cpay_close is successfull";
@@ -684,7 +685,7 @@ MOCK_IMPL(void,
     if (CIRCUIT_IS_ORIGIN(circ)) {
       if (msg_len > RELAY_PPAYLOAD_SIZE) {
         origin_circuit_t *ocirc = TO_ORIGIN_CIRCUIT(circ);
-        if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
+        if (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) {
           // get right ppath
           pay_path_t *ppath = ocirc->ppath;
           crypt_path_t *cpath = ocirc->cpath;
@@ -833,9 +834,9 @@ int mt_process_received_directpaymentcell(circuit_t *circ, cell_t *cell) {
 MOCK_IMPL(int, mt_send_message, (mt_desc_t *desc, mt_ntype_t type,
       byte* msg, int size)) {
 
-  log_info(LD_MT, "MoneTor: Sending %s to %s %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type), mt_party_describe(desc->party),
-	   desc->id[0], desc->id[1]);
+  log_info(LD_MT, "MoneTor: (msg) --------- send %s %" PRIu64 ".%" PRIu64 ", %s",
+	   mt_party_describe(desc->party), desc->id[0], desc->id[1],
+	   mt_token_describe(type));
 
   switch (type) {
     uint8_t command;
@@ -1038,9 +1039,9 @@ MOCK_IMPL(int, mt_send_message_multidesc, (mt_desc_t *desc1, mt_desc_t* desc2,
     return -1;
   }
 
-  log_info(LD_MT, "MoneTor: Sending %s to %s %" PRIu64 ".%" PRIu64 " | %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type), mt_party_describe(desc1->party),
-	   desc1->id[0], desc1->id[1], desc2->id[0], desc2->id[1]);
+  log_info(LD_MT, "MoneTor: (msg) send %s %" PRIu64 ".%" PRIu64 ", %s, %" PRIu64 ".%" PRIu64 "",
+	   mt_party_describe(desc1->party), desc1->id[0], desc1->id[1],
+	   mt_token_describe(type), desc2->id[0], desc2->id[1]);
 
   return mt_cclient_send_message_multidesc(desc1, desc2, type, msg, size);
 }

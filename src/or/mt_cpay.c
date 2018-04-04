@@ -78,6 +78,7 @@ typedef struct {
   int num_payments;
 
   struct timeval start_estab;
+  struct timeval end_estab;
   struct timeval start_pay;
   struct timeval end_pay;
   struct timeval start_close;
@@ -177,6 +178,8 @@ static int help_nan_int_close8(void* args);
 // miscallaneous helper functions
 static int pay_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
 static int dpay_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
+static int estab_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
+static int destab_helper(mt_desc_t* rdesc, mt_desc_t* idesc);
 static double timeval_diff(struct timeval t1, struct timeval t2);
 
 static mt_channel_t* new_channel(void);
@@ -186,6 +189,7 @@ static workqueue_reply_t cpu_task_estab(void* thread, void* arg);
 static workqueue_reply_t cpu_task_nanestab(void* thread, void* arg);
 static workqueue_reply_t cpu_task_nanclose(void* thread, void* arg);
 static int pay_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
+static int estab_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
 static int close_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
 
 static mt_cpay_t client;
@@ -240,6 +244,23 @@ int mt_cpay_init(void){
 }
 
 /**
+ * Establish a channel wit hthe relay through a given intermediary. If
+ * <b>rdesc<\b> and <b>idesc<\b> are equal, then the payment module will make a
+ * direct payment to the intermediary module.
+ */
+int mt_cpay_establish(mt_desc_t* rdesc, mt_desc_t* idesc){
+
+  // determine whether this is a standard or direct payment
+  if(mt_desc_comp(rdesc, idesc) != 0){
+    return estab_helper(rdesc, idesc);
+  }
+  else{
+    return destab_helper(rdesc, idesc);
+  }
+}
+
+
+/**
  * Send a single payment to the relay through a given intermediary. If
  * <b>rdesc<\b> and <b>idesc<\b> are equal, then the payment module will make a
  * direct payment to the intermediary module. If a payment request to a given
@@ -249,13 +270,109 @@ int mt_cpay_init(void){
  */
 int mt_cpay_pay(mt_desc_t* rdesc, mt_desc_t* idesc){
 
-  // determine whether this is a standard or direct payment
+   // determine whether this is a standard or direct payment
   if(mt_desc_comp(rdesc, idesc) != 0){
     return pay_helper(rdesc, idesc);
   }
   else{
     return dpay_helper(rdesc, idesc);
   }
+}
+
+/**
+ * Handle standard establish from mt_cpay_estab(). Re-enter this payment again and
+ * again until the establish is successful and estab_finish is called.
+ */
+static int estab_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
+  mt_channel_t* chn;
+  byte digest[DIGEST_LEN];
+  mt_desc2digest(rdesc, &digest);
+  byte pid[DIGEST_LEN];
+  mt_crypt_rand(DIGEST_LEN, pid);
+
+  // establish nanopayment channel if possible; callback pay_helper
+  if((chn = smartlist_idesc_remove(client.nans_setup, idesc))){
+    log_info(LD_MT, "MoneTor: Trying to establish a nanopayment channel ~ Callback estab_finish");
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->rdesc = *rdesc;
+    chn->callback = (mt_callback_t){.fn = estab_finish, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_nan_cli_estab1(chn, &pid);
+  }
+
+  // set up nanopayment channel if possible; callback estab_helper
+  if((chn = smartlist_idesc_remove(client.chns_estab, idesc))){
+    log_info(LD_MT, "MoneTor: Trying to set up the nanopayment channel ~ Callback estab_helper");
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->callback = (mt_callback_t){.fn = estab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_nan_cli_setup1(chn, &pid);
+  }
+
+  // establish channel if possible; callback estab_helper
+  if((chn = smartlist_idesc_remove(client.chns_setup, idesc))){
+    log_info(LD_MT, "MoneTor: Trying to establish a channel ~ Callback estab_helper");
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->callback = (mt_callback_t){.fn = estab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_chn_end_estab1(chn, &pid);
+  }
+
+  // set up channel if possible; callback estab_helper
+  if((client.mac_bal >= MT_CHN_VAL_CLI + client.fee) || get_options()->MoneTorPublicMint){
+    log_info(LD_MT, "MoneTor: Trying to set up the channel ~ Callback estab_helper");
+    chn = new_channel();
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->idesc = *idesc;    // set channel intermediary
+    chn->callback = (mt_callback_t){.fn = estab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_chn_end_setup(chn, &pid);
+  }
+
+  log_warn(LD_MT, "MoneTor: insufficient funds to start channel");
+  return MT_ERROR;
+}
+
+/**
+ * Handle direct establish from mt_cpay_destab(). Re-enter this payment again and
+ * again until the establish is successful and estab_finish is called.
+ */
+static int destab_helper(mt_desc_t* rdesc, mt_desc_t* idesc){
+  mt_channel_t* chn;
+  byte digest[DIGEST_LEN];
+  mt_desc2digest(rdesc, &digest);
+  byte pid[DIGEST_LEN];
+  mt_crypt_rand(DIGEST_LEN, pid);
+
+  // establish nanopayment channel if possible; callback destab_finish
+  if((chn = smartlist_idesc_remove(client.nans_setup, rdesc))){
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->rdesc = *rdesc;
+    chn->callback = (mt_callback_t){.fn = estab_finish, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_nan_cli_destab1(chn, &pid);
+  }
+
+  // set up nanopayment channel if possible; callback destab_helper
+  if((chn = smartlist_idesc_remove(client.chns_estab, rdesc))){
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->callback = (mt_callback_t){.fn = destab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_nan_cli_setup1(chn, &pid);
+  }
+
+  // establish channel if possible; callback destab_helper
+  if((chn = smartlist_idesc_remove(client.chns_setup, rdesc))){
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->callback = (mt_callback_t){.fn = destab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_chn_end_estab1(chn, &pid);
+  }
+
+  // setup channel if possible; callback destab_helper
+  if((client.mac_bal >= MT_CHN_VAL_CLI + client.fee) || get_options()->MoneTorPublicMint){
+    chn = new_channel();
+    digestmap_set(client.chns_transition, (char*)pid, chn);
+    chn->idesc = *idesc;
+    chn->callback = (mt_callback_t){.fn = destab_helper, .dref1 = *rdesc, .dref2 = *idesc};
+    return init_chn_end_setup(chn, &pid);
+  }
+
+  log_warn(LD_MT, "MoneTor: insufficient funds to start channel");
+  return MT_ERROR;
 }
 
 /**
@@ -446,9 +563,8 @@ int mt_cpay_close(mt_desc_t* rdesc, mt_desc_t* idesc){
  */
 int mt_cpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 
-  log_info(LD_MT, "MoneTor: Received %s from %s %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type), mt_party_describe(desc->party),
-	   desc->id[0], desc->id[1]);
+  log_info(LD_MT, "MoneTor: (msg) ------------ recv %s %" PRIu64 ".%" PRIu64 ", %s",
+	   mt_party_describe(desc->party), desc->id[0], desc->id[1], mt_token_describe(type));
 
   int result;
   byte pid[DIGEST_LEN];
@@ -655,8 +771,10 @@ static int init_chn_end_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
 static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byte (*pid)[DIGEST_LEN]){
 
-  if(mt_desc_comp(desc, &client.led_desc) != 0)
+  if(mt_desc_comp(desc, &client.led_desc) != 0){
+    log_warn(LD_MT, "MoneTor: message does not come from ledger");
     return MT_ERROR;
+  }
 
   // if this is confirmation of mac_any_trans call then ignore and return success
   byte zeros[DIGEST_LEN] = {0};
@@ -670,8 +788,10 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
     return MT_ERROR;
   }
 
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return SUCCESS code");
     return MT_ERROR;
+  }
 
   digestmap_remove(client.chns_transition, (char*)*pid);
   smartlist_add(client.chns_setup, chn);
@@ -693,14 +813,18 @@ static int init_chn_end_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // if single threaded then just call procedures in series
   if(get_options()->MoneTorSingleThread){
-    if(cpu_task_estab(NULL, args) != WQ_RPL_REPLY)
+    if(cpu_task_estab(NULL, args) != WQ_RPL_REPLY){
+      log_warn(LD_MT, "MoneTor: cpu task returned error");
        return MT_ERROR;
+    }
     return help_chn_end_estab1(args);
   }
 
   // if not single threaded then offload task to a different cpu task/reply flow
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_estab, (work_task)help_chn_end_estab1, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_estab, (work_task)help_chn_end_estab1, args)){
+    log_warn(LD_MT, "MoneTor: cpu task returned error");
     return MT_ERROR;
+  }
   return MT_SUCCESS;
 }
 
@@ -740,8 +864,10 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
   }
 
   // validate token
-  if(token->verified != MT_CODE_VERIFIED)
+  if(token->verified != MT_CODE_VERIFIED){
+    log_warn(LD_MT, "MoneTor: token did not return code VERIFIED");
     return MT_ERROR;
+  }
 
   byte int_addr[MT_SZ_ADDR];
   mt_pk2addr(&token->int_pk, &int_addr);
@@ -751,6 +877,7 @@ static int handle_chn_int_estab2(mt_desc_t* desc, chn_int_estab2_t* token, byte 
      token->receipt.val != chn->data.public.int_bal ||
      memcmp(token->receipt.from, int_addr, MT_SZ_ADDR) != 0 ||
      memcmp(token->receipt.to, chn->data.public.addr, MT_SZ_ADDR) != 0){
+    log_warn(LD_MT, "MoneTor: receipt does not verify");
     return MT_ERROR;
    }
 
@@ -781,6 +908,7 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
   // check validity of incoming message;
   if(mt_sig_verify(chn->data.wallet.wcom, MT_SZ_COM, &chn->data.wallet.int_pk, &token->sig)
      != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: signature did not verify");
     return MT_ERROR;
   }
 
@@ -791,14 +919,18 @@ static int handle_chn_int_estab4(mt_desc_t* desc, chn_int_estab4_t* token, byte 
 
   // if single threaded then just call procedures in series
   if(get_options()->MoneTorSingleThread){
-    if(cpu_task_nanestab(NULL, args) != WQ_RPL_REPLY)
+    if(cpu_task_nanestab(NULL, args) != WQ_RPL_REPLY){
+      log_warn(LD_MT, "MoneTor: cpu task returned error");
        return MT_ERROR;
+    }
     return help_chn_int_estab4(args);
   }
 
   // if not single threaded then offload task to a different cpu task/reply flow
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanestab, (work_task)help_chn_int_estab4, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanestab, (work_task)help_chn_int_estab4, args)){
+    log_warn(LD_MT, "MoneTor: cpu task returned error");
     return MT_ERROR;
+  }
   return MT_SUCCESS;
 }
 
@@ -866,8 +998,10 @@ static int handle_nan_int_setup2(mt_desc_t* desc, nan_int_setup2_t* token, byte 
   }
 
   // check validity of incoming message
-  if(token->verified != MT_CODE_VERIFIED)
+  if(token->verified != MT_CODE_VERIFIED){
+    log_warn(LD_MT, "MoneTor: token did not return code VERIFIED");
     return MT_ERROR;
+  }
 
   // Fill in refund token
   chn_end_refund_t* refund = &chn->data.refund;
@@ -907,6 +1041,7 @@ static int handle_nan_int_setup4(mt_desc_t* desc, nan_int_setup4_t* token, byte 
   // check validity of incoming message
   if(mt_sig_verify(chn->data.refund.msg, sizeof(chn->data.refund.msg),
 		   &chn->data.wallet_nan.int_pk, &token->sig) != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: signature did not verify");
     return MT_ERROR;
   }
 
@@ -933,8 +1068,10 @@ static int handle_nan_int_setup6(mt_desc_t* desc, nan_int_setup6_t* token, byte 
     return MT_ERROR;
   }
 
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   digestmap_remove(client.chns_transition, (char*)*pid);
   smartlist_add(client.nans_setup, chn);
@@ -978,8 +1115,10 @@ static int handle_nan_rel_estab6(mt_desc_t* desc, nan_rel_estab6_t* token, byte 
   }
 
   // check token validity
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code success");
     return MT_ERROR;
+  }
 
   // update local data
   chn->data.nan_state.num_payments = 0;
@@ -989,6 +1128,9 @@ static int handle_nan_rel_estab6(mt_desc_t* desc, nan_rel_estab6_t* token, byte 
   mt_desc2digest(desc, &digest);
   digestmap_remove(client.chns_transition, (char*)*pid);
   digestmap_set(client.nans_estab, (char*)digest, chn);
+
+  // record start of nanopayment channel for log
+  tor_gettimeofday(&chn->log.end_estab);
 
   if(chn->callback.fn)
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
@@ -1030,8 +1172,10 @@ static int handle_nan_rel_pay2(mt_desc_t* desc, nan_rel_pay2_t* token, byte (*pi
     return MT_ERROR;
   }
 
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   byte digest[DIGEST_LEN];
   mt_desc2digest(desc, &digest);
@@ -1080,15 +1224,17 @@ static int handle_nan_int_destab2(mt_desc_t* desc, nan_int_destab2_t* token, byt
   }
 
   // check token validity
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   byte digest[DIGEST_LEN];
   mt_desc2digest(desc, &digest);
   digestmap_remove(client.chns_transition, (char*)*pid);
   digestmap_set(client.nans_destab, (char*)digest, chn);
 
-  // check validity incoming message
+  tor_gettimeofday(&chn->log.end_estab);
 
   if(chn->callback.fn)
     return chn->callback.fn(&chn->callback.dref1, &chn->callback.dref2);
@@ -1124,8 +1270,10 @@ static int init_nan_cli_dpay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
 static int handle_nan_int_dpay2(mt_desc_t* desc, nan_int_dpay2_t* token, byte (*pid)[DIGEST_LEN]){
 
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -1171,8 +1319,10 @@ static int init_nan_cli_reqclose1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 }
 
 static int handle_nan_rel_reqclose2(mt_desc_t* desc, nan_rel_reqclose2_t* token, byte (*pid)[DIGEST_LEN]){
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -1205,14 +1355,18 @@ static int init_nan_end_close1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
   // if single threaded then just call procedures in series
   if(get_options()->MoneTorSingleThread){
-    if(cpu_task_nanclose(NULL, args) != WQ_RPL_REPLY)
+    if(cpu_task_nanclose(NULL, args) != WQ_RPL_REPLY){
+      log_warn(LD_MT, "MoneTor: cpu task returned error");
        return MT_ERROR;
+    }
     return help_nan_end_close1(args);
   }
 
   // if not single threaded then offload task to a different cpu task/reply flow
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanclose, (work_task)help_nan_end_close1, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanclose, (work_task)help_nan_end_close1, args)){
+    log_warn(LD_MT, "MoneTor: cpu task returned error");
     return MT_ERROR;
+  }
   return MT_SUCCESS;
 }
 
@@ -1247,8 +1401,10 @@ static int handle_nan_int_close2(mt_desc_t* desc, nan_int_close2_t* token, byte 
   (void)desc;
 
 
-  if(token->verified != MT_CODE_SUCCESS)
+  if(token->verified != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -1286,6 +1442,7 @@ static int handle_nan_int_close4(mt_desc_t* desc, nan_int_close4_t* token, byte 
 
   if(mt_sig_verify(refund_msg, sizeof(refund_msg),
 		   &chn->data.wallet_new.int_pk, &token->sig) != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: signature did not verify");
     return MT_ERROR;
   }
 
@@ -1307,8 +1464,10 @@ static int handle_nan_int_close4(mt_desc_t* desc, nan_int_close4_t* token, byte 
 static int handle_nan_int_close6(mt_desc_t* desc, nan_int_close6_t* token, byte (*pid)[DIGEST_LEN]){
 
 
-  if(token->verified != MT_CODE_VERIFIED)
+  if(token->verified != MT_CODE_VERIFIED){
+    log_warn(LD_MT, "MoneTor: token did not return code VERIFIED");
     return MT_ERROR;
+  }
 
   mt_channel_t* chn = digestmap_get(client.chns_transition, (char*)*pid);
   if(chn == NULL){
@@ -1338,11 +1497,15 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
   }
 
   // verify token validity
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: token did not return code SUCCESS");
     return MT_ERROR;
+  }
   if(mt_sig_verify(chn->data.wallet_new.wcom, MT_SZ_COM, &chn->data.wallet_new.int_pk, &token->sig)
-     != MT_SUCCESS)
+     != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: signature did not verify");
     return MT_ERROR;
+  }
 
   // new wallet becomes current wallet
   memcpy(&chn->data.wallet, &chn->data.wallet_new, sizeof(chn->data.wallet));
@@ -1353,14 +1516,18 @@ static int handle_nan_int_close8(mt_desc_t* desc, nan_int_close8_t* token, byte 
 
   // if single threaded then just call procedures in series
   if(get_options()->MoneTorSingleThread){
-    if(cpu_task_nanestab(NULL, args) != WQ_RPL_REPLY)
+    if(cpu_task_nanestab(NULL, args) != WQ_RPL_REPLY){
+      log_warn(LD_MT, "MoneTor: cpu task returned error");
        return MT_ERROR;
+    }
     return help_nan_int_close8(args);
   }
 
   // if not single threaded then offload task to a different cpu task/reply flow
-  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanestab, (work_task)help_nan_int_close8, args))
+  if(!cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_nanestab, (work_task)help_nan_int_close8, args)){
+    log_warn(LD_MT, "MoneTor: cpu task returned error");
     return MT_ERROR;
+  }
   return MT_SUCCESS;
 }
 
@@ -1373,7 +1540,6 @@ static int help_nan_int_close8(void* args){
 
   // if sufficient funds left then move channel to establish state, otherwise move to spent
   if(chn->data.wallet.end_bal >= MT_NAN_LEN * (MT_NAN_VAL + (MT_NAN_VAL * client.tax) / 100)){
-    //new wallet becomes old wallet
     smartlist_add(client.chns_estab, chn);
   }
   else{
@@ -1395,8 +1561,8 @@ static int help_nan_int_close8(void* args){
   tor_gettimeofday(&now);
 
   double lifetime = timeval_diff(now, chn->log.start_estab);
-  double tt_establish = timeval_diff(chn->log.start_pay, chn->log.start_estab);
-  double tt_payment = timeval_diff(chn->log.end_pay, chn->log.start_estab);
+  double tt_establish = timeval_diff(chn->log.end_estab, chn->log.start_estab);
+  double tt_payment = timeval_diff(chn->log.end_pay, chn->log.start_pay);
   double tt_close = timeval_diff(now, chn->log.start_close);
 
   log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %lf, ttestablish: %lf, ttpayment: %lf, ttclose: %lf}",
@@ -1503,8 +1669,12 @@ static workqueue_reply_t cpu_task_nanclose(void* thread, void* args){
   return WQ_RPL_REPLY;
 }
 
+static int estab_finish(mt_desc_t* rdesc, mt_desc_t* idesc){
+  (void)idesc;
+  return mt_paymod_signal(MT_SIGNAL_ESTABLISH_SUCCESS, rdesc);
+}
+
 static int pay_finish(mt_desc_t* rdesc, mt_desc_t* idesc){
-  //return mt_pay_success(rdesc, idesc, MT_SUCCESS);
   (void)idesc;
   return mt_paymod_signal(MT_SIGNAL_PAYMENT_SUCCESS, rdesc);
 }

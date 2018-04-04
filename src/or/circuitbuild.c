@@ -517,7 +517,6 @@ circuit_establish_circuit(uint8_t purpose, extend_info_t *exit_ei, int flags)
 
   circ = origin_circuit_init(purpose, flags);
   
-  /** Again, no need to close the payment channel, we shouldn't have any */
 
   if (onion_pick_cpath_exit(circ, exit_ei, is_hs_v3_rp_circuit) < 0 ||
       onion_populate_cpath(circ) < 0) {
@@ -527,6 +526,7 @@ circuit_establish_circuit(uint8_t purpose, extend_info_t *exit_ei, int flags)
 
   control_event_circuit_status(circ, CIRC_EVENT_LAUNCHED, 0);
 
+  /** Again, no need to close the payment channel, we shouldn't have any */
   if ((err_reason = circuit_handle_first_hop(circ)) < 0) {
     circuit_mark_for_close(TO_CIRCUIT(circ), -err_reason);
     return NULL;
@@ -1388,6 +1388,7 @@ circuit_init_ppath(pay_path_t* prev) {
   pay_path_t* ppath = tor_malloc_zero(sizeof(pay_path_t));
   /* its not null => middle or exit relay */
   ppath->inter_ident = tor_malloc_zero(sizeof(intermediary_identity_t));
+  ppath->window = get_options()->MoneTorInitialWindow;
   if (prev) {
     ppath->prev = prev;
     ppath->buf = buf_new_with_capacity(RELAY_PPAYLOAD_SIZE);
@@ -1730,6 +1731,7 @@ route_len_for_purpose(uint8_t purpose, extend_info_t *exit_ei)
     /* These three purposes connect to a router that someone else
      * might have chosen, so add an extra hop to protect anonymity. */
   case CIRCUIT_PURPOSE_C_GENERAL:
+  case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
     /* connecting to hidden service directory */
   case CIRCUIT_PURPOSE_C_INTRODUCING:
     /* client connecting to introduction point */
@@ -2211,6 +2213,7 @@ choose_good_exit_server(uint8_t purpose,
 
   switch (purpose) {
     case CIRCUIT_PURPOSE_C_GENERAL:
+    case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
       if (is_internal) /* pick it like a middle hop */
         return router_choose_random_node(NULL, options->ExcludeNodes, flags);
       else
@@ -2255,6 +2258,7 @@ warn_if_last_router_excluded(origin_circuit_t *circ,
                circuit_purpose_to_string(purpose));
       return;
     case CIRCUIT_PURPOSE_C_GENERAL:
+    case CIRCUIT_PURPOSE_C_GENERAL_PAYMENT:
       if (circ->build_state->is_internal)
         return;
       description = "requested exit node";

@@ -117,6 +117,7 @@ static int handle_nan_end_close5(mt_desc_t* desc, nan_end_close5_t* token, byte 
 static int handle_nan_end_close7(mt_desc_t* desc, nan_end_close7_t* token, byte (*pid)[DIGEST_LEN]);
 
 // miscallaneous helper functions
+static int mt_ipay_recv_helper(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size);
 static mt_channel_t* new_channel(byte (*chn_addr)[MT_SZ_ADDR]);
 
 static mt_ipay_t intermediary;
@@ -172,9 +173,13 @@ int mt_ipay_init(void){
  */
 int mt_ipay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 
-  log_info(LD_MT, "MoneTor: Received %s from %s %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type), mt_party_describe(desc->party),
-	   desc->id[0], desc->id[1]);
+  log_info(LD_MT, "MoneTor: (msg) ------------ recv %s %" PRIu64 ".%" PRIu64 ", %s",
+	   mt_party_describe(desc->party), desc->id[0], desc->id[1], mt_token_describe(type));
+
+  return mt_ipay_recv_helper(desc, type, msg, size);
+}
+
+static int mt_ipay_recv_helper(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 
   int result;
   byte pid[DIGEST_LEN];
@@ -374,8 +379,10 @@ static int init_chn_int_setup(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
 
 static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byte (*pid)[DIGEST_LEN]){
 
-  if(mt_desc_comp(desc, &intermediary.led_desc) != 0)
+  if(mt_desc_comp(desc, &intermediary.led_desc) != 0){
+    log_warn(LD_MT, "MoneTor: message did not come from ledger");
     return MT_ERROR;
+  }
 
   // if this is confirmation of a module-level ledger call then return the module callback
   byte zeros[DIGEST_LEN] = {0};
@@ -390,8 +397,10 @@ static int handle_any_led_confirm(mt_desc_t* desc, any_led_confirm_t* token, byt
     return MT_ERROR;
   }
 
-  if(token->success != MT_CODE_SUCCESS)
+  if(token->success != MT_CODE_SUCCESS){
+    log_warn(LD_MT, "MoneTor: cpu task returned error");
     return MT_ERROR;
+  }
 
   intermediary.chn_number++;
   memcpy(&chn->data.wallet.receipt, &token->receipt, sizeof(any_led_receipt_t));
@@ -449,8 +458,10 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
     memcpy(public, &token->end_bal, sizeof(int));
     memcpy(public + sizeof(int), token->wcom, MT_SZ_COM);
 
-    if(mt_zkp_verify(MT_ZKP_TYPE_1, &intermediary.pp, public, public_size, &token->zkp) != MT_SUCCESS)
+    if(mt_zkp_verify(MT_ZKP_TYPE_1, &intermediary.pp, public, public_size, &token->zkp) != MT_SUCCESS){
+      log_warn(LD_MT, "MoneTor: zkp did not verify");
       return MT_ERROR;
+    }
 
     byte ipid[DIGEST_LEN];
     mt_crypt_rand(DIGEST_LEN, ipid);
@@ -460,7 +471,7 @@ static int handle_chn_end_estab1(mt_desc_t* desc, chn_end_estab1_t* token, byte 
     chn->data.public.end_bal = token->end_bal;
     chn->data.public.int_bal = token->int_bal;
     // save wcom
-    chn->callback = (mt_callback_t){.fn = mt_ipay_recv, .dref1 = *desc,
+    chn->callback = (mt_callback_t){.fn = mt_ipay_recv_helper, .dref1 = *desc,
 				    .arg2 = MT_NTYPE_CHN_END_ESTAB1};
     chn->callback.arg4 = pack_chn_end_estab1(token, pid, &chn->callback.arg3);
     digestmap_set(intermediary.chns_transition, (char*)ipid, chn);
@@ -489,8 +500,10 @@ static int handle_chn_end_estab3(mt_desc_t* desc, chn_end_estab3_t* token, byte 
   // fill out token
   chn_int_estab4_t reply;
   reply.success = MT_CODE_SUCCESS;
-  if(mt_sig_sign(token->wcom, MT_SZ_COM, &intermediary.sk, &reply.sig) != MT_SUCCESS)
+  if(mt_sig_sign(token->wcom, MT_SZ_COM, &intermediary.sk, &reply.sig) != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: signature did not verify");
     return MT_ERROR;
+  }
 
   byte* msg;
   int msg_size = pack_chn_int_estab4(&reply, pid, &msg);
@@ -507,15 +520,21 @@ static int handle_nan_cli_setup1(mt_desc_t* desc, nan_cli_setup1_t* token, byte 
   byte wpk_digest[DIGEST_LEN];
   mt_bytes2digest(token->wpk, MT_SZ_PK, &wpk_digest);
 
-  if(digestmap_get(intermediary.chn_states, (char*)wpk_digest))
+  if(digestmap_get(intermediary.chn_states, (char*)wpk_digest)){
+    log_warn(LD_MT, "MoneTor: wallet has already been used");
     return MT_ERROR;
+  }
 
   // only accept consensus values
-  if(token->nan_public.val_from != MT_NAN_VAL + (MT_NAN_VAL * intermediary.tax) / 100)
+  if(token->nan_public.val_from != MT_NAN_VAL + (MT_NAN_VAL * intermediary.tax) / 100){
+    log_warn(LD_MT, "MoneTor: value from does not agree with consensus");
     return MT_ERROR;
+  }
 
-  if(token->nan_public.val_to != MT_NAN_VAL)
+  if(token->nan_public.val_to != MT_NAN_VAL){
+    log_warn(LD_MT, "MoneTor: value to does not agree with consensus");
     return MT_ERROR;
+  }
 
   // public zkp parameters
   int cli_val = -token->nan_public.val_from;
@@ -526,8 +545,10 @@ static int handle_nan_cli_setup1(mt_desc_t* desc, nan_cli_setup1_t* token, byte 
   memcpy(public + MT_SZ_PK + sizeof(int), token->wpk, MT_SZ_PK);
   memcpy(public + MT_SZ_PK + sizeof(int) + MT_SZ_PK, token->wcom, MT_SZ_COM);
 
-  if(mt_zkp_verify(MT_ZKP_TYPE_2, &intermediary.pp, public, public_size, &token->zkp) != MT_SUCCESS)
+  if(mt_zkp_verify(MT_ZKP_TYPE_2, &intermediary.pp, public, public_size, &token->zkp) != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: zkp did not verify");
     return MT_ERROR;
+  }
 
   byte wpk_nan_digest[DIGEST_LEN];
   mt_bytes2digest(token->wpk_nan, MT_SZ_PK, &wpk_nan_digest);
@@ -562,8 +583,10 @@ static int handle_nan_cli_setup1(mt_desc_t* desc, nan_cli_setup1_t* token, byte 
 static int handle_nan_cli_setup3(mt_desc_t* desc, nan_cli_setup3_t* token, byte (*pid)[DIGEST_LEN]){
 
   // verify token
-  if(token->refund_msg[0] != MT_CODE_REFUND)
+  if(token->refund_msg[0] != MT_CODE_REFUND){
+    log_warn(LD_MT, "MoneTor: bad refund code");
     return MT_ERROR;
+  }
 
   nan_int_state_t* nan_state = digestmap_get(intermediary.nan_states,
 					 (char*)(token->refund_msg + sizeof(byte)));
@@ -572,8 +595,10 @@ static int handle_nan_cli_setup3(mt_desc_t* desc, nan_cli_setup3_t* token, byte 
     return MT_ERROR;
   }
 
-  if(memcmp(nan_state->wcom, token->refund_msg + sizeof(byte) + DIGEST_LEN, MT_SZ_COM) != 0)
+  if(memcmp(nan_state->wcom, token->refund_msg + sizeof(byte) + DIGEST_LEN, MT_SZ_COM) != 0){
+    log_warn(LD_MT, "MoneTor: bad refund message");
     return MT_ERROR;
+  }
 
   memset(nan_state, '\0', sizeof(nan_int_state_t));
 
@@ -581,6 +606,7 @@ static int handle_nan_cli_setup3(mt_desc_t* desc, nan_cli_setup3_t* token, byte 
   nan_int_setup4_t reply;
   if(mt_sig_sign(token->refund_msg, sizeof(token->refund_msg), &intermediary.sk, &reply.sig)
      != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: could not sign refund token");
     return MT_ERROR;
   }
 
@@ -606,6 +632,7 @@ static int handle_nan_cli_setup5(mt_desc_t* desc, nan_cli_setup5_t* token, byte 
 
   if(mt_sig_verify(token->revocation.msg, sizeof(token->revocation.msg), &wpk, &token->revocation.sig)
      != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: signature did not verify");
     return MT_ERROR;
   }
 
@@ -640,10 +667,11 @@ static int handle_nan_rel_estab2(mt_desc_t* desc, nan_rel_estab2_t* token, byte 
   byte wpk_digest[DIGEST_LEN];
   mt_bytes2digest(token->wpk, MT_SZ_PK, &wpk_digest);
 
-  if(digestmap_get(intermediary.chn_states, (char*)wpk_digest))
+  if(digestmap_get(intermediary.chn_states, (char*)wpk_digest)){
+    log_warn(LD_MT, "MoneTor: wallet has already been used");
     return MT_ERROR;
+  }
 
-  printf("got here\n");
   // make sure nanopayment channel was already initialized by the client
   byte nan_digest[DIGEST_LEN];
   mt_nanpub2digest(&token->nan_public, &nan_digest);
@@ -653,13 +681,11 @@ static int handle_nan_rel_estab2(mt_desc_t* desc, nan_rel_estab2_t* token, byte 
     return MT_ERROR;
   }
 
-  printf("got here\n");
   // make sure that nanopayment channel is in the "ready" state
   if(nan_state->status != MT_CODE_READY){
     log_warn(LD_MT, "nanopayment channel is not accepting connections");
     return MT_ERROR;
   }
-  printf("got here\n");
 
   // public zkp parameters
   int rel_val = token->nan_public.val_to;
@@ -669,10 +695,10 @@ static int handle_nan_rel_estab2(mt_desc_t* desc, nan_rel_estab2_t* token, byte 
   memcpy(public + MT_SZ_PK, &rel_val, sizeof(int));
   memcpy(public + MT_SZ_PK + sizeof(int), token->wpk, MT_SZ_PK);
   memcpy(public + MT_SZ_PK + sizeof(int) + MT_SZ_PK, token->wcom, MT_SZ_COM);
-  printf("got here\n");
-  if(mt_zkp_verify(MT_ZKP_TYPE_2, &intermediary.pp, public, public_size, &token->zkp) != MT_SUCCESS)
+  if(mt_zkp_verify(MT_ZKP_TYPE_2, &intermediary.pp, public, public_size, &token->zkp) != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: zkp did not verify");
     return MT_ERROR;
-  printf("got here\n");
+  }
   byte wpk_nan_digest[DIGEST_LEN];
   mt_bytes2digest(token->wpk_nan, MT_SZ_PK, &wpk_nan_digest);
 
@@ -700,8 +726,10 @@ static int handle_nan_rel_estab4(mt_desc_t* desc, nan_rel_estab4_t* token, byte 
   (void)token;
 
   // verify token validity
-  if(token->refund_msg[0] != MT_CODE_REFUND)
+  if(token->refund_msg[0] != MT_CODE_REFUND){
+    log_warn(LD_MT, "MoneTor: bad refund code");
     return MT_ERROR;
+  }
 
   nan_int_state_t* nan_state = digestmap_get(intermediary.nan_states,
 					 (char*)(token->refund_msg + sizeof(byte)));
@@ -781,10 +809,12 @@ static int handle_nan_cli_dpay1(mt_desc_t* desc, nan_cli_dpay1_t* token, byte (*
   // if the payment number > 0 then need to check hashes
   if(nan_state->end_state.num_payments &&
      mt_hc_verify(&nan_state->end_state.last_hash, &token->preimage, 1)){
+    log_warn(LD_MT, "MoneTor: preimage did not verify (not first payment)");
     return MT_ERROR;
   }
   else if(!nan_state->end_state.num_payments &&
 	  memcmp(token->preimage, token->nan_public.hash_tail, MT_SZ_HASH) != 0){
+    log_warn(LD_MT, "MoneTor: preimage did not verify (first payment)");
     return MT_ERROR;
   }
 
@@ -837,12 +867,15 @@ static int handle_nan_end_close1(mt_desc_t* desc, nan_end_close1_t* token, byte 
   memcpy(public + MT_SZ_PK + sizeof(int), token->wpk, MT_SZ_PK);
   memcpy(public + MT_SZ_PK + sizeof(int) + MT_SZ_PK, token->wcom_new, MT_SZ_COM);
 
-  if(mt_zkp_verify(MT_ZKP_TYPE_2, &intermediary.pp, public, public_size, &token->zkp_new) != MT_SUCCESS)
+  if(mt_zkp_verify(MT_ZKP_TYPE_2, &intermediary.pp, public, public_size, &token->zkp_new) != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: zkp did not verify");
     return MT_ERROR;
+  }
 
   // verify hash chain
   if(token->num_payments && mt_hc_verify(&token->nan_public.hash_tail, &token->preimage,
 		  token->num_payments - 1) != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: hash chain did not verify");
     return MT_ERROR;
   }
 
@@ -879,10 +912,14 @@ static int handle_nan_end_close3(mt_desc_t* desc, nan_end_close3_t* token, byte 
   }
 
   // check token validity
-  if(token->refund_msg[0] != (byte)MT_CODE_REFUND)
+  if(token->refund_msg[0] != (byte)MT_CODE_REFUND){
+    log_warn(LD_MT, "MoneTor: bad refund code");
     return MT_ERROR;
-  if(memcmp(token->refund_msg + sizeof(byte), nan_state->wcom, sizeof(nan_state->wcom)) != 0)
+  }
+  if(memcmp(token->refund_msg + sizeof(byte), nan_state->wcom, sizeof(nan_state->wcom)) != 0){
+    log_warn(LD_MT, "MoneTor: bad refund message");
     return MT_ERROR;
+  }
 
   nan_int_close4_t reply;
   mt_sig_sign(token->refund_msg, sizeof(token->refund_msg), &intermediary.sk, &reply.sig);
@@ -900,6 +937,7 @@ static int handle_nan_end_close5(mt_desc_t* desc, nan_end_close5_t* token, byte 
   // verify token validity
   if(mt_sig_verify(token->revocation.msg, sizeof(token->revocation.msg),
 		   &token->wpk_nan, &token->revocation.sig) != MT_SUCCESS){
+    log_warn(LD_MT, "MoneTor: signature did not verify");
     return MT_ERROR;
   }
 
@@ -930,8 +968,10 @@ static int handle_nan_end_close7(mt_desc_t* desc, nan_end_close7_t* token, byte 
     return MT_ERROR;
   }
 
-  if(memcmp(token->wcom_new, nan_state->wcom, sizeof(token->wcom_new) != 0))
+  if(memcmp(token->wcom_new, nan_state->wcom, sizeof(token->wcom_new) != 0)){
+    log_warn(LD_MT, "MoneTor: commeted wallets are not the same");
     return MT_ERROR;
+  }
 
   nan_int_close8_t reply;
   reply.success = MT_CODE_SUCCESS;

@@ -46,6 +46,7 @@
  **/
 
 #define RELAY_PRIVATE
+#include <math.h>
 #include "or.h"
 #include "addressmap.h"
 #include "backtrace.h"
@@ -80,6 +81,9 @@
 #include "routerparse.h"
 #include "scheduler.h"
 #include "rephist.h"
+
+// moneTor: square root of get_options()->MoneTorFlowMod; calculated once
+static double flow_mod_sqrt;
 
 static edge_connection_t *relay_lookup_conn(circuit_t *circ, cell_t *cell,
                                             cell_direction_t cell_direction,
@@ -723,7 +727,7 @@ relay_send_pcommand_from_edge_,(circuit_t* circ, uint8_t relay_command,
     cell_direction = CELL_DIRECTION_IN;
     cpath_layer = NULL;
   }
-  
+
   if (cell_direction == CELL_DIRECTION_OUT && circ->n_chan) {
     /* if we're using relaybandwidthrate, this conn wants priority */
     channel_timestamp_client(circ->n_chan);
@@ -1993,30 +1997,33 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
       return 0;
     case RELAY_COMMAND_SENDME:
       if (!rh.stream_id) {
+
         if (layer_hint) {
-          if (layer_hint->package_window + CIRCWINDOW_INCREMENT >
-                CIRCWINDOW_START_MAX) {
-            static struct ratelim_t exit_warn_ratelim = RATELIM_INIT(600);
-            log_fn_ratelim(&exit_warn_ratelim, LOG_WARN, LD_PROTOCOL,
-                   "Unexpected sendme cell from exit relay. "
-                   "Closing circ.");
-            return -END_CIRC_REASON_TORPROTOCOL;
-          }
+	  /* moneTor flow: disable client-side sendme check */
+          /* if (layer_hint->package_window + CIRCUITWINDOW_INCREMENT > */
+          /*       circwindow_start_max) { */
+          /*   static struct ratelim_t exit_warn_ratelim = RATELIM_INIT(600); */
+          /*   log_fn_ratelim(&exit_warn_ratelim, LOG_WARN, LD_PROTOCOL, */
+          /*          "Unexpected sendme cell from exit relay. " */
+          /*          "Closing circ."); */
+          /*   return -END_CIRC_REASON_TORPROTOCOL; */
+          /* } */
           layer_hint->package_window += CIRCWINDOW_INCREMENT;
           log_debug(LD_APP,"circ-level sendme at origin, packagewindow %d.",
                     layer_hint->package_window);
           mt_cclient_update_payment_window(circ, 3);
           circuit_resume_edge_reading(circ, layer_hint);
         } else {
-          if (circ->package_window + CIRCWINDOW_INCREMENT >
-                CIRCWINDOW_START_MAX) {
-            static struct ratelim_t client_warn_ratelim = RATELIM_INIT(600);
-            log_fn_ratelim(&client_warn_ratelim,LOG_PROTOCOL_WARN, LD_PROTOCOL,
-                   "Unexpected sendme cell from client. "
-                   "Closing circ (window %d).",
-                   circ->package_window);
-            return -END_CIRC_REASON_TORPROTOCOL;
-          }
+	  /* moneTor flow: disable client-side sendme check */
+          /* if (circ->package_window + CIRCUITWINDOW_INCREMENT > */
+          /*       circwindow_start_max) { */
+          /*   static struct ratelim_t client_warn_ratelim = RATELIM_INIT(600); */
+          /*   log_fn_ratelim(&client_warn_ratelim,LOG_PROTOCOL_WARN, LD_PROTOCOL, */
+          /*          "Unexpected sendme cell from client. " */
+          /*          "Closing circ (window %d).", */
+          /*          circ->package_window); */
+          /*   return -END_CIRC_REASON_TORPROTOCOL; */
+          /* } */
           circ->package_window += CIRCWINDOW_INCREMENT;
           log_debug(LD_APP,
                     "circ-level sendme at non-origin, packagewindow %d.",
@@ -2030,6 +2037,7 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
                  rh.stream_id);
         return 0;
       }
+
       conn->package_window += STREAMWINDOW_INCREMENT;
       log_debug(domain,"stream-level sendme, packagewindow now %d.",
                 conn->package_window);
@@ -2283,7 +2291,10 @@ connection_edge_consider_sending_sendme(edge_connection_t *conn)
     return;
   }
 
-  while (conn->deliver_window <= STREAMWINDOW_START - STREAMWINDOW_INCREMENT) {
+  // moneTor flow
+  int streamwindow_start = mt_modify_flow_value(STREAMWINDOW_START, circ);
+
+  while (conn->deliver_window <= streamwindow_start - STREAMWINDOW_INCREMENT) {
     log_debug(conn->base_.type == CONN_TYPE_AP ?LD_APP:LD_EXIT,
               "Outbuf %d, Queuing stream sendme.",
               (int)conn->base_.outbuf_flushlen);
@@ -2531,8 +2542,12 @@ circuit_consider_sending_sendme(circuit_t *circ, crypt_path_t *layer_hint)
 {
 //  log_fn(LOG_INFO,"Considering: layer_hint is %s",
 //         layer_hint ? "defined" : "null");
+
+  // moneTor flow: client side & relay side
+  int circwindow_start = mt_modify_flow_value(CIRCWINDOW_START, circ);
+
   while ((layer_hint ? layer_hint->deliver_window : circ->deliver_window) <=
-          CIRCWINDOW_START - CIRCWINDOW_INCREMENT) {
+          circwindow_start - CIRCWINDOW_INCREMENT) {
     log_debug(LD_CIRC,"Queuing circuit sendme.");
     if (layer_hint)
       layer_hint->deliver_window += CIRCWINDOW_INCREMENT;
@@ -2948,6 +2963,24 @@ packed_cell_get_circid(const packed_cell_t *cell, int wide_circ_ids)
   }
 }
 
+/**
+ * return modified versions of circuit and stream flow control values that were
+ * previously constants in vanilla Tor.
+ */
+int32_t mt_modify_flow_value(int32_t original, circuit_t* circ){
+
+  // calculate the square once and store it for the duration of the program
+  if(flow_mod_sqrt <= 0)
+    flow_mod_sqrt = sqrt(get_options()->MoneTorFlowMod);
+
+  if((circ->mt_priority)){
+    return (int32_t)(original * flow_mod_sqrt);
+  }
+  else{
+    return (int32_t)(original / flow_mod_sqrt);
+  }
+}
+
 /** Pull as many cells as possible (but no more than <b>max</b>) from the
  * queue of the first active circuit on <b>chan</b>, and write them to
  * <b>chan</b>-&gt;outbuf.  Return the number of cells written.  Advance
@@ -3219,7 +3252,7 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
     }
   }
 #endif /* 0 */
-  
+
 
   cell_queue_append_packed_copy(circ, queue, exitward, cell,
                                 chan->wide_circ_ids, 1);
@@ -3249,7 +3282,7 @@ append_cell_to_circuit_queue(circuit_t *circ, channel_t *chan,
 
   /* New way: mark this as having waiting cells for the scheduler */
   scheduler_channel_has_waiting_cells(chan);
-  
+
 }
 
 /** Append an encoded value of <b>addr</b> to <b>payload_out</b>, which must

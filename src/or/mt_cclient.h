@@ -90,7 +90,7 @@ intermediary_t* mt_cclient_get_intermediary_from_ocirc(origin_circuit_t* circ);
  * stream is attached to a general circuit
  */
 
-void mt_cclient_launch_payment(origin_circuit_t* circ);
+int mt_cclient_launch_payment(origin_circuit_t* circ);
 
 /**
  * Interface to send payment message from a client related role
@@ -131,6 +131,6 @@ int intermediary_parse_state(or_state_t *state, int set, char** msg);
  * Looks up descriptor and returns one of MT_GUARD, MT_MIDDLE, or
  * MT_EXIT or -1 on error
  */
-int mt_cclient_relay_type(mt_desc_t *desc);
+MOCK_DECL(int, mt_cclient_relay_type,(mt_desc_t *desc));
 
 #endif

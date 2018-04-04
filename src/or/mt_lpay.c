@@ -149,9 +149,8 @@ int mt_lpay_init(void){
  */
 int mt_lpay_recv(mt_desc_t* desc, mt_ntype_t type, byte* msg, int size){
 
-  log_info(LD_MT, "MoneTor: Received %s from %s %" PRIu64 ".%" PRIu64 "",
-	   mt_token_describe(type), mt_party_describe(desc->party),
-	   desc->id[0], desc->id[1]);
+  log_info(LD_MT, "MoneTor: (msg) ------------ recv %s %" PRIu64 ".%" PRIu64 ", %s",
+	   mt_party_describe(desc->party), desc->id[0], desc->id[1], mt_token_describe(type));
 
   // verify signed message, produce addr to pass into handlers
   byte pk[MT_SZ_PK];
@@ -345,8 +344,10 @@ int handle_mac_any_trans(mac_any_trans_t* token, byte (*addr)[MT_SZ_ADDR], any_l
 int handle_chn_end_setup(chn_end_setup_t* token, byte (*addr)[MT_SZ_ADDR], any_led_receipt_t* rec){
 
   // check that the message originates from the payer
-  if(memcmp(addr, token->from, MT_SZ_ADDR) != 0)
+  if(memcmp(addr, token->from, MT_SZ_ADDR) != 0){
+    log_warn(LD_MT, "MoneTor: address and signer differ");
     return MT_ERROR;
+  }
 
   // check that the token public data is internally consistent
   byte token_addr[MT_SZ_ADDR];
@@ -354,6 +355,7 @@ int handle_chn_end_setup(chn_end_setup_t* token, byte (*addr)[MT_SZ_ADDR], any_l
   if(token->val_to != token->chn_public.end_bal ||
      memcmp(token_addr, *addr, MT_SZ_ADDR) != 0 ||
      memcmp(token->chn_public.addr, token->chn, MT_SZ_ADDR) != 0){
+    log_warn(LD_MT, "MoneTor: token is internally inconsistent");
     return MT_ERROR;
   }
 
@@ -362,8 +364,10 @@ int handle_chn_end_setup(chn_end_setup_t* token, byte (*addr)[MT_SZ_ADDR], any_l
 
   // if MoneTorPublicMint is on then user can set up channels for free
   if(!get_options()->MoneTorPublicMint){
-    if(data_from == NULL)
+    if(data_from == NULL){
+      log_warn(LD_MT, "MoneTor: no previous account found");
       return MT_ERROR;
+    }
   }
   else {
     if(data_from == NULL){
@@ -381,14 +385,17 @@ int handle_chn_end_setup(chn_end_setup_t* token, byte (*addr)[MT_SZ_ADDR], any_l
   }
 
   // check that we have a new and unused channel address
-  if(data_chn->state != MT_LSTATE_EMPTY)
+  if(data_chn->state != MT_LSTATE_EMPTY){
+    log_warn(LD_MT, "MoneTor: attempting to reuse old address");
     return MT_ERROR;
+  }
 
   int* bal_from = &(data_from->bal);
   int* bal_to = &(data_chn->end_bal);
 
   // check that the escrow transfer goes through
   if(transfer(bal_from, bal_to, token->val_from, token->val_to, ledger.fee) == MT_ERROR){
+    log_warn(LD_MT, "MoneTor: balance transfer error");
     return MT_ERROR;
   }
 
@@ -415,8 +422,10 @@ int handle_chn_end_setup(chn_end_setup_t* token, byte (*addr)[MT_SZ_ADDR], any_l
 int handle_chn_int_setup(chn_int_setup_t* token, byte (*addr)[MT_SZ_ADDR], any_led_receipt_t* rec){
 
   // check that the message originates from the payer
-  if(memcmp(addr, token->from, MT_SZ_ADDR) != 0)
+  if(memcmp(addr, token->from, MT_SZ_ADDR) != 0){
+    log_warn(LD_MT, "MoneTor: address and signer differ");
     return MT_ERROR;
+  }
 
   mac_led_data_t* data_from = digestmap_get(ledger.mac_accounts, (char*)token->from);
   chn_led_data_t* data_chn = digestmap_get(ledger.chn_accounts, (char*)token->chn);
@@ -427,13 +436,16 @@ int handle_chn_int_setup(chn_int_setup_t* token, byte (*addr)[MT_SZ_ADDR], any_l
   if(token->val_to != token->chn_public.int_bal ||
      memcmp(token_addr, *addr, MT_SZ_ADDR) != 0 ||
      memcmp(token->chn_public.addr, token->chn, MT_SZ_ADDR) != 0){
+    log_warn(LD_MT, "MoneTor: token is internally inconsistent");
     return MT_ERROR;
   }
 
   // if MoneTorPublicMint is on then user can set up channels for free
   if(!get_options()->MoneTorPublicMint){
-    if(data_from == NULL)
+    if(data_from == NULL){
+      log_warn(LD_MT, "MoneTor: no previous account found");
       return MT_ERROR;
+    }
   }
   else {
     if(data_from == NULL){
@@ -443,25 +455,35 @@ int handle_chn_int_setup(chn_int_setup_t* token, byte (*addr)[MT_SZ_ADDR], any_l
     data_from->bal += token->val_from;
   }
 
-  if(data_chn == NULL)
+  if(data_chn == NULL){
+    log_warn(LD_MT, "MoneTor: no previous channel found");
     return MT_ERROR;
+  }
 
   // check that the channel address is in the right state
-  if(data_chn->state != MT_LSTATE_INIT)
+  if(data_chn->state != MT_LSTATE_INIT){
+    log_warn(LD_MT, "MoneTor: attempting to reuse old address");
     return MT_ERROR;
+  }
 
   // check that end user and intermediary's public channel tokens agree
-  if(token->chn_public.end_bal != data_chn->end_public.end_bal)
+  if(token->chn_public.end_bal != data_chn->end_public.end_bal){
+    log_warn(LD_MT, "MoneTor: channel token end balances do not aggree");
     return MT_ERROR;
-  if(token->chn_public.int_bal != data_chn->end_public.int_bal)
+  }
+  if(token->chn_public.int_bal != data_chn->end_public.int_bal){
+    log_warn(LD_MT, "MoneTor: channel token int balances do not aggree");
     return MT_ERROR;
+  }
 
   int* bal_from = &(data_from->bal);
   int* bal_to = &(data_chn->int_bal);
 
   // check that the escrow transfer goes through
-  if(transfer(bal_from, bal_to, token->val_from, token->val_to, ledger.fee) == MT_ERROR)
+  if(transfer(bal_from, bal_to, token->val_from, token->val_to, ledger.fee) == MT_ERROR){
+    log_warn(LD_MT, "MoneTor: balance transfer error");
     return MT_ERROR;
+  }
 
   memcpy(data_chn->int_addr, addr, MT_SZ_ADDR);
   data_chn->int_public = token->chn_public;

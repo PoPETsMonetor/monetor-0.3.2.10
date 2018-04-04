@@ -242,12 +242,12 @@ mt_cintermediary_send_message(mt_desc_t *desc, mt_ntype_t pcommand,
   // We can go a bit further and re-send the command for 
   // ledger circuits when it is up again.
   if (!circ) {
-    log_warn(LD_MT, "Looks like the circuit his not within our map :/");
-    return -2;
+    log_warn(LD_MT, "Looks like the circuit is not within our map :/");
+    return -1;
   }
   if (circ->marked_for_close) {
     log_warn(LD_MT, "Looks like the circuit has been marked for close");
-    return -2;
+    return -1;
   }
   if (circ->state != CIRCUIT_STATE_OPEN) {
     log_info(LD_MT, "MoneTor: the circuit is still building?."
@@ -271,8 +271,6 @@ mt_cintermediary_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
     desc = &ledger->desc;
     if (mt_ipay_recv(desc, pcommand, msg, msg_len) < 0) {
       log_warn(LD_MT, "MoneTor: Payment module returned -1 for %s", mt_token_describe(pcommand));
-      circ->mt_priority = 0;
-      log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");
     }
   }
   else if (circ->purpose == CIRCUIT_PURPOSE_INTERMEDIARY) {
@@ -280,8 +278,6 @@ mt_cintermediary_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
     desc = &orcirc->desc;
     if (mt_ipay_recv(desc, pcommand, msg, msg_len) < 0) {
       log_warn(LD_MT, "MoneTor: Payment module returned -1 for %s", mt_token_describe(pcommand));
-      circ->mt_priority = 0;
-      log_warn(LD_MT, "MoneTor: PRIORITY DISABLED");
     }
   }
   else {

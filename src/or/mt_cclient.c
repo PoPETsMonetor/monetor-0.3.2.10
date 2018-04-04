@@ -215,34 +215,36 @@ intermediary_need_cleanup(intermediary_t *intermediary, time_t now) {
  * want to establish a payment circuit.
  */
 
-void
+int
 mt_cclient_launch_payment(origin_circuit_t* circ) {
   log_info(LD_MT, "MoneTor - Initiating payment - calling payment module");
 
   if (router_have_consensus_path() == CONSENSUS_PATH_UNKNOWN ||
       !have_completed_a_circuit()) {
     log_warn(LD_MT, "MoneTor: Looks like we launch a payment while we still not bootstrapped?");
-    return;
+    return -1;
   }
   /** get guard's desc pointer */
-  tor_assert(circ->cpath->extend_info);
-  node_t* node = (node_t*)node_get_by_id(circ->cpath->extend_info->identity_digest);
-  if (!node) {
-    log_warn(LD_MT, "MoneTor: node is NULL");
-    return;
-  }
-  if (!node->desc) {
+  /*tor_assert(circ->cpath->extend_info);*/
+  /*node_t* node = (node_t*)node_get_by_id(circ->cpath->extend_info->identity_digest);*/
+  /*if (!node) {*/
+    /*log_warn(LD_MT, "MoneTor: node is NULL");*/
+    /*return -1;*/
+  /*}*/
+  /*if (!node->desc) {*/
     /** a desc pointer in node_t should work fine we have more than one guard
      * but not the right architecture if we want to save this information to
      * the disk*/
-    increment(count);
-    node->desc = tor_malloc_zero(sizeof(mt_desc_t));
-    node->desc->id[0] = count[0];
-    node->desc->id[1] = count[1];
-    node->desc->party = MT_PARTY_REL;
-  }
-  circ->ppath->desc.id[0] = node->desc->id[0];
-  circ->ppath->desc.id[1] = node->desc->id[1];
+  increment(count);
+    /*node->desc = tor_malloc_zero(sizeof(mt_desc_t));*/
+    /*node->desc->id[0] = count[0];*/
+    /*node->desc->id[1] = count[1];*/
+    /*node->desc->party = MT_PARTY_REL;*/
+  /*}*/
+  /*circ->ppath->desc.id[0] = node->desc->id[0];*/
+  circ->ppath->desc.id[0] = count[0];
+  /*circ->ppath->desc.id[1] = node->desc->id[1];*/
+  circ->ppath->desc.id[1] = count[1];
   circ->ppath->desc.party = MT_PARTY_REL;
   /* Choosing right intermediary */
   tor_assert(circ->ppath->next);
@@ -252,6 +254,7 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
     intermediary_g = get_intermediary_by_role(ALLPOS);
   else
     intermediary_g = get_intermediary_by_role(MIDDLE);
+
   increment(count);
   middle->desc.id[0] = count[0];
   middle->desc.id[1] = count[1];
@@ -259,8 +262,7 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   /* Log if intermediary is NULL? Should not happen*/
   if (!intermediary_g) {
     log_warn(LD_MT, "Looks like we do not have an intermediary yet ..");
-    circuit_mark_for_close(TO_CIRCUIT(circ), -1);
-    return;
+    return -1;
   }
 
   if (intermediary_g) {
@@ -284,6 +286,10 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
     memcpy(exit->inter_ident->identity, intermediary_e->identity->identity,
         DIGEST_LEN);
   }
+  else {
+    log_warn(LD_MT, "Looks like we do not have an intermediary yet for exit..");
+    return -1;
+  }
   log_info(LD_MT, "MoneTor - Adding circ's descs %s to digestmap",
       mt_desc_describe(&circ->ppath->desc));
   /* Adding new elements to digestmap */
@@ -299,12 +305,12 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
   mt_desc2digest(&exit->desc, &id);
   digestmap_set(desc2circ, (char*) id, TO_CIRCUIT(circ));
   /*Now, notify payment module that we have to start a payment*/
-  int retVal;
   log_info(LD_MT, "MoneTor - Calling payment module for direct payment"
       " with param %s and %s", mt_desc_describe(&circ->ppath->desc),
       mt_desc_describe(&circ->ppath->desc));
+  int retVal;
   /* Direct payment to the guard */
-  retVal = mt_cpay_pay(&circ->ppath->desc, &circ->ppath->desc);
+  retVal = mt_cpay_establish(&circ->ppath->desc, &circ->ppath->desc);
   if (retVal < 0) {
     //XXX MoneTor - Do we mark the payment for close?
     circ->ppath->p_marked_for_close = 1;
@@ -315,7 +321,7 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
       " with param %s and %s", mt_desc_describe(&middle->desc),
       mt_desc_describe(&intermediary_g->desc));
   /* Payment to the middle relay involving intermediary */
-  retVal = mt_cpay_pay(&middle->desc, &intermediary_g->desc);
+  retVal = mt_cpay_establish(&middle->desc, &intermediary_g->desc);
   if (retVal < 0) {
     middle->p_marked_for_close = 1;
     log_info(LD_MT, "MoneTor: mt_cpay_pay returned -1");
@@ -324,11 +330,12 @@ mt_cclient_launch_payment(origin_circuit_t* circ) {
       " with param %s and %s", mt_desc_describe(&exit->desc),
       mt_desc_describe(&intermediary_e->desc));
   /* Payment to the exit relay involving intermediary */
-  retVal = mt_cpay_pay(&exit->desc, &intermediary_e->desc);
+  retVal = mt_cpay_establish(&exit->desc, &intermediary_e->desc);
   if (retVal < 0) {
     exit->p_marked_for_close = 1;
     log_info(LD_MT, "MoneTor: mt_cpay_pay returned -1");
   }
+  return 0;
 }
 
 
@@ -421,45 +428,75 @@ run_cclient_housekeeping_event(time_t now) {
     }
   } SMARTLIST_FOREACH_END(intermediary);
 
-  /*log_info(LD_MT, "MoneTor: relay digestmap length: %d", digestmap_size(desc2circ));*/
-  /*DIGESTMAP_FOREACH(desc2circ, key, circuit_t *, circ) {*/
-    /*if (!CIRCUIT_IS_ORIGIN(circ) && !TO_ORIGIN_CIRCUIT(circ)->ppath) {*/
-      /*continue;*/
-    /*}*/
+  log_info(LD_MT, "MoneTor: relay digestmap length: %d", digestmap_size(desc2circ));
+  DIGESTMAP_FOREACH_MODIFY(desc2circ, key, circuit_t *, circ) {
+
+    /************************************************************************/
+    // XXX moneTor: very temporary measure until we find freed pointer
+
+    int found = 0;
+    SMARTLIST_FOREACH_BEGIN(circuit_get_global_list(), circuit_t *, next_circ) {
+      if(next_circ == circ){
+        found = 1;
+      }
+    } SMARTLIST_FOREACH_END(next_circ);
+
+    if(!found){
+      MAP_DEL_CURRENT(key);
+      continue;
+    }
+
+    /************************************************************************/
+
+    /** That should not happen, though */
+    if (!CIRCUIT_IS_ORIGIN(circ)) {
+      log_warn(LD_MT, "MoneTor: housekeeping noticed a circuit that has nothing to do there");
+      continue;
+    }
+
+    if (!TO_ORIGIN_CIRCUIT(circ)->ppath) {
+      /** Say hello to the ledger and intermediary circ */
+      continue;
+    }
+
     /*[>* Verify if we have enough remaining window <]*/
-    /*pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;*/
-    /*int hop = 1;*/
-    /*while (ppath_tmp != NULL) {*/
-      /*if (ppath_tmp->window < LIMIT_PAYMENT_WINDOW &&*/
-          /*!ppath_tmp->payment_is_processing &&*/
-          /*!ppath_tmp->p_marked_for_close) {*/
+    pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
+    int hop = 1;
+    while (ppath_tmp != NULL) {
+      if (ppath_tmp->window < LIMIT_PAYMENT_WINDOW &&
+          !ppath_tmp->payment_is_processing &&
+          !ppath_tmp->p_marked_for_close) {
         /*[>* pay :-) <]*/
-        /*intermediary_t* intermediary = get_intermediary_by_role(ppath_tmp->position);*/
-        /*log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d", ppath_tmp->window);*/
-        /*ppath_tmp->payment_is_processing = 1;*/
-        /*if (hop == 1) {*/
+        intermediary_t* intermediary = NULL;
+        if (MAX_INTERMEDIARY_CHOSEN == 1)
+          intermediary = get_intermediary_by_role(ALLPOS);
+        else
+          intermediary = get_intermediary_by_role(ppath_tmp->position);
+        log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d", ppath_tmp->window);
+        ppath_tmp->payment_is_processing = 1;
+        if (hop == 1) {
           /*[>* We must do a direct payment, using same descriptor <]*/
-          /*if (mt_cpay_pay(&ppath_tmp->desc, &ppath_tmp->desc) < 0) {*/
-            /*log_warn(LD_MT, "MoneTor: direct payment mt_cpay_pay failed");*/
-            /*ppath_tmp->p_marked_for_close = 1;*/
-            /*ppath_tmp->last_mt_cpay_succeeded = 0;*/
-          /*}*/
-        /*}*/
-        /*else {*/
-          /*if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {*/
-            /*log_warn(LD_MT, "MoneTor: mt_cpay_pay failed");*/
-            /*ppath_tmp->p_marked_for_close = 1;*/
-            /*ppath_tmp->last_mt_cpay_succeeded = 0;*/
-          /*}*/
-        /*}*/
-      /*}*/
+          if (mt_cpay_pay(&ppath_tmp->desc, &ppath_tmp->desc) < 0) {
+            log_warn(LD_MT, "MoneTor: direct payment mt_cpay_pay failed");
+            ppath_tmp->p_marked_for_close = 1;
+            ppath_tmp->last_mt_cpay_succeeded = 0;
+          }
+        }
+        else {
+          if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
+            log_warn(LD_MT, "MoneTor: mt_cpay_pay failed");
+            ppath_tmp->p_marked_for_close = 1;
+            ppath_tmp->last_mt_cpay_succeeded = 0;
+          }
+        }
+      }
       /*else if (!ppath_tmp->last_mt_cpay_succeeded) {*/
         /*log_warn(LD_MT, "MoneTor: Last payment did not succeeded yet for hop %d.", hop);*/
       /*}*/
-      /*ppath_tmp = ppath_tmp->next;*/
-      /*hop++;*/
-    /*}*/
-  /*} DIGESTMAP_FOREACH_END;*/
+      ppath_tmp = ppath_tmp->next;
+      hop++;
+    }
+  } DIGESTMAP_FOREACH_END;
 }
 
 /*
@@ -604,7 +641,7 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
    * a general circuit towards the ledger, then we may have
    * a reachability problem.. */
   if (TO_CIRCUIT(circ)->state != CIRCUIT_STATE_OPEN) {
-    now = approx_time();
+   now = approx_time();
     log_warn(LD_MT, "MoneTor: Looks like we did not extend a circuit successfully"
         " towards the ledger %lld", (long long) now);
     ledger->circuit_retries++;
@@ -616,9 +653,9 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
   byte id[DIGEST_LEN];
   mt_desc2digest(&ledger->desc, &id);
   if (digestmap_get(desc2circ, (char*) id)) {
-    digestmap_remove(desc2circ, (char*) id);
     log_info(LD_MT, "MoneTor: ledger circ has closed. Removed %s from our internal structure",
       mt_desc_describe(&ledger->desc));
+    digestmap_remove(desc2circ, (char*) id);
   }
   else {
     log_warn(LD_MT, "MoneTor: in ledger_circ_has_closed, looks like we didn't have this desc in our map %s", mt_desc_describe(&ledger->desc));
@@ -631,44 +668,44 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
  */
 
 void mt_cclient_update_payment_window(circuit_t *circ, int stop_hop) {
-  if (get_options()->EnablePayment && CIRCUIT_IS_ORIGIN(circ)) {
+  if (get_options()->EnablePayment && CIRCUIT_IS_ORIGIN(circ) &&
+      circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) {
     pay_path_t *ppath_tmp = TO_ORIGIN_CIRCUIT(circ)->ppath;
     int hop = 1;
     while(ppath_tmp) {
       if (hop == stop_hop) // we don't remove anything from exit
         break;
-      if(ppath_tmp->first_payment_succeeded) {
-        if (--ppath_tmp->window  < (get_options()->MoneTorInitialWindow-get_options()->MoneTorPaymentRate)
-            && !ppath_tmp->payment_is_processing &&
-            !ppath_tmp->p_marked_for_close) {
+      if (--ppath_tmp->window  < (get_options()->MoneTorInitialWindow-get_options()->MoneTorPaymentRate)
+          && !ppath_tmp->payment_is_processing &&
+          !ppath_tmp->p_marked_for_close &&
+          ppath_tmp->establish_succeeded) {
         /** pay :-) */
-          intermediary_t* intermediary;
-          if (MAX_INTERMEDIARY_CHOSEN == 1)
-            intermediary = get_intermediary_by_role(ALLPOS);
-          else
-            intermediary = get_intermediary_by_role(ppath_tmp->position);
-          if (!intermediary) {
-            log_warn(LD_MT, "MoneTor: get_intermediary_by_role returned NULL :/");
-            if (hop > 1)
-              break;
+        intermediary_t* intermediary;
+        if (MAX_INTERMEDIARY_CHOSEN == 1)
+          intermediary = get_intermediary_by_role(ALLPOS);
+        else
+          intermediary = get_intermediary_by_role(ppath_tmp->position);
+        if (!intermediary) {
+          log_warn(LD_MT, "MoneTor: get_intermediary_by_role returned NULL :/");
+          if (hop > 1)
+            break;
+        }
+        log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d on hop %d with on desc: %s",
+            ppath_tmp->window, hop, mt_desc_describe(&intermediary->desc));
+        ppath_tmp->payment_is_processing = 1;
+        if (hop == 1) {
+          /** We must do a direct payment, using same descriptor */
+          if (mt_cpay_pay(&ppath_tmp->desc, &ppath_tmp->desc) < 0) {
+            log_warn(LD_MT, "MoneTor: direct payment mt_cpay_pay failed");
+            ppath_tmp->p_marked_for_close = 1;
+            ppath_tmp->last_mt_cpay_succeeded = 0;
           }
-          log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d on hop %d with on desc: %s",
-              ppath_tmp->window, hop, mt_desc_describe(&intermediary->desc));
-          ppath_tmp->payment_is_processing = 1;
-          if (hop == 1) {
-            /** We must do a direct payment, using same descriptor */
-            if (mt_cpay_pay(&ppath_tmp->desc, &ppath_tmp->desc) < 0) {
-              log_warn(LD_MT, "MoneTor: direct payment mt_cpay_pay failed");
-              ppath_tmp->p_marked_for_close = 1;
-              ppath_tmp->last_mt_cpay_succeeded = 0;
-            }
-          }
-          else {
-            if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
-              log_warn(LD_MT, "MoneTor: mt_cpay_pay failed");
-              ppath_tmp->p_marked_for_close = 1;
-              ppath_tmp->last_mt_cpay_succeeded = 0;
-            }
+        }
+        else {
+          if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
+            log_warn(LD_MT, "MoneTor: mt_cpay_pay failed");
+            ppath_tmp->p_marked_for_close = 1;
+            ppath_tmp->last_mt_cpay_succeeded = 0;
           }
         }
       }
@@ -701,6 +738,13 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
     return -1;
   }
   oricirc = TO_ORIGIN_CIRCUIT(circ);
+  if(signal == MT_SIGNAL_PAYMENT_INITIALIZED){
+    log_info(LD_MT, "MoneTor: began establishing channel with a relay");
+    if(++circ->mt_channels_initialized >= 3){
+      circ->mt_priority = 1;
+      log_info(LD_MT, "MoneTor: Payment initialized, start prioritizing now");
+    }
+  }
   if (signal == MT_SIGNAL_PAYMENT_SUCCESS) {
     /** Which one? */
     pay_path_t *ppath_tmp = oricirc->ppath;
@@ -710,14 +754,24 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
         if (!ppath_tmp->first_payment_succeeded) {
           log_info(LD_MT, "MoneTor: Yay! First payment succeeded for hop %d", hop);
           ppath_tmp->first_payment_succeeded = 1;
-          ppath_tmp->window = get_options()->MoneTorInitialWindow;
         }
-        else {
-          ppath_tmp->window += get_options()->MoneTorPaymentRate;
-        }
+        ppath_tmp->window += get_options()->MoneTorPaymentRate;
         ppath_tmp->last_mt_cpay_succeeded = 1;
         ppath_tmp->payment_is_processing = 0;
         log_info(LD_MT, "MoneTor: payment succeeded for hop %d :)", hop);
+        break;
+      }
+      ppath_tmp = ppath_tmp->next;
+      hop++;
+    }
+  }
+  else if (signal == MT_SIGNAL_ESTABLISH_SUCCESS) {
+    pay_path_t *ppath_tmp = oricirc->ppath;
+    int hop = 1;
+    while (ppath_tmp) {
+      if (mt_desc_eq(&ppath_tmp->desc, desc)) {
+        ppath_tmp->establish_succeeded = 1;
+        log_info(LD_MT, "MoneTor: channel has been established for hop %d :)", hop);
         break;
       }
       ppath_tmp = ppath_tmp->next;
@@ -737,7 +791,7 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
     }
   }
   else if (signal == MT_SIGNAL_CLOSE_SUCCESS ||
-           signal == MT_SIGNAL_CLOSE_FAILURE) {
+      signal == MT_SIGNAL_CLOSE_FAILURE) {
     tor_assert(oricirc->ppath);
     pay_path_t *ppath_tmp = oricirc->ppath;
     int has_closed = 0;
@@ -771,9 +825,8 @@ void mt_cclient_general_circ_has_closed(origin_circuit_t *oricirc) {
   if (oricirc->ppath) {
     log_info(LD_MT, "MoneTor: a general circuit has closed");
     byte id[DIGEST_LEN];
-    crypt_path_t *cpath_tmp = oricirc->cpath;
     pay_path_t *ppath_tmp = oricirc->ppath;
-    while (cpath_tmp->next != oricirc->cpath && ppath_tmp) {
+    while (ppath_tmp) {
       mt_desc2digest(&ppath_tmp->desc, &id);
       if (digestmap_get(desc2circ, (char*) id)) {
         digestmap_remove(desc2circ, (char*) id);
@@ -888,7 +941,7 @@ mt_cclient_intermediary_circ_has_opened(origin_circuit_t *circ) {
  * the circuit for close */
 void mt_cclient_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason) {
   origin_circuit_t *oricirc = NULL;
-  if (circ->purpose != CIRCUIT_PURPOSE_C_GENERAL || abort) {
+  if (circ->purpose != CIRCUIT_PURPOSE_C_GENERAL_PAYMENT || abort) {
     if (abort) {
       log_info(LD_MT, "We should abort the payment channel");
     }
@@ -947,7 +1000,7 @@ mt_cclient_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
   if (!circ) {
     log_warn(LD_MT, "MoneTor: in mt_cclient_send_message, digestmap_get failed to return a circ for descriptor"
         " %s", mt_desc_describe(desc));
-    return -2;
+    return -1;
   }
   if(circ->marked_for_close) {
     log_warn(LD_MT, "MoneTor: This circuit is about to be freed");
@@ -1062,7 +1115,6 @@ mt_cclient_send_message_multidesc(mt_desc_t *desc1, mt_desc_t *desc2,
   memcpy(msg_with_desc, msg_int_id, size_int_id);
   memcpy(msg_with_desc+size_int_id, desc2, sizeof(mt_desc_t)); // XXX not safe over network ~ byte ordering
   memcpy(msg_with_desc+sizeof(mt_desc_t)+size_int_id, msg, size);
-
   int ret = mt_cclient_send_message(desc1, RELAY_COMMAND_MT, type, msg_with_desc, size+size_int_id+sizeof(mt_desc_t));
   tor_free(msg_with_desc);
   tor_free(msg_int_id);
@@ -1099,7 +1151,7 @@ mt_cclient_process_received_msg, (origin_circuit_t *circ, crypt_path_t *layer_hi
       log_info(LD_MT, "MoneTor: Payment module returned -1 for mt_ntype_t %s", mt_token_describe(pcommand));
     }
   }
-  else if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_GENERAL) {
+  else if (TO_CIRCUIT(circ)->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT) {
 
     pay_path_t *ppath = circ->ppath;
     crypt_path_t *cpath = circ->cpath;
@@ -1153,6 +1205,19 @@ void
 mt_cclient_general_circuit_free(origin_circuit_t* circ) {
   if (!circ)
     return;
+  /** Should we check again if the map contains the circ? */
+  byte digest[DIGEST_LEN];
+  pay_path_t *ppath_tmp = circ->ppath;
+  int hop = 1;
+  while (ppath_tmp) {
+    mt_desc2digest(&ppath_tmp->desc, &digest);
+    if (digestmap_get(desc2circ, (char*)digest)) {
+      log_warn(LD_MT, "MoneTor: Wut hop %d should have been already removed :/", hop);
+      digestmap_remove(desc2circ, (char*) digest);
+    }
+    ppath_tmp = ppath_tmp->next;
+    hop++;
+  }
   pay_path_free(circ->ppath);
   buf_free(circ->buf); //normally untouched
 }
@@ -1167,7 +1232,7 @@ mt_cclient_intermediary_circuit_free(origin_circuit_t* circ) {
 
 /************************** Informational (Logging purposes) ***************************/
 
-int mt_cclient_relay_type(mt_desc_t *desc){
+MOCK_IMPL(int, mt_cclient_relay_type,(mt_desc_t *desc)){
   byte digest[DIGEST_LEN];
   mt_desc2digest(desc, &digest);
 

@@ -27,6 +27,7 @@
 #include "mt_cpay.h"
 #include "mt_rpay.h"
 #include "mt_ipay.h"
+#include "mt_cclient.h"
 #include "mt_messagebuffer.h"
 #include "test.h"
 
@@ -46,6 +47,7 @@ typedef struct {
 } context_t;
 
 typedef enum {
+  CALL_ESTAB,
   CALL_PAY,
   CALL_CLOSE,
   SEND_LED,
@@ -271,6 +273,7 @@ static int mock_paymod_signal(mt_signal_t signal, mt_desc_t* desc){
   // need to get idesc somehow;
 
   switch(signal){
+    case MT_SIGNAL_ESTABLISH_SUCCESS:
     case MT_SIGNAL_PAYMENT_SUCCESS:;
 
       byte cdigest[DIGEST_LEN];
@@ -303,6 +306,14 @@ static int mock_paymod_signal(mt_signal_t signal, mt_desc_t* desc){
     default:;
   }
   return MT_SUCCESS;
+}
+
+static int mock_cclient_relay_type(mt_desc_t* desc){
+  if(desc->party == MT_PARTY_REL)
+    return MT_MIDDLE;
+  else if(desc->party == MT_PARTY_INT)
+    return MT_GUARD;
+  tor_assert(0);
 }
 
 /**
@@ -574,7 +585,7 @@ static void set_up_main_loop(void){
     // make indirect payments
     for(int i = 0; i < REL_CONNS; i++){
       event_t* event = tor_malloc(sizeof(event_t));
-      event->type = CALL_PAY;
+      event->type = CALL_ESTAB;
       event->src = ctx->desc;
       event->desc1 = unique_rel_descs[i];
       event->desc2 = ((context_t*)digestmap_rand(int_ctx))->desc;
@@ -584,7 +595,7 @@ static void set_up_main_loop(void){
     // Make direct payments
     if(DPAY_ON){
       event_t* event = tor_malloc(sizeof(event_t));
-      event->type = CALL_PAY;
+      event->type = CALL_ESTAB;
       event->src = ctx->desc;
       event->desc1 = ((context_t*)digestmap_rand(int_ctx))->desc;
       event->desc2 = event->desc1;
@@ -643,6 +654,16 @@ static int do_main_loop_once(void){
   }
 
   switch(event->type){
+
+    case CALL_ESTAB:
+      ctx = digestmap_get(cli_ctx, (char*)src_digest);
+      mt_cpay_import(ctx->state);
+      tor_free(ctx->state);
+      cur_desc = event->src;
+      printf("cli (%02d) : call estab (%02d)\n", (int)event->src.id[0], (int)event->desc1.id[0]);
+      result = mt_cpay_establish(&event->desc1, &event->desc2);
+      mt_cpay_export(&ctx->state);
+      break;
 
     case CALL_PAY:
       ctx = digestmap_get(cli_ctx, (char*)src_digest);
@@ -800,6 +821,7 @@ static void test_mt_paymulti(void *arg){
   MOCK(mt_paymod_signal, mock_paymod_signal);
   MOCK(mt_micro_sleep, mock_micro_sleep);
   MOCK(cpuworker_queue_work, (cpuworker_fn)mock_cpuworker_queue_work);
+  MOCK(mt_cclient_relay_type, mock_cclient_relay_type);
 
 
   cli_ctx = digestmap_new();
@@ -1041,6 +1063,7 @@ static void test_mt_paymulti(void *arg){
   UNMOCK(mt_paymod_signal);
   UNMOCK(cpuworker_queue_work);
   UNMOCK(mt_micro_sleep);
+  UNMOCK(mt_cclient_relay_type);
 
   // free maps
 }
