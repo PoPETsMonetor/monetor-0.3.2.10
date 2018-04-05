@@ -3155,6 +3155,10 @@ options_validate(or_options_t *old_options, or_options_t *options,
   tor_assert(msg);
   *msg = NULL;
 
+  if(options->MoneTorFlowMod < 0 || options->MoneTorFlowMod > 1){
+    REJECT("MoneTorFlowMod should be a double between 0 and 1");
+  }
+
   if (parse_ports(options, 1, msg, &n_ports,
                   &world_writable_control_socket) < 0)
     return -1;

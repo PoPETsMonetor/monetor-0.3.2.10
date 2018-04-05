@@ -83,7 +83,6 @@
 #include "rephist.h"
 
 // moneTor: square root of get_options()->MoneTorFlowMod; calculated once
-static double flow_mod_sqrt;
 
 static edge_connection_t *relay_lookup_conn(circuit_t *circ, cell_t *cell,
                                             cell_direction_t cell_direction,
@@ -2969,15 +2968,14 @@ packed_cell_get_circid(const packed_cell_t *cell, int wide_circ_ids)
  */
 int32_t mt_modify_flow_value(int32_t original, circuit_t* circ){
 
-  // calculate the square once and store it for the duration of the program
-  if(flow_mod_sqrt <= 0)
-    flow_mod_sqrt = sqrt(get_options()->MoneTorFlowMod);
+  int32_t increment = (int32_t)(original * get_options()->MoneTorFlowMod);
 
-  if((circ->mt_priority)){
-    return (int32_t)(original * flow_mod_sqrt);
+  if((circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT && get_options()->ClientOnly) ||
+     (circ->purpose == CIRCUIT_PURPOSE_PAYMENT && !get_options()->ClientOnly)){
+    return (int32_t)(original + increment);
   }
   else{
-    return (int32_t)(original / flow_mod_sqrt);
+    return (int32_t)(original - increment);
   }
 }
 
