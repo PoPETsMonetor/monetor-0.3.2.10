@@ -1606,7 +1606,7 @@ static int help_nan_int_close8(void* args){
 	     mt_desc_describe(&chn->rdesc));
   }
 
-  log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %lf, ttestablish: %lf, ttpayment: %lf, ttpaysuccess, %lf, ttclose: %lf}",
+  log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %lf, ttestablish: %lf, ttpayment: %lf, ttpaysuccess: %lf, ttclose: %lf}",
 	   approx_time(),
 	   type_str,
 	   chn->log.num_payments,
