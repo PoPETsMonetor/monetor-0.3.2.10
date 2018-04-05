@@ -1581,7 +1581,7 @@ static int help_nan_int_close8(void* args){
   double tt_payment = timeval_diff(chn->log.end_pay, chn->log.start_pay);
   double tt_close = timeval_diff(now, chn->log.start_close);
 
-  double tt_paysuccess;
+  double tt_paysuccess = 0.0;
   byte rdigest[DIGEST_LEN];
   struct timeval* paycall;
   mt_desc2digest(&chn->rdesc, &rdigest);
@@ -1604,7 +1604,6 @@ static int help_nan_int_close8(void* args){
   else{
     log_info(LD_MT, "MoneTor: closing channel with %s that had zero payments",
 	     mt_desc_describe(&chn->rdesc));
-    tt_paysuccess = -1.0;
   }
 
   log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %lf, ttestablish: %lf, ttpayment: %lf, ttpaysuccess, %lf, ttclose: %lf}",
