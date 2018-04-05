@@ -139,6 +139,10 @@ typedef struct {
 
   // structure to run message buffering functionality
   mt_msgbuf_t* msgbuf;
+
+  // used for logging first payment call
+  digestmap_t* log_first_paycall;
+
 } mt_cpay_t;
 
 // functions to initialize new protocols
@@ -240,6 +244,9 @@ int mt_cpay_init(void){
   client.nans_reqclosed = digestmap_new();
   client.chns_spent = smartlist_new();
   client.chns_transition = digestmap_new();
+
+  client.log_first_paycall = digestmap_new();
+
   return MT_SUCCESS;
 }
 
@@ -269,6 +276,15 @@ int mt_cpay_establish(mt_desc_t* rdesc, mt_desc_t* idesc){
  * error.
  */
 int mt_cpay_pay(mt_desc_t* rdesc, mt_desc_t* idesc){
+
+  // If this is the first payment to rdesc then record the time for logging
+  byte digest[DIGEST_LEN];
+  mt_desc2digest(rdesc, &digest);
+  if(!digestmap_get(client.log_first_paycall, (char*)digest)){
+    struct timeval* paycall = tor_malloc(sizeof(struct timeval));
+    tor_gettimeofday(paycall);
+    digestmap_set(client.log_first_paycall, (char*)digest, paycall);
+  }
 
    // determine whether this is a standard or direct payment
   if(mt_desc_comp(rdesc, idesc) != 0){
@@ -1565,13 +1581,38 @@ static int help_nan_int_close8(void* args){
   double tt_payment = timeval_diff(chn->log.end_pay, chn->log.start_pay);
   double tt_close = timeval_diff(now, chn->log.start_close);
 
-  log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %lf, ttestablish: %lf, ttpayment: %lf, ttclose: %lf}",
+  double tt_paysuccess;
+  byte rdigest[DIGEST_LEN];
+  struct timeval* paycall;
+  mt_desc2digest(&chn->rdesc, &rdigest);
+
+  if(chn->log.num_payments){
+    if((paycall = digestmap_get(client.log_first_paycall, (char*)rdigest))){
+      tt_paysuccess = timeval_diff(chn->log.end_pay, *paycall);
+      free(paycall);
+      digestmap_remove(client.log_first_paycall, (char*)rdigest);
+    }
+    else{
+      log_warn(LD_MT, "MoneTor: couldn't find first payment time for %s. This should not happen",
+	     mt_desc_describe(&chn->rdesc));
+
+      tor_assert(0);
+    }
+  }
+  else{
+    log_info(LD_MT, "MoneTor: closing channel with %s that had zero payments",
+	     mt_desc_describe(&chn->rdesc));
+    tt_paysuccess = -1.0;
+  }
+
+  log_info(LD_MT, "MoneTor: mt_log_nanochannel: {time: %ld, type: %s, numpayments: %d, lifetime: %lf, ttestablish: %lf, ttpayment: %lf, ttpaysuccess, %lf, ttclose: %lf}",
 	   approx_time(),
 	   type_str,
 	   chn->log.num_payments,
 	   lifetime,
 	   tt_establish,
 	   tt_payment,
+	   tt_paysuccess,
 	   tt_close);
 
   memset(&chn->log, '\0', sizeof(chn->log));
