@@ -1050,7 +1050,6 @@ static void test_mt_paymulti(void *arg){
     mt_ipay_import(ctx->state);
     int bal =  mt_ipay_mac_bal() + mt_ipay_chn_bal();
     int exp = *(int*)digestmap_get(exp_bal, digest);
-    printf("%d %d\n\n", bal, exp);
     tor_assert(bal == exp);
   } MAP_FOREACH_END;
 
