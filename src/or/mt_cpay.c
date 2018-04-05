@@ -1588,7 +1588,9 @@ static int help_nan_int_close8(void* args){
 
   if(chn->log.num_payments){
     if((paycall = digestmap_get(client.log_first_paycall, (char*)rdigest))){
-      tt_paysuccess = timeval_diff(chn->log.end_pay, *paycall);
+      // take the later of the first payment call and the first channel establishment
+      double diff = timeval_diff(*paycall, chn->log.start_estab);
+      tt_paysuccess = timeval_diff(chn->log.end_pay, diff > 0 ? *paycall : chn->log.start_estab);
       free(paycall);
       digestmap_remove(client.log_first_paycall, (char*)rdigest);
     }
