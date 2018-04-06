@@ -386,7 +386,10 @@ int handle_chn_end_setup(chn_end_setup_t* token, byte (*addr)[MT_SZ_ADDR], any_l
 
   // check that we have a new and unused channel address
   if(data_chn->state != MT_LSTATE_EMPTY){
-    log_warn(LD_MT, "MoneTor: attempting to reuse old address");
+    char* hex_out;
+    mt_bytes2hex((byte*)token->chn, &hex_out);
+    log_warn(LD_MT, "MoneTor: channel %s not unique", hex_out);
+    tor_free(hex_out);
     return MT_ERROR;
   }
 

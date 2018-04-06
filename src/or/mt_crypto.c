@@ -151,6 +151,7 @@ int mt_crypt_keygen(byte (*pp)[MT_SZ_PP], byte (*pk_out)[MT_SZ_PK], byte  (*sk_o
 int mt_crypt_rand(int size, byte* rand_out){
   if(RAND_bytes(rand_out, size) != 1){
     if(RAND_pseudo_bytes(rand_out, size) != 1){
+      log_warn(LD_MT, "MoneTor: for some reason random bytes returned an error");
       return MT_ERROR;
     }
   }
