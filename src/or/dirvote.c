@@ -1169,6 +1169,7 @@ networkstatus_compute_bw_weights_v10(smartlist_t *chunks, int64_t G,
 static void
 update_total_bandwidth_weights(const routerstatus_t *rs,
                                int is_exit, int is_guard,
+                               int is_intermediary, int is_ledger,
                                int64_t *G, int64_t *M, int64_t *E, int64_t *D,
                                int64_t *T)
 {
@@ -1178,6 +1179,11 @@ update_total_bandwidth_weights(const routerstatus_t *rs,
   if (!rs->has_bandwidth) {
     log_info(LD_BUG, "Missing consensus bandwidth for router %s",
              rs->nickname);
+    return;
+  }
+
+  if (is_intermediary ||  is_ledger) {
+    log_info(LD_DIR, "MoneTor: We ignore intermediary relay or ledger in total bandwidth");
     return;
   }
 
@@ -2011,6 +2017,7 @@ networkstatus_compute_consensus(smartlist_t *votes,
       {
         update_total_bandwidth_weights(&rs_out,
                                        is_exit, is_guard,
+                                       is_intermediary, is_ledger,
                                        &G, &M, &E, &D, &T);
       }
 
