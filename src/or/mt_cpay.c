@@ -1123,6 +1123,8 @@ static int init_nan_cli_estab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   tor_assert(chn->log.relay_type == MT_MIDDLE || chn->log.relay_type == MT_EXIT);
   tor_gettimeofday(&chn->log.start_estab);
 
+  mt_paymod_signal(MT_SIGNAL_PAYMENT_INITIALIZED, &chn->rdesc);
+
   // make token
   nan_cli_estab1_t token;
   memcpy(&token.nan_public, &chn->data.nan_public, sizeof(nan_any_public_t));
@@ -1245,6 +1247,8 @@ static int init_nan_cli_destab1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   chn->log.relay_type = mt_cclient_relay_type(&chn->idesc);
   tor_assert(chn->log.relay_type == MT_GUARD);
   tor_gettimeofday(&chn->log.start_estab);
+
+  mt_paymod_signal(MT_SIGNAL_PAYMENT_INITIALIZED, &chn->rdesc);
 
   // intiate token
   nan_cli_destab1_t token;

@@ -734,13 +734,14 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
   origin_circuit_t *oricirc = NULL;
   if (!circ) {
     log_info(LD_MT, "MoneTor: received a signal linked to a desc "
-        " which is not in our map anymore?");
+	     " which is not in our map anymore?");
     return -1;
   }
   oricirc = TO_ORIGIN_CIRCUIT(circ);
   if(signal == MT_SIGNAL_PAYMENT_INITIALIZED){
     log_info(LD_MT, "MoneTor: began establishing channel with a relay");
-    if(++circ->mt_channels_initialized >= 3){
+    circ->mt_channels_initialized++;
+    if(circ->mt_channels_initialized >= 3){
       circ->mt_priority = 1;
       log_info(LD_MT, "MoneTor: Payment initialized, start prioritizing now");
     }

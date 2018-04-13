@@ -2013,7 +2013,7 @@ connection_edge_process_relay_cell(cell_t *cell, circuit_t *circ,
           mt_cclient_update_payment_window(circ, 3);
           circuit_resume_edge_reading(circ, layer_hint);
         } else {
-	  /* moneTor flow: disable client-side sendme check */
+	  /* moneTor flow: disable relay-side sendme check */
           /* if (circ->package_window + CIRCUITWINDOW_INCREMENT > */
           /*       circwindow_start_max) { */
           /*   static struct ratelim_t client_warn_ratelim = RATELIM_INIT(600); */
@@ -2970,8 +2970,7 @@ int32_t mt_modify_flow_value(int32_t original, circuit_t* circ){
 
   double alpha = get_options()->MoneTorFlowMod;
   double fraction = get_options()->MoneTorPremiumFraction;
-  int isPremium = (circ->purpose == CIRCUIT_PURPOSE_C_GENERAL_PAYMENT && get_options()->ClientOnly) ||
-    (circ->purpose == CIRCUIT_PURPOSE_PAYMENT && !get_options()->ClientOnly);
+  int isPremium = circ->mt_priority;
 
   return (int32_t)(original * (1 + alpha * (isPremium / fraction - 1)));
 }
