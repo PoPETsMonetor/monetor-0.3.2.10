@@ -4883,7 +4883,11 @@ typedef struct {
   /* Set value for how much moneTor prioritizes paid traffic via flow control windows*/
   double MoneTorFlowMod;
 
+  /* Expected percent premium traffic; used by flow modifier */
   double MoneTorPremiumFraction;
+
+  /* Do not wait for or send payment acknowledgement messages */
+  int MoneTorAcknowledge;
 
   int MoneTorPaymentRate;
 

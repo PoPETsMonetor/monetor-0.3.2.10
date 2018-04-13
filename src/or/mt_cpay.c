@@ -60,6 +60,7 @@
  * Prototype for multi-thread function used to generate the expensive zkp proof
  */
 typedef void (*work_task)(void*);
+
 /**
  * Hold function and arguments necessary to execute callbacks on a channel once
  * the current protocol has completed
@@ -73,6 +74,9 @@ typedef struct {
   mt_desc_t dref2;
 } mt_callback_t;
 
+/**
+ * Hold information for logging payment channel information
+ */
 typedef struct {
   int relay_type;
   int num_payments;
@@ -83,6 +87,16 @@ typedef struct {
   struct timeval end_pay;
   struct timeval start_close;
 } mt_log_info_t;
+
+/**
+ * Hold information for making fake local recv calls
+ */
+typedef struct{
+  mt_desc_t desc;
+  mt_ntype_t type;
+  byte* msg;
+  int size;
+} mt_recv_args;
 
 /**
  * Hold information necessary to maintain a single payment channel
@@ -192,9 +206,11 @@ static mt_channel_t* smartlist_idesc_remove(smartlist_t* list, mt_desc_t* desc);
 static workqueue_reply_t cpu_task_estab(void* thread, void* arg);
 static workqueue_reply_t cpu_task_nanestab(void* thread, void* arg);
 static workqueue_reply_t cpu_task_nanclose(void* thread, void* arg);
+static workqueue_reply_t cpu_task_none(void* thread, void* arg);
 static int pay_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
 static int estab_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
 static int close_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
+static int recv_local(void* args);
 
 static mt_cpay_t client;
 
@@ -1177,6 +1193,18 @@ static int init_nan_cli_pay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   int msg_size = pack_nan_cli_pay1(&token, pid, &msg);
   int result = mt_buffer_message(client.msgbuf, &chn->rdesc, MT_NTYPE_NAN_CLI_PAY1, msg, msg_size);
   tor_free(msg);
+
+  // if we don't want an actual acknowledgement then send a fake one
+  if(!get_options()->MoneTorAcknowledge){
+    mt_recv_args* args = tor_malloc(sizeof(mt_recv_args));
+    nan_rel_pay2_t fake_ack = {.success = MT_CODE_SUCCESS};
+    args->desc = chn->rdesc;
+    args->type = MT_NTYPE_NAN_REL_PAY2;
+    args->size = pack_nan_rel_pay2(&fake_ack, pid, &args->msg);
+    cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_none, (work_task)recv_local, (void*)args);
+    log_info(LD_MT, "MoneTor: sending fake pay acknowledgement");
+  }
+
   return result;
 }
 
@@ -1281,6 +1309,18 @@ static int init_nan_cli_dpay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
   int msg_size = pack_nan_cli_dpay1(&token, pid, &msg);
   int result = mt_buffer_message(client.msgbuf, &chn->idesc, MT_NTYPE_NAN_CLI_DPAY1, msg, msg_size);
   tor_free(msg);
+
+  // if we don't want an actual acknowledgement then send a fake one
+  if(!get_options()->MoneTorAcknowledge){
+    mt_recv_args* args = tor_malloc(sizeof(mt_recv_args));
+    nan_int_dpay2_t fake_ack = {.success = MT_CODE_SUCCESS};
+    args->desc = chn->rdesc;
+    args->type = MT_NTYPE_NAN_INT_DPAY2;
+    args->size = pack_nan_int_dpay2(&fake_ack, pid, &args->msg);
+    cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_none, (work_task)recv_local, (void*)args);
+    log_info(LD_MT, "MoneTor: sending fake pay acknowledgement");
+  }
+
   return result;
 }
 
@@ -1711,6 +1751,13 @@ static workqueue_reply_t cpu_task_nanclose(void* thread, void* args){
   return WQ_RPL_REPLY;
 }
 
+/* Do nothing; used to three events back onto the queue */
+static workqueue_reply_t cpu_task_none(void* thread, void* arg){
+  (void)thread;
+  (void)arg;
+  return WQ_RPL_REPLY;
+}
+
 static int estab_finish(mt_desc_t* rdesc, mt_desc_t* idesc){
   (void)idesc;
   return mt_paymod_signal(MT_SIGNAL_ESTABLISH_SUCCESS, rdesc);
@@ -1745,4 +1792,12 @@ static double timeval_diff(struct timeval t1, struct timeval t2){
   time_t sec_diff = t1.tv_sec - t2.tv_sec;
   long usec_diff = t1.tv_usec - t2.tv_usec;
   return (sec_diff * 1000000.0 + usec_diff) / 1000000.0;
+}
+
+static int recv_local(void* args){
+  mt_recv_args* recv_args = (mt_recv_args*)args;
+  int result = mt_cpay_recv(&recv_args->desc, recv_args->type, recv_args->msg, recv_args->size);
+  tor_free(recv_args->msg);
+  tor_free(recv_args);
+  return result;
 }
