@@ -609,8 +609,10 @@ static void set_up_main_loop(void){
 
 static int do_main_loop_once(void){
 
-  // shuffle events for fun
-  smartlist_sort(event_queue, compare_random);
+  // shuffle events for fun if we have acknowledgements; else the order is important
+  if(get_options()->MoneTorAcknowledge){
+    smartlist_sort(event_queue, compare_random);
+  }
 
   // randomly make some descriptors unavailable
   MAP_FOREACH(digestmap_, statuses, const char*, digest, int*, status){
@@ -1015,8 +1017,9 @@ static void test_mt_paymulti(void *arg){
     tt_assert(do_main_loop_once() == MT_SUCCESS);
   }
 
-  // turn to single thread just for fun
+  // mess with options for fun
   options->MoneTorSingleThread = 1;
+  options->MoneTorAcknowledge = 0;
 
   printf("\n restarting \n\n");
 
