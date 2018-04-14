@@ -216,7 +216,7 @@ static config_var_t option_vars_[] = {
   V(MoneTorSingleThread,         BOOL,     "0"),
   V(MoneTorSingleCore,           BOOL,     "0"),
   V(MoneTorPriorityMod,          DOUBLE,   "1.0"),
-  V(MoneTorFlowMod,              DOUBLE,   "1.0"),
+  V(MoneTorFlowMod,              DOUBLE,   "0.0"),
   V(MoneTorPremiumFraction,      DOUBLE,   "0.5"),
   V(MoneTorAcknowledge,          BOOL,     "1"),
   V(MoneTorInitialWindow,        INT,     "3000"),
