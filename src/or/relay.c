@@ -2292,7 +2292,7 @@ connection_edge_consider_sending_sendme(edge_connection_t *conn)
 
   // moneTor flow
   int streamwindow_start = mt_modify_flow_value(STREAMWINDOW_START, circ);
-
+  log_info(LD_CIRC, "MoneTor: streamwindow_start: %d", streamwindow_start);
   while (conn->deliver_window <= streamwindow_start - STREAMWINDOW_INCREMENT) {
     log_debug(conn->base_.type == CONN_TYPE_AP ?LD_APP:LD_EXIT,
               "Outbuf %d, Queuing stream sendme.",
@@ -2544,7 +2544,7 @@ circuit_consider_sending_sendme(circuit_t *circ, crypt_path_t *layer_hint)
 
   // moneTor flow: client side & relay side
   int circwindow_start = mt_modify_flow_value(CIRCWINDOW_START, circ);
-
+  log_info(LD_CIRC, "MoneTor: circwindow_start: %d", circwindow_start);
   while ((layer_hint ? layer_hint->deliver_window : circ->deliver_window) <=
           circwindow_start - CIRCWINDOW_INCREMENT) {
     log_debug(LD_CIRC,"Queuing circuit sendme.");
