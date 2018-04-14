@@ -2966,13 +2966,13 @@ packed_cell_get_circid(const packed_cell_t *cell, int wide_circ_ids)
  * return modified versions of circuit and stream flow control values that were
  * previously constants in vanilla Tor.
  */
-int32_t mt_modify_flow_value(int32_t original, circuit_t* circ){
+int mt_modify_flow_value(int original, circuit_t* circ){
 
   double alpha = get_options()->MoneTorFlowMod;
   double fraction = get_options()->MoneTorPremiumFraction;
   int isPremium = circ->mt_priority;
-
-  return (int32_t)(original * (1 + alpha * (isPremium / fraction - 1)));
+  log_info(LD_CIRC, "MoneTor: isPremium: %d", isPremium);
+  return (int)(original * (1 + alpha * (isPremium / fraction - 1)));
 }
 
 /** Pull as many cells as possible (but no more than <b>max</b>) from the
