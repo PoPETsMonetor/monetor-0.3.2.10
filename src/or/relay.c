@@ -2292,7 +2292,6 @@ connection_edge_consider_sending_sendme(edge_connection_t *conn)
 
   // moneTor flow
   int streamwindow_start = mt_modify_flow_value(STREAMWINDOW_START, circ);
-  log_info(LD_CIRC, "MoneTor: streamwindow_start: %d", streamwindow_start);
   while (conn->deliver_window <= streamwindow_start - STREAMWINDOW_INCREMENT) {
     log_debug(conn->base_.type == CONN_TYPE_AP ?LD_APP:LD_EXIT,
               "Outbuf %d, Queuing stream sendme.",
@@ -2971,7 +2970,6 @@ int mt_modify_flow_value(int original, circuit_t* circ){
   double alpha = get_options()->MoneTorFlowMod;
   double fraction = get_options()->MoneTorPremiumFraction;
   int isPremium = circ->mt_priority;
-  log_info(LD_CIRC, "MoneTor: isPremium: %d", isPremium);
   return (int)(original * (1 + alpha * (isPremium / fraction - 1)));
 }
 

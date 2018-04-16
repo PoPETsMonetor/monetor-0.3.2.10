@@ -206,7 +206,7 @@ static mt_channel_t* smartlist_idesc_remove(smartlist_t* list, mt_desc_t* desc);
 static workqueue_reply_t cpu_task_estab(void* thread, void* arg);
 static workqueue_reply_t cpu_task_nanestab(void* thread, void* arg);
 static workqueue_reply_t cpu_task_nanclose(void* thread, void* arg);
-static workqueue_reply_t cpu_task_none(void* thread, void* arg);
+/*static workqueue_reply_t cpu_task_none(void* thread, void* arg);*/
 static int pay_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
 static int estab_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
 static int close_finish(mt_desc_t* rdesc, mt_desc_t* idesc);
@@ -1203,8 +1203,9 @@ static int init_nan_cli_pay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
     args->desc = chn->rdesc;
     args->type = MT_NTYPE_NAN_REL_PAY2;
     args->size = pack_nan_rel_pay2(&fake_ack, pid, &args->msg);
-    cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_none, (work_task)recv_local, (void*)args);
+    /*cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_none, (work_task)recv_local, (void*)args);*/
     log_info(LD_MT, "MoneTor: sending fake pay acknowledgement");
+    recv_local((void*) args);
   }
 
   return result;
@@ -1321,8 +1322,9 @@ static int init_nan_cli_dpay1(mt_channel_t* chn, byte (*pid)[DIGEST_LEN]){
     args->desc = chn->rdesc;
     args->type = MT_NTYPE_NAN_INT_DPAY2;
     args->size = pack_nan_int_dpay2(&fake_ack, pid, &args->msg);
-    cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_none, (work_task)recv_local, (void*)args);
+    /*cpuworker_queue_work(WQ_PRI_HIGH, cpu_task_none, (work_task)recv_local, (void*)args);*/
     log_info(LD_MT, "MoneTor: sending fake pay acknowledgement");
+    recv_local((void*) args);
   }
 
   return result;
@@ -1756,11 +1758,11 @@ static workqueue_reply_t cpu_task_nanclose(void* thread, void* args){
 }
 
 /* Do nothing; used to three events back onto the queue */
-static workqueue_reply_t cpu_task_none(void* thread, void* arg){
-  (void)thread;
-  (void)arg;
-  return WQ_RPL_REPLY;
-}
+/*static workqueue_reply_t cpu_task_none(void* thread, void* arg){*/
+  /*(void)thread;*/
+  /*(void)arg;*/
+  /*return WQ_RPL_REPLY;*/
+/*}*/
 
 static int estab_finish(mt_desc_t* rdesc, mt_desc_t* idesc){
   (void)idesc;

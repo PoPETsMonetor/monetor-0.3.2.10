@@ -787,8 +787,8 @@ static int handle_nan_cli_pay1(mt_desc_t* desc, nan_cli_pay1_t* token, byte (*pi
   chn->data.nan_state.num_payments ++;
   memcpy(chn->data.nan_state.last_hash, token->preimage, MT_SZ_HASH);
 
+  mt_paymod_signal(MT_SIGNAL_PAYMENT_RECEIVED, desc);
   if(get_options()->MoneTorAcknowledge){
-    mt_paymod_signal(MT_SIGNAL_PAYMENT_RECEIVED, desc);
 
     byte* msg;
     int msg_size = pack_nan_rel_pay2(&reply, pid, &msg);

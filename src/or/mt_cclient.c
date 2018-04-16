@@ -690,22 +690,25 @@ void mt_cclient_update_payment_window(circuit_t *circ, int stop_hop) {
           if (hop > 1)
             break;
         }
-        log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d on hop %d with on desc: %s",
-            ppath_tmp->window, hop, mt_desc_describe(&intermediary->desc));
-        ppath_tmp->payment_is_processing = 1;
-        if (hop == 1) {
-          /** We must do a direct payment, using same descriptor */
-          if (mt_cpay_pay(&ppath_tmp->desc, &ppath_tmp->desc) < 0) {
-            log_warn(LD_MT, "MoneTor: direct payment mt_cpay_pay failed");
-            ppath_tmp->p_marked_for_close = 1;
-            ppath_tmp->last_mt_cpay_succeeded = 0;
+        while (ppath_tmp->window < (get_options()->MoneTorInitialWindow-get_options()->MoneTorPaymentRate) &&
+            !ppath_tmp->payment_is_processing) {
+          log_info(LD_MT, "MoneTor: Calling mt_cpay_pay because window is %d on hop %d with on desc: %s",
+              ppath_tmp->window, hop, mt_desc_describe(&intermediary->desc));
+          ppath_tmp->payment_is_processing = 1;
+          if (hop == 1) {
+            /** We must do a direct payment, using same descriptor */
+            if (mt_cpay_pay(&ppath_tmp->desc, &ppath_tmp->desc) < 0) {
+              log_warn(LD_MT, "MoneTor: direct payment mt_cpay_pay failed");
+              ppath_tmp->p_marked_for_close = 1;
+              ppath_tmp->last_mt_cpay_succeeded = 0;
+            }
           }
-        }
-        else {
-          if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
-            log_warn(LD_MT, "MoneTor: mt_cpay_pay failed");
-            ppath_tmp->p_marked_for_close = 1;
-            ppath_tmp->last_mt_cpay_succeeded = 0;
+          else {
+            if (mt_cpay_pay(&ppath_tmp->desc, &intermediary->desc) < 0) {
+              log_warn(LD_MT, "MoneTor: mt_cpay_pay failed");
+              ppath_tmp->p_marked_for_close = 1;
+              ppath_tmp->last_mt_cpay_succeeded = 0;
+            }
           }
         }
       }
@@ -734,7 +737,7 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
   origin_circuit_t *oricirc = NULL;
   if (!circ) {
     log_info(LD_MT, "MoneTor: received a signal linked to a desc "
-	     " which is not in our map anymore?");
+        " which is not in our map anymore?");
     return -1;
   }
   oricirc = TO_ORIGIN_CIRCUIT(circ);
@@ -746,7 +749,7 @@ int mt_cclient_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
       log_info(LD_MT, "MoneTor: Payment initialized, start prioritizing now");
     }
   }
-  if (signal == MT_SIGNAL_PAYMENT_SUCCESS) {
+  else if (signal == MT_SIGNAL_PAYMENT_SUCCESS) {
     /** Which one? */
     pay_path_t *ppath_tmp = oricirc->ppath;
     int hop = 1;
