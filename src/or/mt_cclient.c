@@ -465,7 +465,8 @@ run_cclient_housekeeping_event(time_t now) {
     while (ppath_tmp != NULL) {
       if (ppath_tmp->window < LIMIT_PAYMENT_WINDOW &&
           !ppath_tmp->payment_is_processing &&
-          !ppath_tmp->p_marked_for_close) {
+          !ppath_tmp->p_marked_for_close &&
+          ppath_tmp->establish_succeeded) {
         /*[>* pay :-) <]*/
         intermediary_t* intermediary = NULL;
         if (MAX_INTERMEDIARY_CHOSEN == 1)
