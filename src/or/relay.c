@@ -2543,7 +2543,6 @@ circuit_consider_sending_sendme(circuit_t *circ, crypt_path_t *layer_hint)
 
   // moneTor flow: client side & relay side
   int circwindow_start = mt_modify_flow_value(CIRCWINDOW_START, circ);
-  log_info(LD_CIRC, "MoneTor: circwindow_start: %d", circwindow_start);
   while ((layer_hint ? layer_hint->deliver_window : circ->deliver_window) <=
           circwindow_start - CIRCWINDOW_INCREMENT) {
     log_debug(LD_CIRC,"Queuing circuit sendme.");
