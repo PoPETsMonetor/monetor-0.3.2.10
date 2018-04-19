@@ -3157,7 +3157,7 @@ options_validate(or_options_t *old_options, or_options_t *options,
   tor_assert(msg);
   *msg = NULL;
 
-  if(options->MoneTorFlowMod < 0 || options->MoneTorFlowMod > 1){
+  if(options->MoneTorFlowMod < 0.0 || options->MoneTorFlowMod > 1.0){
     REJECT("MoneTorFlowMod should be a double between 0 and 1");
   }
 

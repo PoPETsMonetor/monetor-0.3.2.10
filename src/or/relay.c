@@ -2969,6 +2969,10 @@ int mt_modify_flow_value(int original, circuit_t* circ){
   double alpha = get_options()->MoneTorFlowMod;
   double fraction = get_options()->MoneTorPremiumFraction;
   int isPremium = circ->mt_priority;
+
+  if(fraction <= 0)
+    return original;
+
   return (int)(original * (1 + alpha * (isPremium / fraction - 1)));
 }
 
