@@ -3180,8 +3180,7 @@ tor_init(int argc, char *argv[])
   }
 
   /* Initialize the payment subsystem */
-  if (options->EnablePayment)
-    mt_init();
+  mt_init();
 
   /* Scan/clean unparseable descroptors; after reading config */
   routerparse_init();
