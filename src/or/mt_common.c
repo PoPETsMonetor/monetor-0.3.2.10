@@ -31,6 +31,7 @@
 #include "router.h"
 #include "relay.h"
 #include "scheduler.h"
+#include <time.h>
 
 static uint64_t count[2] = {0, 0};
 
@@ -289,7 +290,7 @@ void increment(long unsigned *id) {
 }
 
 uint64_t rand_uint64(void) {
-  srand(getpid());
+  srand(time(NULL));
   uint64_t r = 0;
   for (int i=0; i<64; i += 30) {
     r = r*((uint64_t)RAND_MAX + 1) + rand();
