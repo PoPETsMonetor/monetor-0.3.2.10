@@ -1686,7 +1686,16 @@ static mt_channel_t* new_channel(void){
   chn->data.public.end_bal = chn->data.wallet.end_bal;
   chn->data.public.int_bal = 0;
   memcpy(chn->data.public.cpk, client.pk, MT_SZ_PK);
-  mt_crypt_rand(MT_SZ_ADDR, chn->data.public.addr);
+
+  // use combo of randomness and deterministic unique counter for channel
+  char* fname = get_datadir_fname("sr-state");
+  byte input[MT_SZ_HASH + MT_SZ_HASH + sizeof(client.chn_number)];
+  byte hash_out[MT_SZ_HASH];
+  mt_crypt_rand(MT_SZ_ADDR, (byte*)input);
+  mt_crypt_hash((byte*)fname, strlen(fname), (byte (*)[MT_SZ_HASH])(input + MT_SZ_HASH));
+  memcpy(input + MT_SZ_HASH + MT_SZ_HASH, &client.chn_number, sizeof(client.chn_number));
+  mt_crypt_hash(input, sizeof(input), &hash_out);
+  memcpy(chn->data.public.addr, hash_out, MT_SZ_HASH);
 
   // create wallet commitment
   byte msg[MT_SZ_PK + sizeof(int)];
