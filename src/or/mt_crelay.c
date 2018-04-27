@@ -168,6 +168,8 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
       circ->desci = tor_malloc_zero(sizeof(mt_desc_t));
       memcpy(circ->desci, ocirc->desci, sizeof(mt_desc_t));
       digestmap_set(desc2circ, (char*) id, circ);
+      circ->inter_ident = tor_malloc_zero(sizeof(intermediary_identity_t));
+      memcpy(circ->inter_ident->identity, ocirc->inter_ident->identity, DIGEST_LEN);
       smartlist_add(intercircs, circ);
     }
     else { /** We reache max retries */
@@ -673,6 +675,9 @@ void
 mt_crelay_intermediary_circuit_free(origin_circuit_t *oricirc) {
   if (oricirc->desci) {
     tor_free(oricirc->desci);
+  }
+  if (oricirc->inter_ident) {
+    tor_free(oricirc->inter_ident);
   }
   buf_free(oricirc->buf);
 }
