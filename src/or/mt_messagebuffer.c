@@ -109,7 +109,9 @@ static int mt_add_to_buffer(mt_msgbuf_t* msgbuf, mt_desc_t* desc, message_t* mes
   }
   else{
     // message should have gone through if status is available
-    tor_assert(*status == 0);
+    //tor_assert(*status == 0);
+    log_warn(LD_MT, "MoneTor: Status should be zero but isn't");
+    *status = 0;
   }
   // create new buffer element if necessary
   smartlist_t* buffer = digestmap_get(msgbuf->buffers, (char*)digest);
