@@ -120,7 +120,8 @@ intermediary_t* get_intermediary_by_role(position_t position) {
   return NULL;
 }
 
-/** Get intermediary matching inter_ident
+/**
+ * Get intermediary matching inter_ident
  */
 
 intermediary_t *get_intermediary_by_identity(intermediary_identity_t *ident) {
@@ -138,6 +139,10 @@ smartlist_t* get_intermediaries(int for_circuit) {
   return NULL;
 }
 
+/**
+ * Check whether identity is an intermediary.
+ */
+
 int mt_cclient_is_intermediary(const char *identity) {
   SMARTLIST_FOREACH_BEGIN(intermediaries, intermediary_t*, intermediary) {
     if (tor_memeq(intermediary->identity->identity, identity,
@@ -146,6 +151,10 @@ int mt_cclient_is_intermediary(const char *identity) {
   } SMARTLIST_FOREACH_END(intermediary);
   return 0;
 }
+
+/**
+ * Check whether identity is ledger.
+ */
 
 int mt_cclient_is_ledger(const char *identity) {
   if (!ledger)
@@ -635,6 +644,9 @@ run_cclient_scheduled_events(time_t now) {
   run_cclient_build_circuit_event(now);
 }
 
+/**
+ * A ledger circ has closed -- pass the information and cleanup
+ */
 
 void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
 
@@ -643,7 +655,7 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
    * a general circuit towards the ledger, then we may have
    * a reachability problem.. */
   if (TO_CIRCUIT(circ)->state != CIRCUIT_STATE_OPEN) {
-   now = approx_time();
+    now = approx_time();
     log_warn(LD_MT, "MoneTor: Looks like we did not extend a circuit successfully"
         " towards the ledger %lld", (long long) now);
     ledger->circuit_retries++;
@@ -666,6 +678,8 @@ void mt_cclient_ledger_circ_has_closed(origin_circuit_t *circ) {
 }
 
 /**
+ * Update the tracking window for payment, and pay if necessary
+ *
  * stop_hop means that we decrease payment window until hop stop_hop.
  */
 
@@ -725,6 +739,8 @@ void mt_cclient_update_payment_window(circuit_t *circ, int stop_hop) {
  * Called by the payment module to signal an event
  *
  * Can be either:
+ *   MT_SIGNAL_PAYMENT_INITIALIZED
+ *   MT_SIGNAL_ESTABLISH_SUCCESS
  *   MT_SIGNAL_PAYMENT_SUCCESS
  *   MT_SIGNAL_PAYMENT_FAILURE
  *   MT_SIGNAL_CLOSE_SUCCESS

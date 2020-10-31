@@ -206,6 +206,11 @@ int mt_cintermediary_paymod_signal(mt_signal_t signal, mt_desc_t *desc) {
   return 0;
 }
 
+/**
+ * Marking the payment channel for closing -- Distinguish gracefull closing
+ * from a protocol abort
+ */
+
 void mt_cintermediary_mark_payment_channel_for_close(circuit_t *circ, int abort, int reason) {
   if (CIRCUIT_IS_ORIGIN(circ)) {
     /** That might be a ledger circ, just mark it as closed */
@@ -239,6 +244,10 @@ ledger_t *mt_cintermediary_get_ledger(void) {
 
 /********************** Payment related functions ********************/
 
+/**
+ * Send a payment message to the circuit linked to *desc.
+ */
+
 int
 mt_cintermediary_send_message(mt_desc_t *desc, mt_ntype_t pcommand,
     byte *msg, int size) {
@@ -268,6 +277,11 @@ mt_cintermediary_send_message(mt_desc_t *desc, mt_ntype_t pcommand,
   return relay_send_pcommand_from_edge(circ, RELAY_COMMAND_MT,
       pcommand, layer_start, (const char*) msg, size);
 }
+
+/**
+ * The Tor code has found a payment cell and called this function to get it
+ * processed.
+ */
 
 void
 mt_cintermediary_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,
