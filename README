@@ -22,7 +22,7 @@ original source files. Most of the payment logic is implemented within
 src/or/mt_[].c/h files, and separated for each role in the payment protocol. So,
 the logic is one controller file and one payment handling file for each role.
 E.g., src/or/mt_cclient.c and src/or/mt_cpay.c. The first is the controler that
-interface the payment layer to the payment cryptography, the second hold the
+interfaces the payment layer to the payment cryptography, the second hold the
 crypto logic to make payments. Only function from the controllers are expected
 to be called from other places in the Tor code base.
 
@@ -33,6 +33,10 @@ them. If you end-up to this case, ./configure allows to specify static
 dependencies (./configure --help) to build with static libraries: just download
 the library version around the release date of this code, and that should work
 fine :-)
+
+In a much further future, it might be possible that the libc would not be
+compatible, or that other library problems appear. Running this code over a
+Debian 8, or Ubuntu 16 should guarantee to remove those issues.
 
 
 
