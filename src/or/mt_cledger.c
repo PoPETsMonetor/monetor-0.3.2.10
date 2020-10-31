@@ -1,5 +1,8 @@
 /**
  * \file mt_cledger.c
+ *
+ * \brief contains the ledger controller functionalities to interact with the
+ * ledger payment crypto layer, and the eventing of the Tor network
  */
 
 #include "or.h"

@@ -2,7 +2,7 @@
  * \file mt_messagebuffer.c
  *
 
- * Provide functionality for buffer messages from payment modules to
+ * \brief Provide functionality for buffer messages from payment modules to
  * invoke message sending without having to worry about whether the
  * circuit is ready. The messages are sent immediately if possible. If
  * not, they are stored in a buffer until the circuit becomes

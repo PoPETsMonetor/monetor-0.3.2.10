@@ -2,8 +2,12 @@
 #define mt_cclient_h
 
 #include "mt_common.h"
+
 /**
- * Controller moneTor client part
+ * \file mt_cclient.h
+ *
+ * \brief Header file for mt_cclient.c
+ *
  */
 
 

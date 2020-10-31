@@ -1,5 +1,7 @@
 /**
  * \file mt_cledger.h
+ *
+ * \brief Header file for mt_cledger.c
  */
 
 #ifndef mt_cledger_h

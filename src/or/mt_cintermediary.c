@@ -1,3 +1,11 @@
+/**
+ *  \file mt_cintermediary
+ *
+ *  \brief Implement the controller logic for moneTor payment system when the
+ *  Tor instance is used as a client. This module interract with mt_ipay.c
+ *  produce and verify part of the payment protocol
+ */
+
 #include "or.h"
 #include "buffers.h"
 #include "mt_cintermediary.h"

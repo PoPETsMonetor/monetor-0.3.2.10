@@ -1,3 +1,14 @@
+/**
+ *  \file mt_crelay.c
+ *
+ *  \brief Controller code for a Tor relay (Guard, middle or exit) to handle
+ *  nanopayment events and payment channel events. This controller is also
+ *  responsible to check the healthiness of the payment system and react
+ *  appropriatly in case of issues (note, a lot of potential issues have not
+ *  been taken into consideration for this research level code).
+ *
+ */
+
 
 #include "or.h"
 #include "buffers.h"
@@ -25,8 +36,11 @@ static int intermediary_role_initiated = 0;
 static void run_crelay_housekeeping_event(time_t now);
 static void run_crelay_build_circuit_event(time_t now);
 
-void
-mt_crelay_init(void) {
+/**
+ * Initialize the controller and the payment layer
+ */
+
+void mt_crelay_init(void) {
   log_info(LD_MT, "MoneTor: initialization of controler relay code");
   ledgercircs = smartlist_new();
   desc2circ = digestmap_new();
@@ -40,6 +54,10 @@ mt_crelay_init(void) {
   mt_ipay_init();
 }
 
+/**
+ * Upon a new channel request, we need to init a new descriptor and set this
+ * circuit as a circuit able to receive payments (+relaying normal cells).
+ */
 void mt_crelay_init_desc_and_add(or_circuit_t *circ, mt_party_t party) {
   /** We're a general circ over a relay that received its first
    * RELAY_COMMAND_MT cell, let's change the purpose of this circ --
@@ -65,7 +83,7 @@ ledger_t * mt_crelay_get_ledger(void) {
 /************************** Open and close events **************/
 
 /**
- *
+ * A Tor circuit to the ledger has opened
  */
 void
 mt_crelay_ledger_circ_has_opened(origin_circuit_t *ocirc) {
@@ -85,6 +103,10 @@ mt_crelay_ledger_circ_has_opened(origin_circuit_t *ocirc) {
     mt_ipay_set_status(&ledger->desc, 1);
   }
 }
+
+/**
+ * A Tor circuit to the ledger has closed
+ */
 
 void mt_crelay_ledger_circ_has_closed(origin_circuit_t *circ) {
   time_t now;
@@ -114,8 +136,10 @@ void mt_crelay_ledger_circ_has_closed(origin_circuit_t *circ) {
   }
 }
 
-void
-mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
+/**
+ * A circuit towards an intermediary has closed
+ */
+void mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
   /** If ocirc is not within our digestmap, it means that the payment
    * channel has been closed, then it is ok :)
    *
@@ -199,8 +223,11 @@ mt_crelay_intermediary_circ_has_closed(origin_circuit_t* ocirc) {
   }
 }
 
-void
-mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
+/**
+ * A Tor circuit towards an intermediary node has opened
+ */
+
+void mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
   /** XXX Did Should notify the payment system when the intermediary is
    * ready? */
   log_info(LD_MT, "MoneTor: Yay! An intermediary circuit opened");
@@ -209,19 +236,13 @@ mt_crelay_intermediary_circ_has_opened(origin_circuit_t* ocirc) {
   log_info(LD_MT, "MoneTor: changing status on the payment module, for descriptor %s",
       mt_desc_describe(ocirc->desci));
   mt_rpay_set_status(ocirc->desci, 1);
-  /*byte id[DIGEST_LEN];*/
-  /*SMARTLIST_FOREACH_BEGIN(desctoset, mt_desc_t *, desc) {*/
-    /*mt_desc2digest(desc, &id);*/
-    /*if (digestmap_get(desc2circ, (char*) id))*/
-      /*mt_rpay_set_status(desc, 1);*/
-  /*}SMARTLIST_FOREACH_END(desc);*/
-  /*if (smartlist_len(desctoset) > 0)*/
-    /*smartlist_clear(desctoset);*/
 }
 
 
-void
-mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
+/**
+ * A circuit in which we're a relay has closed (we're not origin).
+ */
+void mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
   mt_rpay_set_status(&circ->desc, 0);
   byte id[DIGEST_LEN];
   mt_desc2digest(&circ->desc, &id);
@@ -254,6 +275,10 @@ mt_crelay_orcirc_has_closed(or_circuit_t *circ) {
 }
 
 /************************** Events *****************************/
+
+/**
+ * Prevent the house from being on fire; or at least react to it.
+ */
 
 static void
 run_crelay_housekeeping_event(time_t now) {
@@ -364,6 +389,11 @@ run_crelay_scheduled_events(time_t now) {
 
 /************************** Payment related functions ********************/
 
+/**
+ * Send a payment layer protocol message to the original client, to the ledger
+ * or to the intermediary.
+ */
+
 int
 mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
     byte* msg, int size) {
@@ -406,6 +436,11 @@ mt_crelay_send_message(mt_desc_t* desc, uint8_t command, mt_ntype_t type,
     return -2;
   }
 }
+
+/**
+ * Handle the reception of a payment protocol message from the Tor user, the
+ * intermediary or the ledger.
+ */
 
 void
 mt_crelay_process_received_msg(circuit_t *circ, mt_ntype_t pcommand,

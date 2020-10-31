@@ -6,27 +6,27 @@ configure it properly.
 To build Tor from source:
         ./configure && make && make install
 
-To build Tor from a just-cloned git repository:
-        sh autogen.sh && ./configure && make && make install
+To build Tor from a just-cloned git repository (install autoconf first):
+ 
+sh autogen.sh && ./configure --disable-asciidoc
 
-Home page:
-        https://www.torproject.org/
+ If failed, install any missing library (probably things like libevent-dev and
+libssl-dev) and call the script again. Then:
 
-Download new versions:
-        https://www.torproject.org/download/download.html
+make && make install
 
-Documentation, including links to installation and setup instructions:
-        https://www.torproject.org/docs/documentation.html
-
-Making applications work with Tor:
-        https://wiki.torproject.org/projects/tor/wiki/doc/TorifyHOWTO
-
-Frequently Asked Questions:
-        https://www.torproject.org/docs/faq.html
+This is a fork from Tor version 0.3.2.10 with some bugfixing cherry-picked
+commits that appeared later. The core of our features are inside
+src/or/mt_[].c/h files, but other modifications and adjustments live in many
+original source files.
 
 
-To get started working on Tor development:
-        See the doc/HACKING directory.
+Note! It might be possible that in the future, library such as libssl-dev or
+libevent-dev won't be compatible to the current fonction prototype used from
+them. If you end-up to this case, ./configure allows to specify static
+dependencies (./configure --help) to build with static libraries: just download
+the library version around the release date of this code, and that should work
+fine :-)
 
-Release timeline:
-         https://trac.torproject.org/projects/tor/wiki/org/teams/NetworkTeam/CoreTorReleases
+
+

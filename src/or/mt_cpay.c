@@ -3,7 +3,7 @@
 /**
  * \file mt_cpay.c
  *
- * Implement logic for the client role in the moneTor payment scheme. The module
+ * \brief Implement logic for the client role in the moneTor payment scheme. The module
  * interacts with other payment code (<b>mt_cpay<\b>, <b>mt_rpay<\b>,
  * <b>mt_ipay<\b>) across the Tor network. The module only interacts with two
  * other parts of the Tor code base: the corresponding moneTor controller and
@@ -59,7 +59,7 @@
 /**
  * Prototype for multi-thread function used to generate the expensive zkp proof
  */
-typedef void (*work_task)(void*);
+typedef void (*work_task)(void *);
 
 /**
  * Hold function and arguments necessary to execute callbacks on a channel once

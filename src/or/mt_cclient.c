@@ -1,6 +1,7 @@
 /**
  * \file mt_cclient.c
- * Implement the controller logic for the MoneTor payment system when
+ *
+ * \brief Implement the controller logic for the moneTor payment system when
  * this Tor instance is used as a client. This module interacts with
  * mt_cpay.c module to produce and verify the crypto pieces.
  *

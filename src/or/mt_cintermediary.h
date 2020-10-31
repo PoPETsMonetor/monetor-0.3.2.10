@@ -1,3 +1,9 @@
+/**
+ * \file mt_cintermediary.h
+ *
+ * \brief Header file for mt_cintermediary.c
+ */
+
 #ifndef mt_cintermediary_h
 #define mt_cintermediary_h
 

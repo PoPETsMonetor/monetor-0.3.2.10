@@ -88,16 +88,16 @@ static void test_mt_common(void *arg)
     UNMOCK(mt_micro_sleep);
 }
 
-static void
-mt_cclient_process_received_msg_mock(origin_circuit_t *circ, crypt_path_t *cpath,
-    mt_ntype_t pcommand, byte *msg, size_t msg_len) {
-  (void) circ;
-  (void) cpath;
-  (void) pcommand;
-  (void) msg;
-  (void) msg_len;
-  return;
-}
+/*static void*/
+/*mt_cclient_process_received_msg_mock(origin_circuit_t *circ, crypt_path_t *cpath,*/
+    /*mt_ntype_t pcommand, byte *msg, size_t msg_len) {*/
+  /*(void) circ;*/
+  /*(void) cpath;*/
+  /*(void) pcommand;*/
+  /*(void) msg;*/
+  /*(void) msg_len;*/
+  /*return;*/
+/*}*/
 
 static void test_mt_process_msg(void *args) {
   (void)args;

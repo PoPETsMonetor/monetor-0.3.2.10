@@ -1,6 +1,6 @@
 /**
  * \file mt_tokens.h
- * \brief Header file for mt_tokens.c
+ * \brief Header file for mt_cpay.c
  *
  * All functions return MT_SUCCESS/MT_ERROR unless void or otherwise stated.
  **/
