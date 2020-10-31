@@ -18,7 +18,13 @@ make && make install
 This is a fork from Tor version 0.3.2.10 with some bugfixing cherry-picked
 commits that appeared later. The core of our features are inside
 src/or/mt_[].c/h files, but other modifications and adjustments live in many
-original source files.
+original source files. Most of the payment logic is implemented within
+src/or/mt_[].c/h files, and separated for each role in the payment protocol. So,
+the logic is one controller file and one payment handling file for each role.
+E.g., src/or/mt_cclient.c and src/or/mt_cpay.c. The first is the controler that
+interface the payment layer to the payment cryptography, the second hold the
+crypto logic to make payments. Only function from the controllers are expected
+to be called from other places in the Tor code base.
 
 
 Note! It might be possible that in the future, library such as libssl-dev or
